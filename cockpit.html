@@ -422,6 +422,10 @@
 
     // Holt den Hinweis per direktem, einmaligem Firebase-Abruf (unabhängig vom
     // players-Listener) und zeigt ihn in einer schließbaren Sprechblase neben der Truhe.
+    // Solange die Sprechblase offen ist, zeigt die Truhe das "geöffnet"-Bild.
+    const CHEST_CLOSED_IMG = "https://github.com/thundermon89-glitch/Quiznight/raw/main/Kistegeschlosssencockpit.jpg";
+    const CHEST_OPEN_IMG = "https://github.com/thundermon89-glitch/Quiznight/raw/2a2930cac0bce37a87e795cadf82de3b8de84ee5/Kistege%C3%B6ffnetcockpit.jpg";
+
     function showChestSpeechBubble() {
       get(ref(db, 'players/' + playerId + '/riddleClues')).then((snap) => {
         let clues = snap.val();
@@ -438,9 +442,15 @@
           content.innerHTML = clues.map(c => `<div class="flex items-start gap-1.5"><span class="text-[#7017c9] flex-shrink-0">${icon('crystal', 'w-3.5 h-3.5')}</span>${c}</div>`).join('');
         }
         bubble.classList.remove('hidden');
+        const chestImg = document.getElementById('chest-img');
+        if (chestImg) chestImg.src = CHEST_OPEN_IMG;
       }).catch(() => {});
     }
-    window.closeChestBubble = () => document.getElementById('chest-speech-bubble')?.classList.add('hidden');
+    window.closeChestBubble = () => {
+      document.getElementById('chest-speech-bubble')?.classList.add('hidden');
+      const chestImg = document.getElementById('chest-img');
+      if (chestImg) chestImg.src = CHEST_CLOSED_IMG;
+    };
 
     function fireChestConfetti() {
       const canvas = document.getElementById("chest-confetti-canvas");
@@ -865,7 +875,7 @@
         <div id="chest-bonus-popup-layer" class="absolute inset-x-0 top-0 flex justify-center pointer-events-none" style="z-index:5;"></div>
         <div id="chest-fly-layer" class="absolute inset-x-0 bottom-0 h-16 pointer-events-none"></div>
         <div id="chest-icon" onclick="clickChest()" class="chest-clickable drop-shadow-[0_6px_10px_rgba(112,23,201,0.35)]" title="Klick mich!">
-          <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/chest.png" alt="Truhe" class="w-28 h-28 md:w-36 md:h-36 object-contain">
+          <img id="chest-img" src="https://github.com/thundermon89-glitch/Quiznight/raw/main/Kistegeschlosssencockpit.jpg" alt="Truhe" class="w-28 h-28 md:w-36 md:h-36 object-contain">
         </div>
       </div>
       <div class="text-center text-sm mt-2 flex-shrink-0 text-[#1a1a2e]/60 italic">Spiel eine Runde - die Truhe redet mit dir! 🔮</div>
