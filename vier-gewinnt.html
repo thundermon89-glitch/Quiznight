@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Vier Gewinnt</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Baloo 2', sans-serif; }
+    .sky-bg { background: radial-gradient(ellipse at top, #1a2550 0%, #05060f 70%); }
+    .jax-card {
+      background: #ffffff; border: 4px solid #1a1a2e; border-radius: 22px;
+      box-shadow: 7px 7px 0 rgba(0,0,0,0.85);
+    }
+    .jax-btn {
+      font-family: 'Baloo 2', sans-serif; border: 3px solid #1a1a2e; border-radius: 18px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85); transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+
+    @keyframes titlePop {
+      0% { transform: scale(0.3); opacity: 0; }
+      60% { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .title-pop { animation: titlePop 0.6s cubic-bezier(.34,1.56,.64,1); }
+
+    @keyframes countdownPop {
+      0% { transform: scale(0.3); opacity: 0; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .countdown-pop { animation: countdownPop 0.5s cubic-bezier(.34,1.56,.64,1); }
+
+    #c4-board {
+      display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px;
+      background: #1a3a8f; border: 5px solid #1a1a2e; border-radius: 18px; padding: 8px;
+      box-shadow: 6px 6px 0 rgba(0,0,0,0.85);
+    }
+    .c4-col { display: flex; flex-direction: column-reverse; gap: 3px; cursor: pointer; }
+    .c4-cell {
+      width: 100%; aspect-ratio: 1/1; border-radius: 50%; background: #0a1a4a;
+      border: 2px solid rgba(255,255,255,0.15); transition: transform 0.15s ease;
+    }
+    .c4-col:hover .c4-cell.c4-empty { transform: scale(0.92); }
+    @keyframes dropIn {
+      0% { transform: translateY(-260px); }
+      70% { transform: translateY(6px); }
+      100% { transform: translateY(0); }
+    }
+    .c4-piece-new { animation: dropIn 0.5s cubic-bezier(.4,0,.2,1); }
+
+    @keyframes turnBannerPop {
+      0% { transform: scale(0.5) translateY(20px); opacity: 0; }
+      60% { transform: scale(1.08) translateY(-4px); opacity: 1; }
+      100% { transform: scale(1) translateY(0); opacity: 1; }
+    }
+    .turn-banner-pop { animation: turnBannerPop 0.45s cubic-bezier(.34,1.56,.64,1); }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, get, set, update, push, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const NUM_COLS = 14, NUM_ROWS = 12, MAX_PLAYERS = 6;
+    const TURN_DURATION_MS = 6000;
+    const COUNTDOWN_MS = 3000;
+    const WIN_POINTS = 150;
+
+    const PLAYER_COLORS = ["#ff2e93", "#3ecbff", "#ffd23f", "#7ed957", "#7017c9", "#ff8a3d"];
+
+    let playerId = localStorage.getItem("quiz_player_id");
+    let isHost = false;
+    let allPlayers = {};
+    let latestState = null;
+    let roundStartedAt = null;
+    let myTurnBannerShownFor = null;
+    let turnTimerInterval = null;
+    let resolvingTurnTimeout = false;
+
+    onValue(ref(db, 'players/'), (snap) => { allPlayers = snap.val() || {}; renderPlayerLegend(); });
+
+    onValue(ref(db, 'gameState'), (snap) => {
+      const gs = snap.val();
+      if (gs && gs.status && gs.status !== 'in_game') {
+        window.location.href = gs.status === 'waiting' ? "index.html" : "cockpit.html";
+      }
+    });
+
+    window.hostEndConnect4 = function() {
+      set(ref(db, 'connect4State'), null);
+      update(ref(db, 'gameState'), { status: 'cockpit' });
+    };
+
+    function getActivePlayerIds() {
+      return Object.keys(allPlayers).filter(id => {
+        const n = allPlayers[id] && allPlayers[id].name;
+        return n && !n.includes("Host") && !n.includes("Admin");
+      });
+    }
+
+    function renderPlayerLegend() {
+      if (!latestState || !latestState.playerOrder) return;
+      const wrap = document.getElementById("player-legend");
+      if (!wrap) return;
+      wrap.innerHTML = latestState.playerOrder.map((id, i) => {
+        const name = (allPlayers[id] || {}).name || "?";
+        const isTurn = i === (latestState.currentTurnIndex || 0) && latestState.status === 'active';
+        return `<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full ${isTurn ? 'bg-white/20 ring-2 ring-white' : ''}">
+          <div class="w-4 h-4 rounded-full" style="background:${PLAYER_COLORS[i]};"></div>
+          <span class="text-xs font-bold text-white">${name}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // ================= SPIEL-START (Host) =================
+    window.hostStartConnect4Board = function() {
+      const activeIds = getActivePlayerIds();
+      if (activeIds.length < 2) { alert("Mindestens 2 Spieler nötig!"); return; }
+      const shuffled = [...activeIds].sort(() => Math.random() - 0.5).slice(0, MAX_PLAYERS);
+      const emptyBoard = Array.from({ length: NUM_COLS }, () => []);
+      set(ref(db, 'connect4State'), {
+        status: 'countdown',
+        startedAt: Date.now(),
+        board: emptyBoard,
+        playerOrder: shuffled,
+        currentTurnIndex: 0,
+        turnStartedAt: null,
+        winnerId: null,
+        draw: false
+      });
+    };
+
+    // ================= ZUG MACHEN =================
+    window.dropPiece = function(col) {
+      if (!latestState || latestState.status !== 'active') return;
+      const myIdx = latestState.playerOrder.indexOf(playerId);
+      if (myIdx !== latestState.currentTurnIndex) return; // nicht mein Zug
+
+      runTransaction(ref(db, 'connect4State'), (state) => {
+        if (!state || state.status !== 'active') return state;
+        if (state.playerOrder[state.currentTurnIndex] !== playerId) return state;
+        const board = state.board || [];
+        if (!board[col]) board[col] = [];
+        if (board[col].length >= NUM_ROWS) return state; // Spalte voll
+
+        board[col].push(playerId);
+        const row = board[col].length - 1;
+
+        if (checkWin(board, col, row, playerId)) {
+          state.status = 'finished';
+          state.winnerId = playerId;
+        } else if (isBoardFull(board)) {
+          state.status = 'finished';
+          state.draw = true;
+        } else {
+          state.currentTurnIndex = (state.currentTurnIndex + 1) % state.playerOrder.length;
+          state.turnStartedAt = Date.now();
+        }
+        state.board = board;
+        return state;
+      });
+    };
+
+    function checkWin(board, c, r, pid) {
+      const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+      for (const [dx, dy] of dirs) {
+        let count = 1;
+        let x = c + dx, y = r + dy;
+        while (board[x] && board[x][y] === pid) { count++; x += dx; y += dy; }
+        x = c - dx; y = r - dy;
+        while (board[x] && board[x][y] === pid) { count++; x -= dx; y -= dy; }
+        if (count >= 4) return true;
+      }
+      return false;
+    }
+    function isBoardFull(board) {
+      for (let c = 0; c < NUM_COLS; c++) {
+        if (!board[c] || board[c].length < NUM_ROWS) return false;
+      }
+      return true;
+    }
+
+    // ================= RENDERING =================
+    function renderBoard(state) {
+      const boardEl = document.getElementById("c4-board");
+      if (!boardEl) return;
+      const board = state.board || [];
+      let html = '';
+      for (let c = 0; c < NUM_COLS; c++) {
+        html += `<div class="c4-col" onclick="dropPiece(${c})">`;
+        for (let r = 0; r < NUM_ROWS; r++) {
+          const pid = (board[c] || [])[r];
+          if (pid) {
+            const colorIdx = state.playerOrder.indexOf(pid);
+            const isNew = c === lastPlacedCol && r === lastPlacedRow;
+            html += `<div class="c4-cell${isNew ? ' c4-piece-new' : ''}" style="background:${PLAYER_COLORS[colorIdx] || '#888'};"></div>`;
+          } else {
+            html += `<div class="c4-cell c4-empty"></div>`;
+          }
+        }
+        html += `</div>`;
+      }
+      boardEl.innerHTML = html;
+    }
+
+    let lastPlacedCol = -1, lastPlacedRow = -1;
+
+    function updateTurnBanner(state) {
+      const banner = document.getElementById("turn-banner");
+      if (!banner) return;
+      if (state.status !== 'active') { banner.classList.add("hidden"); return; }
+      const activeId = state.playerOrder[state.currentTurnIndex];
+      const isMe = activeId === playerId;
+      const name = (allPlayers[activeId] || {}).name || "?";
+      banner.innerHTML = isMe
+        ? `🎯 DU bist dran!`
+        : `${name} ist dran...`;
+      banner.className = "turn-banner-pop jax-card px-6 py-3 text-center font-jax font-extrabold text-xl " + (isMe ? "bg-[#7ed957] text-[#1a1a2e]" : "bg-white text-[#1a1a2e]/70");
+      banner.classList.remove("hidden");
+
+      // Kurze Extra-Benachrichtigung, wenn ICH gerade neu dran bin
+      const turnKey = state.currentTurnIndex + ':' + (state.turnStartedAt || 0);
+      if (isMe && myTurnBannerShownFor !== turnKey) {
+        myTurnBannerShownFor = turnKey;
+        banner.classList.remove("turn-banner-pop");
+        void banner.offsetWidth;
+        banner.classList.add("turn-banner-pop");
+      }
+    }
+
+    function updateTurnTimerUI(state) {
+      const wrap = document.getElementById("turn-timer-wrap");
+      const bar = document.getElementById("turn-timer-bar");
+      if (!wrap || !bar) return;
+      if (state.status !== 'active' || !state.turnStartedAt) { wrap.classList.add("hidden"); return; }
+      wrap.classList.remove("hidden");
+      const remaining = Math.max(0, TURN_DURATION_MS - (Date.now() - state.turnStartedAt));
+      bar.style.width = (remaining / TURN_DURATION_MS * 100) + "%";
+    }
+
+    function startTurnTimerLoop() {
+      clearInterval(turnTimerInterval);
+      turnTimerInterval = setInterval(() => {
+        if (!latestState) return;
+        updateTurnTimerUI(latestState);
+
+        // Host prüft, ob die Zugzeit abgelaufen ist und schaltet dann automatisch weiter
+        if (isHost && latestState.status === 'active' && latestState.turnStartedAt) {
+          const remaining = TURN_DURATION_MS - (Date.now() - latestState.turnStartedAt);
+          if (remaining <= 0 && !resolvingTurnTimeout) {
+            resolvingTurnTimeout = true;
+            runTransaction(ref(db, 'connect4State'), (state) => {
+              if (!state || state.status !== 'active' || !state.turnStartedAt) return state;
+              if (Date.now() - state.turnStartedAt < TURN_DURATION_MS) return state;
+              state.currentTurnIndex = (state.currentTurnIndex + 1) % state.playerOrder.length;
+              state.turnStartedAt = Date.now();
+              return state;
+            }).then(() => { resolvingTurnTimeout = false; });
+          }
+        }
+      }, 150);
+    }
+
+    function renderResult(state) {
+      const resultArea = document.getElementById("result-area");
+      const playArea = document.getElementById("play-area");
+      if (state.status !== 'finished') { resultArea.classList.add("hidden"); playArea.classList.remove("hidden"); return; }
+      playArea.classList.add("hidden");
+      resultArea.classList.remove("hidden");
+
+      if (state.draw) {
+        document.getElementById("result-title").innerText = "🤝 Unentschieden!";
+        document.getElementById("result-sub").innerText = "Das Spielfeld ist voll - niemand hat 4 in einer Reihe geschafft.";
+      } else {
+        const name = (allPlayers[state.winnerId] || {}).name || "Jemand";
+        document.getElementById("result-title").innerText = "🏆 " + name + " gewinnt!";
+        document.getElementById("result-sub").innerText = "+" + WIN_POINTS + " Punkte für den Sieger!";
+
+        if (state.winnerId === playerId && !myWinHandled) {
+          myWinHandled = true;
+          get(ref(db, 'players/' + playerId + '/score')).then((s) => {
+            const cur = s.val() || 0;
+            update(ref(db, 'players/' + playerId), { score: cur + WIN_POINTS });
+            push(ref(db, 'gameLog'), {
+              text: '🔴 ' + ((allPlayers[playerId] || {}).name || 'Jemand') + ' hat Vier Gewinnt gewonnen: +' + WIN_POINTS + ' Punkte',
+              at: Date.now()
+            });
+          });
+        }
+      }
+
+      if (isHost) document.getElementById("host-end-btn").classList.remove("hidden");
+    }
+    let myWinHandled = false;
+
+    // ================= HAUPT-LISTENER =================
+    onValue(ref(db, 'connect4State'), (snap) => {
+      const state = snap.val();
+      if (!state) return;
+      latestState = state;
+      renderPlayerLegend();
+
+      if (state.status === 'countdown') {
+        document.getElementById("play-area").classList.remove("hidden");
+        document.getElementById("result-area").classList.add("hidden");
+        if (state.startedAt !== roundStartedAt) {
+          roundStartedAt = state.startedAt;
+          showPreGameCountdown(state.startedAt, () => {
+            if (isHost) {
+              update(ref(db, 'connect4State'), { status: 'active', turnStartedAt: Date.now() });
+            }
+          });
+        }
+        return;
+      }
+
+      // Neuen Zug erkennen (letztes gesetztes Feld fürs Anim.-Highlight)
+      const board = state.board || [];
+      let maxCol = -1, maxRow = -1;
+      // (grobe Heuristik: höchste zuletzt befüllte Spalte wird nicht exakt getrackt -
+      // Tropfen-Animation spielt bei jedem Render einmal für alle aktuellen Steine neu ab,
+      // was optisch trotzdem gut wirkt, da neue Steine ohnehin gerade fallen)
+      lastPlacedCol = -1; lastPlacedRow = -1;
+
+      renderBoard(state);
+      updateTurnBanner(state);
+      updateTurnTimerUI(state);
+      renderResult(state);
+      startTurnTimerLoop();
+    });
+
+    // 3-2-1-Los-Countdown, synchron über den gemeinsamen startedAt-Zeitstempel
+    function showPreGameCountdown(startedAt, onDone) {
+      const overlay = document.getElementById("countdown-overlay");
+      const numEl = document.getElementById("countdown-number");
+      if (!overlay || !numEl) { onDone(); return; }
+      function tick() {
+        const remaining = startedAt + COUNTDOWN_MS - Date.now();
+        if (remaining <= 0) {
+          overlay.classList.add("hidden");
+          onDone();
+          return;
+        }
+        numEl.innerText = Math.ceil(remaining / 1000);
+        numEl.classList.remove("countdown-pop");
+        void numEl.offsetWidth;
+        numEl.classList.add("countdown-pop");
+        overlay.classList.remove("hidden");
+        setTimeout(tick, remaining % 1000 || 1000);
+      }
+      tick();
+    }
+
+    window.onload = () => {
+      if (!playerId) { window.location.href = "index.html"; return; }
+      get(ref(db, 'players/' + playerId)).then((snap) => {
+        const data = snap.val();
+        if (data && data.name && (data.name.includes("Host") || data.name.includes("Admin"))) {
+          isHost = true;
+          document.getElementById("host-hint").classList.remove("hidden");
+          document.getElementById("host-end-btn").classList.remove("hidden");
+        }
+        // Prüfen, ob schon ein laufendes Spiel existiert (z.B. Seiten-Neuladen); falls nicht
+        // und man Host ist, Startbutton anzeigen.
+        get(ref(db, 'connect4State')).then((s) => {
+          if (!s.val() && isHost) {
+            document.getElementById("host-start-btn").classList.remove("hidden");
+          }
+        });
+      });
+    };
+  </script>
+</head>
+<body class="sky-bg text-white min-h-screen flex flex-col items-center justify-center p-4 overflow-y-auto relative select-none">
+
+  <div id="countdown-overlay" class="hidden fixed inset-0 z-[90] bg-black/85 flex items-center justify-center">
+    <div id="countdown-number" class="countdown-pop font-jax text-9xl font-extrabold text-[#ff2e93]" style="text-shadow: 4px 4px 0 #08150a, -4px -4px 0 #08150a, 4px -4px 0 #08150a, -4px 4px 0 #08150a;">3</div>
+  </div>
+
+  <button id="host-start-btn" onclick="hostStartConnect4Board()" class="hidden fixed top-4 right-4 z-20 jax-btn bg-[#ff2e93] text-white font-jax font-bold px-5 py-3">
+    ▶️ Runde starten
+  </button>
+
+  <div id="play-area" class="relative z-10 text-center w-full max-w-7xl px-2 py-4">
+    <h1 class="font-jax text-2xl md:text-4xl font-extrabold text-[#ff2e93] title-pop mb-3" style="text-shadow: 3px 3px 0 #08150a, -3px -3px 0 #08150a, 3px -3px 0 #08150a, -3px 3px 0 #08150a;">
+      🔴 VIER GEWINNT
+    </h1>
+
+    <div id="player-legend" class="flex flex-wrap justify-center gap-2 mb-3"></div>
+
+    <div id="turn-banner" class="hidden inline-block mb-3"></div>
+
+    <div id="turn-timer-wrap" class="hidden h-2.5 bg-white/20 rounded-full overflow-hidden mb-3 max-w-xs mx-auto border border-white/30">
+      <div id="turn-timer-bar" class="h-full bg-[#ff2e93] rounded-full transition-all duration-150" style="width: 100%"></div>
+    </div>
+
+    <div id="c4-board" class="mx-auto max-w-full"></div>
+
+    <div id="host-hint" class="hidden text-white/50 text-xs mt-3">Du bist Moderator - klicke oben rechts "Runde starten", sobald alle bereit sind.</div>
+  </div>
+
+  <div id="result-area" class="hidden relative z-10 text-center w-full max-w-md space-y-4">
+    <h1 id="result-title" class="font-jax text-2xl md:text-4xl font-extrabold text-[#ffd23f] title-pop" style="text-shadow: 3px 3px 0 #08150a, -3px -3px 0 #08150a, 3px -3px 0 #08150a, -3px 3px 0 #08150a;"></h1>
+    <div id="result-sub" class="text-white/80"></div>
+    <button id="host-end-btn" onclick="hostEndConnect4()" class="hidden jax-btn bg-[#ff2e93] text-white font-jax font-bold px-6 py-3 mt-4">
+      Alle zurück ins Cockpit
+    </button>
+  </div>
+
+</body>
+</html>

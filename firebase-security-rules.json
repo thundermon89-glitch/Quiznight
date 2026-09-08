@@ -1,0 +1,62 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+
+    "players": {
+      "$playerId": {
+        ".validate": "newData.hasChildren(['name']) && newData.child('name').isString() && newData.child('name').val().length <= 40",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
+        },
+        "score": {
+          ".validate": "newData.isNumber()"
+        },
+        "isReady": {
+          ".validate": "newData.isBoolean()"
+        },
+        "avatar": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "clanTag": {
+          ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 2000)"
+        }
+      }
+    },
+
+    "gameLog": {
+      "$entryId": {
+        ".validate": "newData.hasChildren(['text', 'at']) && newData.child('text').isString() && newData.child('text').val().length <= 300"
+      }
+    },
+
+    "content": {
+      "$gameKey": {
+        "questions": {
+          ".validate": "newData.hasChildren()"
+        },
+        "templates": {
+          "$templateName": {
+            ".validate": "newData.hasChildren()"
+          }
+        },
+        "activeSource": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        }
+      }
+    },
+
+    "gameState": {
+      ".validate": true
+    },
+    "game1State": { ".validate": true },
+    "game2State": { ".validate": true },
+    "game3State": { ".validate": true },
+    "game4State": { ".validate": true },
+    "game5State": { ".validate": true },
+    "game6State": { ".validate": true },
+    "game7State": { ".validate": true },
+    "game8State": { ".validate": true },
+    "wheelState": { ".validate": true }
+  }
+}

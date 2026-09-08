@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Spiel 3: Schaf oder Wolf?</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .font-jax { font-family: 'Baloo 2', sans-serif; }
+
+    .jax-bg {
+      background: linear-gradient(120deg, #2b0f54, #7017c9, #ff2e93, #ff8a3d);
+      background-size: 300% 300%;
+      animation: gradientShift 18s ease infinite;
+    }
+    @keyframes gradientShift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+    .blob { position: absolute; border-radius: 9999px; filter: blur(50px); opacity: 0.35; animation: floaty 12s ease-in-out infinite; }
+    @keyframes floaty { 0%,100% { transform: translate(0,0); } 50% { transform: translate(25px,-35px); } }
+
+    .jax-card {
+      background: #ffffff;
+      border: 4px solid #1a1a2e;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(0,0,0,0.85);
+    }
+    .jax-card-dark {
+      background: #1a1a2e;
+      border: 4px solid #ffffff;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(0,0,0,0.5);
+      color: #ffffff;
+    }
+    .jax-chip {
+      border: 3px solid #1a1a2e;
+      border-radius: 9999px;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.85);
+    }
+    .jax-btn {
+      font-family: 'Baloo 2', sans-serif;
+      border: 3px solid #1a1a2e;
+      border-radius: 20px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(3px,3px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+    .jax-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    @keyframes bounceIn { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+    .jax-pop { animation: bounceIn 0.5s cubic-bezier(.34,1.56,.64,1); }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0) rotate(0); }
+      20% { transform: translateX(-10px) rotate(-2deg); }
+      40% { transform: translateX(10px) rotate(2deg); }
+      60% { transform: translateX(-8px) rotate(-1deg); }
+      80% { transform: translateX(8px) rotate(1deg); }
+    }
+      @keyframes brainHop {
+      0% { transform: translateY(0) scale(1); }
+      30% { transform: translateY(-24px) scale(1.12); }
+      55% { transform: translateY(0) scale(0.94); }
+      75% { transform: translateY(-9px) scale(1.04); }
+      100% { transform: translateY(0) scale(1); }
+    }
+    .brain-hop { animation: brainHop 0.4s ease-out; }
+
+    @keyframes brainFlyAway {
+      0% { transform: translate(0,0) scale(1) rotate(0deg); opacity: 1; }
+      100% { transform: translate(50px, -180px) scale(0.15) rotate(35deg); opacity: 0; }
+    }
+    .brain-fly-away { animation: brainFlyAway 0.7s ease-in forwards; }
+
+    @keyframes brainBubblePop {
+      0% { transform: translateY(6px) scale(0.6); opacity: 0; }
+      20% { transform: translateY(0) scale(1.05); opacity: 1; }
+      80% { transform: translateY(-2px) scale(1); opacity: 1; }
+      100% { transform: translateY(-12px) scale(0.9); opacity: 0; }
+    }
+    .brain-bubble {
+      position: fixed; z-index: 40; pointer-events: none;
+      background: white; color: #1a1a2e; border: 2px solid #1a1a2e;
+      border-radius: 10px; padding: 4px 9px; font-size: 11px; font-weight: 800;
+      font-family: 'Baloo 2', sans-serif;
+      animation: brainBubblePop 1.4s ease-out forwards;
+      white-space: nowrap;
+    }
+    .brain-bubble-success {
+      background: #16a34a; color: white; border-color: #14532d; font-size: 14px;
+      padding: 6px 14px;
+    }
+      @keyframes timeTickingPop {
+      0% { transform: translateY(10px) scale(0.5) rotate(-8deg); opacity: 0; }
+      20% { transform: translateY(-4px) scale(1.15) rotate(4deg); opacity: 1; }
+      35% { transform: translateY(0) scale(1) rotate(-2deg); }
+      100% { transform: translateY(-6px) scale(1.05) rotate(0deg); opacity: 1; }
+    }
+    /* WICHTIG: animation darf hier NICHT "transform" anfassen - das JS steuert die
+       Größe live per style.transform, eine CSS-Animation mit "forwards" auf transform
+       würde das sonst permanent überschreiben/einfrieren. */
+    @keyframes timeTickingFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* ==== KOPF-FLUG ZUR ANTWORT: kullert (rollt/dreht sich) sichtbar herein ==== */
+    @keyframes voteHeadRollIn {
+      0%   { transform: translate(-70px, 14px) rotate(-540deg) scale(0.6); opacity: 0; }
+      65%  { transform: translate(8px, -6px) rotate(25deg) scale(1.08); opacity: 1; }
+      100% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+    }
+    .vote-head-img {
+      width: 228px; height: 228px; object-fit: contain; display: inline-block;
+      margin: 0 3px 3px 0; vertical-align: middle;
+    }
+    .vote-head-img-new { animation: voteHeadRollIn 0.65s cubic-bezier(.34,1.15,.64,1) forwards; }
+
+    /* ==== CLIPPY-SPRECHBLASE ==== */
+    @keyframes clippyBubblePop {
+      0%   { transform: scale(0.4) translateY(20px); opacity: 0; }
+      70%  { transform: scale(1.05) translateY(-4px); opacity: 1; }
+      100% { transform: scale(1) translateY(0); opacity: 1; }
+    }
+    .clippy-bubble-pop { animation: clippyBubblePop 0.4s cubic-bezier(.34,1.56,.64,1); }
+    #clippy-img { animation: clippyIdleBob 2.2s ease-in-out infinite; }
+    @keyframes clippyIdleBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+    @keyframes winnerGifPop {
+      0% { transform: scale(0.5); opacity: 0; }
+      60% { transform: scale(1.08); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .winner-gif-modal-inner { animation: winnerGifPop 0.4s cubic-bezier(.34,1.56,.64,1); }
+    .time-ticking-popup {
+      position: fixed; z-index: 55; pointer-events: none;
+      animation: timeTickingFadeIn 0.3s ease-out;
+      transition: transform 0.15s ease-out;
+    }
+
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, update, onValue, get, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // ==== EIGENES ICON-SET (keine Emojis) ====
+    const ICONS = {
+      target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+      crown: '<path d="M4 18h16l1-9-5 3-4-6-4 6-5-3z"/>',
+      lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+      medal: '<circle cx="12" cy="15" r="5"/><path d="M9 10L7 3h2l3 6 3-6h2l-2 7"/>',
+      check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
+      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+      skull: '<path d="M12 3a7 7 0 0 0-7 7v3l-1 2h4l1 3h6l1-3h4l-1-2v-3a7 7 0 0 0-7-7z"/><circle cx="9.5" cy="11" r="1.2"/><circle cx="14.5" cy="11" r="1.2"/>',
+      book: '<path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M6 3v16"/>',
+      arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+      exit: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/>',
+      refresh: '<path d="M20 11a8 8 0 0 0-14.9-3.5M4 13a8 8 0 0 0 14.9 3.5"/><path d="M5 4v4h4M19 20v-4h-4"/>'
+    };
+    function icon(name, cls) {
+      return `<svg class="${cls || 'w-5 h-5'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+    }
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const playerId = localStorage.getItem("quiz_player_id");
+    let isHost = false;
+    let currentQuestionData = null;
+    let selectedIndices = [];
+    let latestQuestion = null;
+    let resultAlreadyProcessed = false;
+
+    // q.correct kann eine einzelne Zahl (eine richtige Antwort) oder ein Array
+    // (mehrere richtige Antworten) sein - hier immer als Array normalisiert.
+    function correctSetOf(q) {
+      if (!q) return [];
+      return Array.isArray(q.correct) ? q.correct : [q.correct];
+    }
+
+    // Alle Spieler außer Host/Admin
+    function getActivePlayerIds() {
+      return Object.keys(allPlayers).filter(id => {
+        const n = allPlayers[id] && allPlayers[id].name;
+        return n && !n.includes("Host") && !n.includes("Admin");
+      });
+    }
+
+    // ==== DAS KERNSTÜCK VON SPIEL 3: Punkte hängen davon ab, WIE VIELE Spieler
+    // gemeinsam die richtige Antwort haben - Ziel ist entweder ALLE oder NIEMAND
+    // auf seine Seite zu holen. Mittelgroße Gruppen (2-3) gehen leer aus. ====
+    // ==== SIEGER-GIF: nur wenn jemand GANZ ALLEIN richtig lag (die 400-Punkte-Situation) ====
+    const WINNER_GIFS = [
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/a-man-with-a-beard-and-long-blonde-hair-is-sitting-in-the-woods-holding-a-sword-h5ucdvwr8fi723k7.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/bh187-austin-powers.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/cartoon-clippy-confused-mathematic-9gftw2cvivr1ngi8.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/cartoon-man-gaming-on-couch-with-8-hour-chips-ham4lovwzdb3jorf.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/claynosaurz-is-the-name-of-the-dinosaur-in-this-cartoon-x423n06ilmm451v2.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/hand-inserting-super-nintendo-cartridge-into-video-game-console-21wnh6albyo5yia3.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/hulk-hogan-mic-drop-meme-cnc2ps6ain3yz0eg.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/i-am-a-mastermind-samuel-l-jackson.gif"
+    ];
+
+    let lastSeenWinnerGifId = null;
+    function maybeShowWinnerGif(state) {
+      const ev = state.winnerGifEvent;
+      if (!ev || !ev.id || ev.id === lastSeenWinnerGifId) return;
+      if (Date.now() - ev.id > 12000) { lastSeenWinnerGifId = ev.id; return; }
+      lastSeenWinnerGifId = ev.id;
+      const modal = document.getElementById("winner-gif-modal");
+      const nameEl = document.getElementById("winner-gif-name");
+      const imgEl = document.getElementById("winner-gif-img");
+      if (!modal || !nameEl || !imgEl) return;
+      nameEl.innerText = "+" + (ev.points || 0) + " Punkte für " + (ev.name || "Jemand") + " - ganz allein richtig!";
+      imgEl.src = ev.gifUrl;
+      modal.classList.remove("hidden");
+      setTimeout(() => modal.classList.add("hidden"), 8200);
+    }
+
+    function pointsForGroupSize(correctCount, totalActive) {
+      if (totalActive > 0 && correctCount === totalActive) return 300; // alle einig
+      if (correctCount === 1) return 400;  // ganz allein richtig
+      if (correctCount === 5) return 200;
+      if (correctCount === 4) return 100;
+      return 0; // 2, 3 oder sonstige Zwischengrößen
+    }
+
+    // TIMER / SOUND STATE
+    const ANSWER_DURATION_MS = 90000; // 1,5 Minuten - schnell diskutieren, schnell entscheiden
+    let timerInterval = null;
+    let timerExpiredHandled = false;
+    let audioCtx = null;
+
+    // FRAGEN-KATALOG (Standard-Fragen als Rückfallebene, falls im Editor noch nichts angelegt wurde)
+    let questions = [
+{
+        id: 11,
+        question: "Welche besondere Fähigkeit hat der Krallenfrosch?",
+        options: [
+          "Er laicht, wenn ihm Urin schwangerer Personen injiziert wird.",
+          "Er betäubt Fische durch Ultraschall-Vibrationen seiner Krallen.",
+          "Er verglast bei Dürre jahrelang zu einem durchsichtigen Klumpen.",
+          "Er verdaut verschluckte Kieselsteine zur Mineralstoffaufnahme."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://de.wikipedia.org/wiki/Froschtest?wprov=sfla1"
+      },
+      {
+        id: 12,
+        question: "Warum hielten manche Schäfer Gerüchten zufolge eine bestimmte Ziegenart in ihrer Schafherde?",
+        options: [
+          "Sie fällt bei Schreck in Ohnmacht und dient Raubtieren als leichte Beute, während die Schafe fliehen.",
+          "Sie gab einen besonders lauten Mecker-Schrei von sich, sobald sich ein Wolf näherte, und diente dadurch als natürliche Alarmanlage.",
+          "Sie hatte angeblich einen beruhigenden Einfluss auf die Schafe und verhinderte, dass die Herde bei Gefahr auseinanderlief.",
+          "Sie fraß bevorzugt giftige Pflanzen am Wegesrand und schützte die Schafe dadurch davor, versehentlich davon zu fressen."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.zeit.de/wissen/umwelt/2012-01/unterschaetztes-tier-fainting-goats"
+      },
+      {
+        id: 13,
+        question: "Welches Einstellungskriterium sorgte dafür, dass das FBI praktisch nicht in der Lage war, Cybersecurityexperten einzustellen?",
+        options: [
+          "Ein negativer Drogentest.",
+          "Ein einwandfreier Führerschein.",
+          "Keine Vorstrafen wegen Hacking.",
+          "Keine illegalen Downloads von Software."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.heise.de/news/FBI-hat-Personalmangel-bei-Informatikern-2766898.html"
+      },
+      {
+        id: 14,
+        question: "Warum mussten 27 menschliche Gene umbenannt werden?",
+        options: [
+          "Damit Excel sie nicht automatisch umformatiert.",
+          "Weil Forscher beim Vorlesen der Namen ständig unfreiwillig fluchten.",
+          "Weil manche Gennamen mit Erreger-Abkürzungen verwechselt wurden.",
+          "Weil Gene wie Comicfiguren hießen und die Rechteinhaber klagen wollten."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.sueddeutsche.de/wirtschaft/microsoft-excel-genforschung-namen-1.4992440"
+      },
+      {
+        id: 15,
+        question: "Rapper Snoop Dogg zahlt laut eigenen Angaben einem Mann 40–50.000 $, um was in Vollzeit zu tun?",
+        options: [
+          "Er hat ihn zum Drehen seiner Joints eingestellt.",
+          "Er hat ihn eingestellt, um täglich seine Sneaker-Sammlung zu sortieren.",
+          "Er zahlt ihm dafür, ständig seine Kette zu polieren.",
+          "Er hat ihn als persönlichen 'Yeah'-Rufer bei Aufnahmen engagiert."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.npr.org/2022/06/13/1104529582/snoop-dogg-gives-his-full-time-blunt-roller-a-raise-due-to-inflation"
+      },
+      {
+        id: 16,
+        question: "Was war das Besondere an der erfolgreichen Klage einer 58-jährigen Frau gegen einen 18-jährigen Jungen, der ihr schwere Verletzungen zugefügt hatte?",
+        options: [
+          "Sie klagte gegen einen Toten – seine Leichenteile trafen sie nach einem Zugunglück.",
+          "Er beging die Tat schlafwandelnd und wusste nichts davon.",
+          "Er galt zur Tatzeit als vermisst und tauchte erst durch die Klage wieder auf.",
+          "Er steckte zur Tatzeit noch im Mutterleib."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.huffpost.com/entry/hiroyuki-joho-sued_n_1175172"
+      },
+      {
+        id: 17,
+        question: "Was machen UPS-Fahrer nahezu nie?",
+        options: [
+          "Linksabbiegen – die Routenplanung vermeidet das bewusst, um Zeit und Sprit zu sparen.",
+          "Rückwärts einparken – die Software plant nur Vorwärtsparkplätze ein.",
+          "Radio hören – erlaubt sind nur firmeneigene Hörbücher.",
+          "Mit laufendem Motor tanken – aus Sicherheitsvorschrift strikt verboten."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.welt.de/wirtschaft/article161916731/UPS-Rechtsabbiegen-fuer-weniger-Unfaelle-und-mehr-Effizienz.html"
+      },
+      {
+        id: 18,
+        question: "Welche Aufgabe hat der NASA-Mitarbeiter George Aldrich?",
+        options: [
+          "Er ist 'Chief Sniffer' – er riecht an allem, was mit ins All soll, da Gerüche dort zum Ausschlusskriterium werden können.",
+          "Er ist 'Chief Taster' – er kostet jede Astronautenmahlzeit vor dem Start.",
+          "Er ist offizieller 'Stille-Tester' – er lauscht, ob Bauteile im Vakuum ungewöhnliche Geräusche machen.",
+          "Er ist 'Chief Folder' – er faltet die Raumanzüge nach einem geheimen Origami-Verfahren."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://interestingengineering.com/science/nasas-chief-sniffer-explains-how-his-nose-helps-astronauts"
+      },
+      {
+        id: 19,
+        question: "Im Jahr 1932 hatte Winston Churchill ein Attest, das ihm was erlaubte?",
+        options: [
+          "Ein Attest erlaubte ihm, zu den Mahlzeiten Alkohol zu trinken.",
+          "Ein Attest erlaubte ihm, während Reden zu rauchen.",
+          "Ein Attest befreite ihn von jeglicher Frühsport-Pflicht.",
+          "Ein Attest erlaubte ihm, Kabinettssitzungen im Schlafanzug abzuhalten."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.openculture.com/2023/12/winston-churchill-gets-a-doctors-note-to-drink-unlimited-alcohol-while-visiting-the-u-s-during-prohibition-1932.html#google_vignette"
+      },
+      {
+        id: 20,
+        question: "Was erhält man, wenn man bei VW die Teilenummer 199 398 500 A bestellt?",
+        options: [
+          "Die Volkswagen-Currywurst – VW stellt sie selbst her und verkauft mehr davon als von manchen Fahrzeugmodellen.",
+          "Ein Fläschchen VW-eigenes Parfüm mit 'Neuwagengeruch'.",
+          "Ein Paar Wollsocken aus der VW-Werksschneiderei.",
+          "Eine Flasche VW-Hausbier, gebraut in der Werkskantine Wolfsburg."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://de.wikipedia.org/wiki/Volkswagen-Currywurst?wprov=sfla1"
+      }
+    ];
+
+    // Bonus-Fragen (von Claude ergaenzt) - eigener Erweiterungs-Pool, nicht im Standard-Katalog enthalten
+    const bonusQuestions = [
+      {
+        id: 1,
+        question: "Wie lange dauerte der kürzeste Krieg der Geschichte (Anglo-Sansibar-Krieg, 1896)?",
+        options: ["38 Minuten", "3 Tage", "1 Woche", "12 Stunden"],
+        correct: 0,
+        points: 150
+      },
+      {
+        id: 2,
+        question: "Wie viele Herzen hat ein Oktopus?",
+        options: ["1", "2", "3", "4"],
+        correct: 2,
+        points: 150
+      },
+      {
+        id: 3,
+        question: "Welche dieser Früchte ist botanisch gesehen KEINE Beere?",
+        options: ["Banane", "Erdbeere", "Tomate", "Kiwi"],
+        correct: 1,
+        points: 150
+      },
+      {
+        id: 4,
+        question: "Welche Form hat der Kot von Wombats?",
+        options: ["Rund", "Würfelförmig", "Spiralförmig", "Länglich-spitz"],
+        correct: 1,
+        points: 150
+      },
+      {
+        id: 5,
+        question: "Was dauert auf der Venus länger?",
+        options: ["Ein Tag", "Ein Jahr", "Beide gleich lang", "Auf der Venus gibt es keine Tage"],
+        correct: 0,
+        points: 150
+      },
+      {
+        id: 6,
+        question: "Wie lange hält sich echter Honig ungeöffnet, bevor er verdirbt?",
+        options: ["Etwa 1 Jahr", "Etwa 10 Jahre", "Praktisch unbegrenzt (Jahrtausende)", "Etwa 6 Monate"],
+        correct: 2,
+        points: 150
+      },
+      {
+        id: 7,
+        question: "Welches Land der Welt hat die meisten Zeitzonen?",
+        options: ["Russland", "USA", "Frankreich", "China"],
+        correct: 2,
+        points: 150
+      },
+      {
+        id: 8,
+        question: "Um wie viele Zentimeter kann der Eiffelturm im Hochsommer durch die Hitze wachsen?",
+        options: ["Etwa 15 cm", "Etwa 2 cm", "Etwa 50 cm", "Gar nicht, das ist ein Mythos"],
+        correct: 0,
+        points: 150
+      },
+      {
+        id: 9,
+        question: "Wovon gibt es Schätzungen zufolge mehr?",
+        options: ["Sandkörner an allen Stränden der Erde", "Mögliche Schachpartien", "Sterne im beobachtbaren Universum", "Alle drei sind ungefähr gleich viele"],
+        correct: 1,
+        points: 150
+      },
+      {
+        id: 10,
+        question: "Wie nennt man eine Gruppe von Flamingos im englischen Fachjargon?",
+        options: ["A Flamboyance", "A Parade", "A Blush", "A Colony"],
+        correct: 0,
+        points: 150
+      }
+    ];
+
+
+    // ==== RANG-TITEL: witziger Platzierungs-Hinweis statt exaktem Punktestand ====
+    const RANK_TITLES = [
+      "Sockenflicker",
+      "Krümelmonster-Praktikant",
+      "Wackelpudding-Ritter",
+      "Hobby-Rater",
+      "Quiz-Lehrling",
+      "Wissens-Gladiator",
+      "Fragen-Halbgott",
+      "Elite Übermensch Echse"
+    ];
+    function computeRankTitle(myId, allPlayersData) {
+      const activeIds = Object.keys(allPlayersData).filter(id => allPlayersData[id] && allPlayersData[id].name && !allPlayersData[id].name.includes("Host") && !allPlayersData[id].name.includes("Admin"));
+      if (activeIds.length === 0) return RANK_TITLES[4];
+      const sorted = [...activeIds].sort((a, b) => (allPlayersData[b].score || 0) - (allPlayersData[a].score || 0));
+      const rank = sorted.indexOf(myId) + 1;
+      const n = sorted.length;
+      const percentile = n > 1 ? (rank - 1) / (n - 1) : 0.5;
+      const tierIndex = Math.min(7, Math.max(0, Math.round((1 - percentile) * 7)));
+      return RANK_TITLES[tierIndex];
+    }
+
+    // INITIALISIERUNG
+    let allPlayers = {};
+
+    // Kopf-Bilder pro Spieler, exklusiv für Spiel 3 (unbeschnitten, ohne Rahmen)
+    const HEAD3_IMAGES = {
+      "cCc": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/96d39858e6fd04742b08555eeaa609bf63944b50/cCcspiel3.png",
+      "Sörn1989": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/96d39858e6fd04742b08555eeaa609bf63944b50/s%C3%B6rnspiel3.png",
+      "Santax": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/96d39858e6fd04742b08555eeaa609bf63944b50/santaspiel3.png",
+      "Holzkohle": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/96d39858e6fd04742b08555eeaa609bf63944b50/Holzkohlespiel3.png",
+      "breekibree": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/96d39858e6fd04742b08555eeaa609bf63944b50/Breekibree%20Spiel3.png",
+      "skywalker161": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/96d39858e6fd04742b08555eeaa609bf63944b50/Skywalkerspiel3.png"
+    };
+    const CLIPPY_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/96d39858e6fd04742b08555eeaa609bf63944b50/clippy%20Info%20spiel3.gif";
+    onValue(ref(db, 'players/'), (snapshot) => {
+      const allPlayersData = snapshot.val() || {};
+      allPlayers = allPlayersData;
+      const player = allPlayersData[playerId];
+      if (player) {
+        if (player.name && player.name.includes("Host")) {
+          isHost = true;
+          document.getElementById("brain-logo")?.classList.add("hidden"); // Host bekommt das Gehirn-Feature nicht
+          document.getElementById("host-controls").classList.remove("hidden");
+          document.getElementById("host-end-game-btn").classList.remove("hidden");
+          // Host spielt nicht mit: Antwortbereich ausblenden
+          document.getElementById("player-answer-area").classList.add("hidden");
+          document.getElementById("player-info-score").innerHTML = icon('crown', 'w-3.5 h-3.5 inline -mt-0.5') + ' MODERATOR';
+          renderHostPreview(latestQuestion);
+        } else {
+          document.getElementById("player-info-score").innerHTML = icon('medal', 'w-3.5 h-3.5 inline -mt-0.5') + ' ' + computeRankTitle(playerId, allPlayersData);
+        }
+        document.getElementById("player-info-name").innerText = player.name;
+      }
+    });
+
+    // LISTEN AUF SPIEL1 GAME STATE - erst NACHDEM die (evtl. im Editor angepassten) Fragen
+    // aus Firebase geladen wurden, damit nie mit einem leeren/falschen Katalog gestartet wird.
+    // FRAGEN-QUELLE laden: Host kann im Cockpit vor dem Start wählen, welcher Pool gilt
+    // (eigene / vorgefertigte / feste Vorlage / Mix aus allem). Erst danach den Spielzustand
+    // beobachten, damit nie mit dem falschen Katalog gestartet wird.
+    get(ref(db, 'content/spiel3/activeSource')).then((sourceSnap) => {
+      const source = sourceSnap.val() || 'custom';
+      const defaultQuestions = questions; // die eingebauten Standard-Fragen als Basis für "mix"
+
+      function withResolvedQuestions(resolved) {
+        if (Array.isArray(resolved) && resolved.length > 0) {
+          questions = resolved;
+        }
+        startListeningWithQuestions();
+      }
+
+      if (source === 'default') {
+        withResolvedQuestions(defaultQuestions);
+      } else if (source.indexOf('template:') === 0) {
+        const templateName = source.slice('template:'.length);
+        get(ref(db, 'content/spiel3/templates/' + templateName)).then((snap) => withResolvedQuestions(snap.val()));
+      } else if (source === 'mix') {
+        Promise.all([
+          get(ref(db, 'content/spiel3/questions')),
+          get(ref(db, 'content/spiel3/templates'))
+        ]).then(([customSnap, templatesSnap]) => {
+          let pool = [...defaultQuestions];
+          const custom = customSnap.val();
+          if (Array.isArray(custom)) pool = pool.concat(custom);
+          const templates = templatesSnap.val() || {};
+          Object.values(templates).forEach(t => { if (Array.isArray(t)) pool = pool.concat(t); });
+          for (let i = pool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+          }
+          withResolvedQuestions(pool);
+        });
+      } else {
+        get(ref(db, 'content/spiel3/questions')).then((snap) => withResolvedQuestions(snap.val()));
+      }
+    });
+
+    function startListeningWithQuestions() {
+      onValue(ref(db, 'game3State'), (snapshot) => {
+        const state = snapshot.val() || { questionIdx: 0, stage: 'intro' }; // intro, waiting, question_shown, options_shown, result
+        const q = questions[state.questionIdx || 0];
+        currentQuestionData = { ...q, stage: state.stage, correctOption: state.correctOption };
+        latestQuestion = q;
+
+        renderHostPreview(q);
+        updateUI(state, q);
+
+        // TIMER: läuft nur während 'options_shown', synchronisiert über optionsShownAt
+        if (state.stage === 'options_shown' && state.optionsShownAt) {
+          startAnswerTimer(state.optionsShownAt);
+        } else {
+          stopAnswerTimer();
+        }
+
+        renderLiveVotes(state);
+        maybeShowWinnerGif(state);
+      });
+    }
+
+    // Zeigt live für ALLE sichtbar an, wer welche Antwort(en) angekreuzt hat - kleine
+    // Namens-Chips direkt unter jedem Antwort-Button, aktualisiert sich in Echtzeit.
+    // Verfolgt pro Antwort-Option, welche Spieler dort beim letzten Render schon zu sehen
+    // waren - nur wirklich NEUE Ankünfte bekommen die Kuller-Flug-Animation, damit nicht bei
+    // jedem Render alle Köpfe erneut hereinkullern.
+    let lastRenderedVoteIds = [new Set(), new Set(), new Set(), new Set()];
+
+    function renderLiveVotes(state) {
+      const liveVotes = state.liveVotes || {};
+      for (let i = 0; i < 4; i++) {
+        const wrap = document.getElementById(`opt-votes-${i}`);
+        if (!wrap) continue;
+        const idsHere = Object.keys(liveVotes).filter(id => Array.isArray(liveVotes[id]) && liveVotes[id].includes(i));
+        const prevSet = lastRenderedVoteIds[i];
+
+        wrap.innerHTML = idsHere.map(id => {
+          const name = (allPlayers[id] || {}).name || "?";
+          const headUrl = HEAD3_IMAGES[name];
+          const isNew = !prevSet.has(id);
+          if (headUrl) {
+            return `<img src="${headUrl}" title="${name}" class="vote-head-img${isNew ? ' vote-head-img-new' : ''}">`;
+          }
+          // Fallback für Spieler ohne hinterlegtes Kopf-Bild
+          return `<span class="inline-block bg-white/90 text-[#1a1a2e] text-[10px] font-bold px-2 py-0.5 rounded-full mr-1 mb-1">${name}</span>`;
+        }).join('');
+
+        lastRenderedVoteIds[i] = new Set(idsHere);
+      }
+    }
+
+    // HOST-VORSCHAU: Host sieht Frage + Lösung schon, bevor sie den Spielern gezeigt wird
+    function renderHostPreview(q) {
+      if (!isHost || !q) return;
+      const box = document.getElementById("host-preview-box");
+      if (!box) return;
+      const correctSet = correctSetOf(q);
+      const optsHtml = q.options.map((opt, i) => {
+        const correct = correctSet.includes(i);
+        return `<div class="${correct ? 'text-[#7ed957] font-black' : 'text-[#1a1a2e]/60'} flex items-center gap-1">${String.fromCharCode(65 + i)}) ${opt}${correct ? icon('check','w-3.5 h-3.5') : ''}</div>`;
+      }).join('');
+      const multiHint = correctSet.length > 1 ? `<div class="text-[#ff2e93] font-jax font-bold text-xs mb-1">${correctSet.length} richtige Antworten!</div>` : '';
+      box.innerHTML = `<div class="text-[#7017c9] font-jax font-bold mb-2 flex items-center justify-center gap-1">${icon('book','w-4 h-4')} Vorschau (nur du siehst das):</div><div class="font-jax font-extrabold text-[#1a1a2e] text-xl md:text-2xl mb-3">${q.question}</div>${multiHint}<div class="space-y-1 text-base inline-block text-left">${optsHtml}</div>${q.source ? `<div class="mt-2 text-[10px] text-[#1a1a2e]/40 break-all">🔗 ${q.source}</div>` : ''}`;
+    }
+
+    // NAVIGATION: sobald der Host das Spiel-Ende einläutet (gameState != 'in_game'), zurück ins Cockpit
+    onValue(ref(db, 'gameState'), (snapshot) => {
+      const gs = snapshot.val();
+      if (gs && gs.status && gs.status !== 'in_game') {
+        window.location.href = "cockpit.html";
+      }
+    });
+
+    // HOST: zurück ins Cockpit (setzt Bereitschaft aller Spieler zurück für die nächste Runde)
+    window.hostRestartGame = function() {
+      if (!confirm("Spiel wirklich neu starten? Der Fortschritt dieser Runde geht verloren (Punkte bleiben erhalten).")) return;
+      set(ref(db, 'game3State'), { questionIdx: 0, stage: 'intro' });
+    };
+
+    function generateRiddleClues(pid, sortedIds, players) {
+      const rank = sortedIds.indexOf(pid) + 1;
+      const n = sortedIds.length;
+      const pool = [];
+      if (rank > 1) pool.push('Du bist nicht Erster.');
+      if (rank < n) pool.push('Du bist nicht Letzter.');
+      if (rank > 1) pool.push('Du liegst hinter ' + players[sortedIds[rank - 2]].name + '.');
+      if (rank < n) pool.push('Du liegst vor ' + players[sortedIds[rank]].name + '.');
+      if (rank > 2) pool.push('Mindestens zwei Personen liegen vor dir.');
+      if (rank < n - 1) pool.push('Mindestens zwei Personen liegen hinter dir.');
+      if (pool.length === 0) pool.push('Die Truhe ist ratlos - du bist ganz allein im Rennen.');
+      const shuffled = pool.map(x => [Math.random(), x]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+      return shuffled.slice(0, Math.min(2, shuffled.length));
+    }
+
+        // ==== ZITATE ÜBER DAS SPIELEN (für den Abspann) ====
+    const GAME_QUOTES = [
+      { text: "Beim Spiel kann man einen Menschen in einer Stunde besser kennenlernen als im Gespräch in einem Jahr.", author: "Platon" },
+      { text: "Spiele, damit du ernst sein kannst. Denn das Spiel ist ein Ausruhen, und die Menschen bedürfen, da sie nicht immer tätig sein können, des Ausruhens.", author: "Aristoteles" },
+      { text: "Atome spalten ist ein Kinderspiel, verglichen mit einem Kinderspiel.", author: "Albert Einstein" },
+      { text: "Nur Arbeit und kein Spiel macht dumm.", author: "Karl Marx" },
+      { text: "Spielen ist eine Tätigkeit, die man gar nicht ernst genug nehmen kann.", author: "Jacques-Yves Cousteau" }
+    ];
+    function gameQuoteHtml() {
+      const q = GAME_QUOTES[Math.floor(Math.random() * GAME_QUOTES.length)];
+      return `<div class="italic">"${q.text}"</div><div class="mt-2 not-italic font-bold opacity-80">— ${q.author}</div>`;
+    }
+
+    // ==== RÜCKKEHR-ZWISCHENSZENE: schwarzer Bildschirm mit altertümlichem Countdown ====
+    let lastSeenReturnCountdownAt = null;
+    onValue(ref(db, 'gameState/returnCountdownAt'), (snapshot) => {
+      const startedAt = snapshot.val();
+      if (startedAt && startedAt !== lastSeenReturnCountdownAt) {
+        lastSeenReturnCountdownAt = startedAt;
+        runReturnCountdown(startedAt);
+      }
+    });
+
+    function runReturnCountdown(startedAt) {
+      const overlay = document.getElementById('return-countdown-overlay');
+      const numberEl = document.getElementById('return-countdown-number');
+      if (!overlay || !numberEl) return;
+      overlay.classList.remove('hidden');
+      const DURATION = 5;
+      let doneTriggered = false;
+      function tick() {
+        const elapsed = (Date.now() - startedAt) / 1000;
+        const remaining = Math.max(0, DURATION - elapsed);
+        numberEl.innerText = remaining > 0.05 ? Math.ceil(remaining) : '✓';
+        if (remaining > 0.05) {
+          requestAnimationFrame(tick);
+        } else if (!doneTriggered) {
+          doneTriggered = true;
+          if (isHost) window.hostBackToCockpit();
+        }
+      }
+      tick();
+    }
+
+    window.triggerReturnCountdown = function() {
+      if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
+      update(ref(db, 'gameState'), { returnCountdownAt: Date.now() });
+    };
+
+    window.hostBackToCockpit = function() {
+
+      get(ref(db, 'gameState/startScores')).then((startSnap) => {
+        const startScores = startSnap.val() || {};
+        get(ref(db, 'players/')).then((snapshot) => {
+          const players = snapshot.val() || {};
+          const activeIds = Object.keys(players).filter(id => players[id] && players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin"));
+          const rankedIds = [...activeIds].sort((a, b) => (players[b].score || 0) - (players[a].score || 0));
+          const updates = {};
+          for (let id in players) {
+            if (players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin")) {
+              updates['players/' + id + '/isReady'] = false;
+            }
+          }
+          activeIds.forEach(id => {
+            updates['players/' + id + '/riddleClues'] = generateRiddleClues(id, rankedIds, players);
+          });
+          update(ref(db), updates).then(() => {
+            activeIds.forEach(id => {
+              const delta = (players[id].score || 0) - (startScores[id] || 0);
+              if (delta !== 0) {
+                push(ref(db, 'gameLog'), {
+                  text: (delta > 0 ? '📈 ' : '📉 ') + players[id].name + ': ' + (delta > 0 ? '+' : '') + delta + ' Punkte in Spiel 1',
+                  at: Date.now()
+                });
+              }
+            });
+            set(ref(db, 'gameState'), { status: 'cockpit', chestPending: true, chestPendingAt: Date.now() });
+          });
+        });
+      });
+    };
+
+    // ==== TIMER (1,5 Min. pro Frage) MIT TICK-SOUND & WECKER ====
+    function ensureAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    // Audio-Kontext beim ersten Klick irgendwo auf der Seite freischalten (Browser-Autoplay-Regel)
+    document.addEventListener('click', () => ensureAudioContext(), { once: true });
+
+    function playTick(volume) {
+      try {
+        const ctx = ensureAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = 1000;
+        gain.gain.setValueAtTime(volume, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.07);
+      } catch (e) { /* Audio evtl. noch nicht freigeschaltet - ignorieren */ }
+    }
+
+    function playAlarm() {
+      try {
+        const ctx = ensureAudioContext();
+        const now = ctx.currentTime;
+        for (let i = 0; i < 6; i++) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.value = (i % 2 === 0) ? 880 : 660;
+          gain.gain.setValueAtTime(0.001, now + i * 0.25);
+          gain.gain.linearRampToValueAtTime(0.4, now + i * 0.25 + 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.25 + 0.24);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(now + i * 0.25);
+          osc.stop(now + i * 0.25 + 0.25);
+        }
+      } catch (e) { /* ignorieren */ }
+    }
+
+    function startAnswerTimer(startTimestamp) {
+      stopAnswerTimer();
+      timerExpiredHandled = false;
+      let lastTickAt = 0;
+      const timerWrap = document.getElementById("timer-display");
+      if (timerWrap) timerWrap.classList.remove("hidden");
+
+      timerInterval = setInterval(() => {
+        const elapsed = Date.now() - startTimestamp;
+        const remaining = Math.max(0, ANSWER_DURATION_MS - elapsed);
+        updateTimerUI(remaining, ANSWER_DURATION_MS);
+
+        // Tick-Sound erst ab 45 Sekunden Restzeit - passend zur "Time is ticking"-Animation,
+        // wird danach mit sinkender Restzeit schneller UND lauter
+        const TICK_SOUND_START_MS = 45000;
+        if (remaining <= TICK_SOUND_START_MS) {
+          const progress = 1 - (remaining / TICK_SOUND_START_MS); // 0 -> 1
+          const tickInterval = 1000 - progress * 820; // 1000ms -> 180ms
+          const volume = 0.08 + progress * 0.37;
+          if (remaining > 0 && Date.now() - lastTickAt >= tickInterval) {
+            playTick(volume);
+            lastTickAt = Date.now();
+          }
+        }
+
+        if (remaining <= 0 && !timerExpiredHandled) {
+          timerExpiredHandled = true;
+          playAlarm();
+          clearInterval(timerInterval);
+          timerInterval = null;
+          // Zeit abgelaufen: Lösung automatisch anzeigen (nur der Host schreibt den Status)
+          if (isHost) {
+            update(ref(db, 'game3State'), { stage: 'result' });
+          }
+        }
+      }, 100);
+    }
+
+    function stopAnswerTimer() {
+      if (timeTickingEl_updateTimerUI) { timeTickingEl_updateTimerUI.remove(); timeTickingEl_updateTimerUI = null; }
+      timeTickingStep_updateTimerUI = -1;
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      const timerWrap = document.getElementById("timer-display");
+      if (timerWrap) timerWrap.classList.add("hidden");
+    }
+
+    // "Time is ticking"-Anzeige: erscheint ab 25 Sekunden Restzeit, bleibt DAUERHAFT stehen
+    // (kein kurzer Popup mehr) und wird alle 5 Sekunden ruckartig (kein sanftes Wachsen)
+    // größer. Verschwindet erst exakt bei 0.
+    const TIME_TICKING_START_MS_updateTimerUI = 45000;
+    let timeTickingEl_updateTimerUI = null;
+    let timeTickingStep_updateTimerUI = -1;
+    function maybeShowTimeTicking_updateTimerUI(remaining) {
+      if (remaining > TIME_TICKING_START_MS_updateTimerUI || remaining <= 0) {
+        if (timeTickingEl_updateTimerUI) { timeTickingEl_updateTimerUI.remove(); timeTickingEl_updateTimerUI = null; }
+        timeTickingStep_updateTimerUI = -1;
+        return;
+      }
+      const anchor = document.getElementById("timer-seconds");
+      if (!anchor) return;
+
+      if (!timeTickingEl_updateTimerUI) {
+        const rect = anchor.getBoundingClientRect();
+        const img = document.createElement("img");
+        img.src = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/timeistickingGames.png";
+        img.className = "time-ticking-popup";
+        img.style.position = "fixed";
+        img.style.left = (rect.left - 54) + "px"; // links NEBEN der Uhr, nicht darüber
+        img.style.top = (rect.top + rect.height / 2 - 20) + "px";
+        img.style.width = "40px";
+        img.style.zIndex = "55";
+        img.style.pointerEvents = "none";
+        img.style.transformOrigin = "right center"; // wächst nach links weg von der Uhr, nicht drüber
+        img.style.transition = "transform 0.15s ease-out";
+        document.body.appendChild(img);
+        timeTickingEl_updateTimerUI = img;
+      }
+
+      // Alle 5 Sek. ein ruckartiger Wachstumsschritt (25-21s = Stufe 0, 20-16s = Stufe 1, ...)
+      const step = Math.min(4, Math.floor((TIME_TICKING_START_MS_updateTimerUI - remaining) / 5000));
+      if (step !== timeTickingStep_updateTimerUI) {
+        timeTickingStep_updateTimerUI = step;
+        timeTickingEl_updateTimerUI.style.transform = "scale(" + (1 + step * 0.75) + ")";
+      }
+    }
+
+    function updateTimerUI(remaining, duration) {
+      maybeShowTimeTicking_updateTimerUI(remaining);
+      const numberEl = document.getElementById("timer-seconds");
+      const barEl = document.getElementById("timer-bar");
+      if (!numberEl || !barEl) return;
+      const secs = Math.ceil(remaining / 1000);
+      numberEl.innerText = secs + "s";
+      const pct = Math.max(0, (remaining / duration) * 100);
+      barEl.style.width = pct + "%";
+      if (pct > 50) {
+        barEl.className = "h-full bg-green-400 transition-all duration-100 rounded-full";
+        numberEl.className = "text-2xl font-black text-green-400";
+      } else if (pct > 20) {
+        barEl.className = "h-full bg-yellow-400 transition-all duration-100 rounded-full";
+        numberEl.className = "text-2xl font-black text-yellow-400";
+      } else {
+        barEl.className = "h-full bg-red-500 animate-pulse transition-all duration-100 rounded-full";
+        numberEl.className = "text-2xl font-black text-red-500 animate-pulse";
+      }
+    }
+
+    // ==== KONFETTI (richtig) / FAIL-SCREEN (falsch) ====
+    function fireConfetti() {
+      const canvas = document.getElementById("confetti-canvas");
+      if (!canvas) return;
+      canvas.classList.remove("hidden");
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      const ctx = canvas.getContext("2d");
+      const colors = ["#ff2e93", "#7017c9", "#ffd23f", "#3ecbff", "#7ed957", "#ff8a3d"];
+      const particles = [];
+      for (let i = 0; i < 160; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: -20 - Math.random() * canvas.height * 0.5,
+          size: 5 + Math.random() * 6,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          vx: (Math.random() - 0.5) * 4,
+          vy: 2 + Math.random() * 4,
+          rot: Math.random() * 360,
+          vrot: (Math.random() - 0.5) * 12
+        });
+      }
+      let frame = 0;
+      const maxFrames = 220;
+      function animate() {
+        frame++;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.04;
+          p.rot += p.vrot;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot * Math.PI / 180);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+          ctx.restore();
+        });
+        if (frame < maxFrames) {
+          requestAnimationFrame(animate);
+        } else {
+          canvas.classList.add("hidden");
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+      animate();
+    }
+
+    function playSadTrombone() {
+      try {
+        const ctx = ensureAudioContext();
+        const now = ctx.currentTime;
+        const notes = [329.63, 311.13, 293.66, 277.18]; // absteigend - klassischer "Wah-wah-wah-waaah"
+        const durations = [0.32, 0.32, 0.32, 0.95];
+        let t = now;
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.001, t);
+          gain.gain.linearRampToValueAtTime(0.22, t + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + durations[i]);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(t);
+          osc.stop(t + durations[i] + 0.05);
+          t += durations[i];
+        });
+      } catch (e) {}
+    }
+
+    function showFailNote() {
+      playSadTrombone();
+      const box = document.getElementById("fail-note");
+      if (!box) return;
+      box.classList.remove("hidden");
+      box.innerHTML = `<div class="text-4xl mb-1">🌧️😢</div><div class="font-jax font-bold text-[#3ecbff]">Leider falsch...</div>`;
+      setTimeout(() => box.classList.add("hidden"), 2500);
+    }
+
+    function renderHostControlStage(stage) {
+      if (!isHost) return;
+      ["hc-intro", "hc-waiting", "hc-question_shown", "hc-options_shown", "hc-result"].forEach(id => document.getElementById(id)?.classList.add("hidden"));
+      const map = { intro: "hc-intro", waiting: "hc-waiting", question_shown: "hc-question_shown", options_shown: "hc-options_shown", result: "hc-result" };
+      const target = map[stage];
+      if (target) document.getElementById(target)?.classList.remove("hidden");
+    }
+
+    // Haken-Benachrichtigung für den Host: sobald ALLE aktiven Spieler mindestens eine
+    // Antwort ausgewählt haben, wird das direkt am Feld angezeigt - der Host kann dann
+    // vorzeitig auflösen, statt auf die volle Zeit zu warten.
+    function updateAllAnsweredBadge(state) {
+      const badge = document.getElementById("all-answered-badge");
+      if (!badge) return;
+      if (!isHost || state.stage !== 'options_shown') { badge.classList.add("hidden"); return; }
+
+      const activeIds = Object.keys(allPlayers).filter(id => {
+        const n = allPlayers[id] && allPlayers[id].name;
+        return n && !n.includes("Host") && !n.includes("Admin");
+      });
+      const hasAnswered = state.hasAnswered || {};
+      const allDone = activeIds.length > 0 && activeIds.every(id => hasAnswered[id]);
+      badge.classList.toggle("hidden", !allDone);
+    }
+
+    function updateUI(state, q) {
+      const qTitle = document.getElementById("question-title");
+      const statusBadge = document.getElementById("status-badge");
+      renderHostControlStage(state.stage);
+      updateAllAnsweredBadge(state);
+
+      if (state.stage === 'finished') {
+        stopAnswerTimer();
+        if (!isHost) {
+          document.getElementById("player-answer-area").classList.add("hidden");
+          document.getElementById("finished-area").classList.remove("hidden");
+          const fq = document.getElementById("finished-quote"); if (fq && !fq.innerHTML) fq.innerHTML = gameQuoteHtml();
+        }
+        statusBadge.innerText = "SPIEL BEENDET";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#7017c9] text-white";
+        return;
+      }
+      if (!isHost) {
+        document.getElementById("player-answer-area").classList.remove("hidden");
+        document.getElementById("finished-area").classList.add("hidden");
+      }
+      
+      // Regel-Erklärung vor dem allerersten Start
+      if (state.stage === 'intro') {
+        stopAnswerTimer();
+        document.getElementById("intro-screen")?.classList.remove("hidden");
+        document.getElementById("player-answer-area")?.classList.add("hidden");
+        statusBadge.innerText = "SPIELREGELN";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#ffd23f] text-[#1a1a2e]";
+        return;
+      }
+      document.getElementById("intro-screen")?.classList.add("hidden");
+
+      // Frage anzeigen oder verstecken
+      if (state.stage === 'waiting') {
+        qTitle.innerText = "Warten auf Start der nächsten Frage durch den Host...";
+        statusBadge.innerText = "BEREITSTELLUNG";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#ffd23f] text-[#1a1a2e]";
+        resetOptionButtons();
+        return;
+      }
+
+      qTitle.innerText = q.question;
+
+      if (state.stage === 'question_shown') {
+        statusBadge.innerText = "FRAGE FREIGEGEBEN - ANTWORTEN GESPERRT";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#3ecbff] text-[#1a1a2e]";
+        disableOptionButtons(true, "Warten auf Freigabe der Antworten...");
+      } else if (state.stage === 'options_shown') {
+        statusBadge.innerText = "ANTWORTEN FREIGEGEBEN - JETZT WÄHLEN!";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#7ed957] text-[#1a1a2e] animate-pulse";
+        enableOptionButtons(q);
+      } else if (state.stage === 'result') {
+        statusBadge.innerText = "AUFLÖSUNG";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#7017c9] text-white";
+        showResults(q, state);
+      }
+    }
+
+    function resetOptionButtons() {
+      selectedIndices = [];
+      resultAlreadyProcessed = false;
+      for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById(`opt-btn-${i}`);
+        btn.disabled = true;
+        btn.querySelector('.opt-text').innerText = "???";
+        btn.className = getButtonBaseStyle(i) + " opacity-40 cursor-not-allowed";
+      }
+      document.getElementById("group-result-box")?.classList.add("hidden");
+      document.getElementById("fail-note")?.classList.add("hidden");
+      lastRenderedVoteIds = [new Set(), new Set(), new Set(), new Set()];
+    }
+
+    function disableOptionButtons(keepText, placeholder) {
+      for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById(`opt-btn-${i}`);
+        btn.disabled = true;
+        if (!keepText) btn.querySelector('.opt-text').innerText = placeholder;
+        btn.className = getButtonBaseStyle(i) + " opacity-50 cursor-not-allowed";
+      }
+    }
+
+    function enableOptionButtons(q) {
+      for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById(`opt-btn-${i}`);
+        btn.querySelector('.opt-text').innerText = q.options[i];
+        btn.disabled = isHost;
+        btn.className = getButtonBaseStyle(i) + (isHost ? " opacity-50 cursor-not-allowed" : renderSelectionSuffix(i));
+      }
+    }
+
+    function renderSelectionSuffix(i) {
+      return selectedIndices.includes(i) ? " ring-4 ring-white jax-pop cursor-pointer" : " cursor-pointer";
+    }
+
+    function showResults(q, state) {
+      const correctSet = correctSetOf(q);
+      for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById(`opt-btn-${i}`);
+        btn.disabled = true;
+        btn.querySelector('.opt-text').innerText = q.options[i];
+
+        if (correctSet.includes(i)) {
+          btn.className = getButtonBaseStyle(i) + " ring-4 ring-[#1a1a2e] scale-105 z-10";
+        } else {
+          btn.className = getButtonBaseStyle(i) + " opacity-30 grayscale";
+        }
+      }
+
+      // Wer hatte GENAU die richtige Antwort ausgewählt? Basis für die Gruppengrößen-
+      // Punktevergabe - jeder Client berechnet das identisch aus denselben Live-Daten.
+      const liveVotes = (state && state.liveVotes) || {};
+      const activeIds = getActivePlayerIds();
+      const correctPlayerIds = activeIds.filter(id => {
+        const sel = liveVotes[id] || [];
+        const sortedSel = [...sel].sort();
+        const sortedCorrect = [...correctSet].sort();
+        return sortedSel.length > 0 && sortedSel.length === sortedCorrect.length
+          && sortedSel.every((v, idx) => v === sortedCorrect[idx]);
+      });
+      const correctCount = correctPlayerIds.length;
+      const awardedPoints = pointsForGroupSize(correctCount, activeIds.length);
+
+      // Verteilungs-Anzeige für ALLE (Host + Spieler): wer war richtig, wie groß war
+      // die Gruppe, wie viele Punkte gab's dafür.
+      const distBox = document.getElementById("group-result-box");
+      if (distBox) {
+        const names = correctPlayerIds.map(id => (allPlayers[id] || {}).name || "?").join(", ") || "niemand";
+        distBox.innerHTML = `
+          <div class="font-jax font-extrabold text-lg text-[#1a1a2e]">${correctCount} von ${activeIds.length} hatten die richtige Antwort</div>
+          <div class="text-sm text-[#1a1a2e]/70 mt-1">${names}</div>
+          <div class="font-jax font-extrabold text-2xl text-[#7ed957] mt-2">+${awardedPoints} Punkte ${awardedPoints > 0 ? 'für jeden von ihnen' : ''}</div>
+          ${q.source ? `<a href="${q.source}" target="_blank" rel="noopener" class="inline-block mt-3 text-xs text-[#7017c9] underline break-all">🔗 Quelle: ${q.source}</a>` : ''}
+        `;
+        distBox.classList.remove("hidden");
+      }
+
+      // Punkte werden erst JETZT bei der Auflösung vergeben (nicht mehr sofort beim Klicken),
+      // damit die Auswahl bis dahin frei geändert/zurückgenommen werden kann.
+      if (!isHost && !resultAlreadyProcessed) {
+        resultAlreadyProcessed = true;
+        const isFullyCorrect = correctPlayerIds.includes(playerId);
+
+        if (isFullyCorrect && awardedPoints > 0) {
+          fireConfetti();
+          onValue(ref(db, 'players/' + playerId + '/score'), (snapshot) => {
+            const currentScore = snapshot.val() || 0;
+            update(ref(db, 'players/' + playerId), {
+              score: currentScore + awardedPoints
+            });
+          }, { onlyOnce: true });
+
+          // Einzelgewinner-Sonderfall: nur wenn GENAU EINE Person richtig lag, gibt's das
+          // Sieger-GIF für alle - der Einzelgewinner selbst schreibt das Event (kein doppeltes
+          // Schreiben nötig, da er hier der einzige mit isFullyCorrect ist).
+          if (correctCount === 1) {
+            get(ref(db, 'players/' + playerId + '/name')).then((nameSnap) => {
+              update(ref(db, 'game3State/winnerGifEvent'), {
+                id: Date.now(),
+                name: nameSnap.val() || 'Jemand',
+                points: awardedPoints,
+                gifUrl: WINNER_GIFS[Math.floor(Math.random() * WINNER_GIFS.length)]
+              });
+            });
+          }
+        } else if (!isFullyCorrect) {
+          showFailNote();
+        }
+      }
+    }
+
+    function getButtonBaseStyle(idx) {
+      const colors = [
+        "bg-[#ff2e93] text-white",
+        "bg-[#3ecbff] text-[#1a1a2e]",
+        "bg-[#ffd23f] text-[#1a1a2e]",
+        "bg-[#7ed957] text-[#1a1a2e]"
+      ];
+      return `p-7 jax-btn font-jax font-extrabold text-2xl flex items-center space-x-4 ${colors[idx]}`;
+    }
+
+    // ANTWORT AUSWÄHLEN/ZURÜCKNEHMEN (SPIELER) - frei umschaltbar, solange die Runde offen ist.
+    // Mehrere Antworten können gleichzeitig ausgewählt sein, falls die Frage mehrere richtige hat.
+    window.toggleOption = function(idx) {
+      if (isHost) return; // Host spielt nicht mit
+      if (!currentQuestionData || currentQuestionData.stage !== 'options_shown') return;
+
+      // Nur EINE Antwort gleichzeitig möglich - ein Klick auf eine andere Option wechselt
+      // direkt dorthin, kein separates Abwählen mehr nötig.
+      selectedIndices = [idx];
+
+      for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById(`opt-btn-${i}`);
+        btn.className = getButtonBaseStyle(i) + renderSelectionSuffix(i);
+      }
+
+      // Live an Firebase melden, ob dieser Spieler aktuell mind. eine Antwort ausgewählt hat -
+      // damit der Host sehen kann, sobald wirklich ALLE gewählt haben (Haken-Benachrichtigung).
+      update(ref(db, 'game3State/hasAnswered'), { [playerId]: true });
+
+      // Live an Firebase melden, WELCHE Antwort genau ausgewählt ist - das Kernfeature
+      // von Spiel 3: alle Spieler sehen live, wer wo sein Kreuzchen gemacht hat.
+      update(ref(db, 'game3State/liveVotes'), { [playerId]: selectedIndices });
+    };
+
+    window.hostStartFromIntro = () => {
+      update(ref(db, 'game3State'), { stage: 'waiting' });
+    };
+
+    window.toggleClippyBubble = function() {
+      const bubble = document.getElementById("clippy-bubble");
+      if (!bubble) return;
+      const wasHidden = bubble.classList.contains("hidden");
+      bubble.classList.toggle("hidden");
+      if (wasHidden) {
+        bubble.classList.remove("clippy-bubble-pop");
+        void bubble.offsetWidth;
+        bubble.classList.add("clippy-bubble-pop");
+      }
+    };
+
+    // HOST CONTROLS AKTIONEN
+    window.hostReleaseQuestion = () => {
+      update(ref(db, 'game3State'), { stage: 'question_shown' });
+    };
+
+    window.hostReleaseOptions = () => {
+      update(ref(db, 'game3State'), { stage: 'options_shown', optionsShownAt: Date.now(), hasAnswered: null, liveVotes: null });
+    };
+
+    window.hostShowResults = () => {
+      update(ref(db, 'game3State'), { stage: 'result' });
+    };
+
+    window.hostNextQuestion = () => {
+      onValue(ref(db, 'game3State/questionIdx'), (snapshot) => {
+        const currentIdx = snapshot.val() || 0;
+        const nextIdx = currentIdx + 1;
+        if (nextIdx >= questions.length) {
+          update(ref(db, 'game3State'), { stage: 'finished' });
+        } else {
+          update(ref(db, 'game3State'), { questionIdx: nextIdx, stage: 'waiting' });
+        }
+      }, { onlyOnce: true });
+    };
+  
+    // ==== VERSTECKTES GEHIRN: gibt es in jedem Spiel + im Cockpit einmal zu finden.
+    // Jeder Klick lässt es hüpfen + eine kurze Sprechblase mit Klick-Fortschritt zeigen.
+    // Je mehr Gehirne man insgesamt schon aktiviert hat, desto öfter muss man das NÄCHSTE
+    // anklicken (1. Gehirn = 1 Klick, 2. Gehirn = 2 Klicks, usw.). Bei Aktivierung fliegt es
+    // weg. Der Host sieht/bekommt diese Funktion gar nicht erst (spielt nicht um Punkte).
+    const BRAIN_POINTS = 20;
+    let brainClicksSoFar_spiel3 = 0;
+    let brainNeededClicks_spiel3 = null;
+
+    function showBrainBubble_spiel1(text, isSuccess) {
+      const logoEl = document.getElementById("brain-logo");
+      if (!logoEl) return;
+      const rect = logoEl.getBoundingClientRect();
+      const bubble = document.createElement("div");
+      bubble.className = "brain-bubble" + (isSuccess ? " brain-bubble-success" : "");
+      bubble.style.left = (rect.left + rect.width / 2 - 30) + "px";
+      bubble.style.top = (rect.top - 24) + "px";
+      bubble.innerText = text;
+      document.body.appendChild(bubble);
+      setTimeout(() => bubble.remove(), 1400);
+    }
+
+    window.clickBrainLogo = function() {
+      if (isHost) return; // Host spielt nicht um Punkte - für ihn passiert hier nichts
+      const claimedField = "brainFound_spiel3";
+      const logoEl = document.getElementById("brain-logo");
+
+      if (logoEl) {
+        logoEl.classList.remove("brain-hop");
+        void logoEl.offsetWidth;
+        logoEl.classList.add("brain-hop");
+      }
+
+      function tryActivate() {
+        brainClicksSoFar_spiel3++;
+        // Bewusst KEINE Sprechblase bei Zwischen-Klicks - erst beim finalen, erfolgreichen Klick
+        if (brainClicksSoFar_spiel3 < brainNeededClicks_spiel3) return;
+
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data[claimedField]) return; // inzwischen (z.B. anderes Gerät) schon aktiviert
+          const foundCount = data.brainsFoundCount || 0;
+          const newScore = (data.score || 0) + BRAIN_POINTS;
+          update(ref(db, 'players/' + playerId), {
+            score: newScore,
+            [claimedField]: true,
+            brainsFoundCount: foundCount + 1
+          });
+          push(ref(db, 'gameLog'), {
+            text: '🧠 ' + (data.name || 'Jemand') + ' hat ein Gehirn aktiviert: +' + BRAIN_POINTS + ' Punkte',
+            at: Date.now()
+          });
+          showBrainBubble_spiel1("+" + BRAIN_POINTS + " Punkte", true);
+          if (logoEl) logoEl.classList.add("brain-fly-away");
+        });
+      }
+
+      if (brainNeededClicks_spiel3 === null) {
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data["brainFound_spiel3"]) { brainNeededClicks_spiel3 = 0; if (logoEl) logoEl.classList.add("hidden"); return; }
+          brainNeededClicks_spiel3 = (data.brainsFoundCount || 0) + 1;
+          tryActivate();
+        });
+      } else {
+        tryActivate();
+      }
+    };
+</script>
+</head>
+<body class="jax-bg text-white min-h-screen flex flex-col justify-between p-4 md:p-8 select-none relative overflow-x-hidden">
+
+  <!-- HINTERGRUND EFFEKTE -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden">
+    <div class="blob w-80 h-80 bg-pink-500 -top-20 -left-10"></div>
+    <div class="blob w-96 h-96 bg-purple-500 bottom-0 right-0" style="animation-delay:2s;"></div>
+  </div>
+
+  <!-- TOP HUD BAR -->
+  <header class="relative z-10 flex justify-between items-center jax-card p-4 text-[#1a1a2e]">
+    <div class="flex items-center space-x-3">      <span class="text-[#7017c9]"><svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></span>
+      <div>
+        <h1 class="font-jax text-lg font-extrabold tracking-wide text-[#1a1a2e]">SPIEL 3: SCHAF ODER WOLF?</h1>
+        <div id="status-badge" class="jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#ffd23f] text-[#1a1a2e] inline-block mt-1">
+          INITIALISIERUNG
+        </div>
+      </div>
+    </div>
+
+    <!-- SPIELER PROFIL & PUNKTE -->
+    <div class="flex items-center space-x-4 jax-chip bg-[#f4f1ff] px-4 py-2">
+      <div class="text-right">
+        <div id="player-info-name" class="text-sm font-jax font-bold text-[#1a1a2e]">Lade...</div>
+        <div id="player-info-score" class="text-xs font-black text-[#7017c9]">0 Pkt.</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- HOST PANEL (NUR FÜR DEN HOST SICHTBAR) -->
+  <div id="host-controls" class="hidden relative z-20 my-4 jax-card-dark p-4">
+    <div class="text-xs font-jax font-bold text-[#ffd23f] tracking-wider uppercase mb-3 flex items-center space-x-2">
+      <span><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h16l1-9-5 3-4-6-4 6-5-3z"/></svg></span><span>HOST STEUERUNGS-PULT</span>
+    </div>
+    <div id="all-answered-badge" class="hidden bg-[#7ed957] text-[#1a1a2e] rounded-xl p-3 text-center mb-3 font-jax font-bold text-sm flex items-center justify-center gap-2">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+      Alle haben gewählt - du kannst jetzt auflösen!
+    </div>
+    <div id="host-preview-box" class="bg-white text-[#1a1a2e] rounded-xl p-6 text-center mb-3">
+      Lade Vorschau...
+    </div>
+    <div id="hc-intro">
+      <button onclick="hostStartFromIntro()" class="w-full py-6 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold text-lg">
+        Regeln sind klar - los geht's!
+      </button>
+    </div>
+    <div id="hc-waiting">
+      <button onclick="hostReleaseQuestion()" class="w-full py-6 jax-btn bg-[#3ecbff] text-[#1a1a2e] font-jax font-bold text-lg">
+        Frage freigeben
+      </button>
+    </div>
+    <div id="hc-question_shown" class="hidden">
+      <button onclick="hostReleaseOptions()" class="w-full py-6 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold text-lg">
+        Antworten freigeben
+      </button>
+    </div>
+    <div id="hc-options_shown" class="hidden">
+      <button onclick="hostShowResults()" class="w-full py-6 jax-btn bg-[#7017c9] text-white font-jax font-bold text-lg">
+        Auflösen
+      </button>
+    </div>
+    <div id="hc-result" class="hidden">
+      <button onclick="hostNextQuestion()" class="w-full py-6 jax-btn bg-white text-[#1a1a2e] font-jax font-bold text-lg flex items-center justify-center gap-2">
+        Nächste Frage <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+    <button onclick="hostRestartGame()" class="w-full mt-3 py-3 px-4 jax-btn bg-[#ffd23f] text-[#1a1a2e] font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.9-3.5M4 13a8 8 0 0 0 14.9 3.5"/><path d="M5 4v4h4M19 20v-4h-4"/></svg> Spiel neu starten
+    </button>
+  </div>
+
+  <!-- ZURÜCK-INS-COCKPIT: bewusst unten rechts fixiert, damit er nicht aus Versehen getroffen wird -->
+  <button id="host-end-game-btn" onclick="triggerReturnCountdown()" class="hidden fixed bottom-4 right-4 z-30 py-3 px-4 jax-btn bg-[#ff2e93] text-white font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/></svg> Spiel beenden & zurück ins Cockpit
+  </button>
+
+
+  <!-- FRAGE BEREICH -->
+  <main class="relative z-10 my-auto max-w-4xl w-full mx-auto text-center space-y-8 py-6">
+
+    <div id="intro-screen" class="hidden jax-card p-8 text-[#1a1a2e] text-center space-y-4">
+      <h2 class="font-jax text-2xl md:text-3xl font-extrabold">🎯 So funktioniert Schaf oder Wolf?</h2>
+      <div>
+        <img id="clippy-img" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/96d39858e6fd04742b08555eeaa609bf63944b50/clippy%20Info%20spiel3.gif" onclick="toggleClippyBubble()" class="mx-auto w-32 h-32 md:w-40 md:h-40 object-contain cursor-pointer hover:scale-105 transition-transform" alt="Clippy">
+        <div class="text-xs text-[#1a1a2e]/50 mt-1 animate-pulse">👆 Klick auf Clippy für die Spielregeln!</div>
+      </div>
+      <div id="clippy-bubble" class="hidden bg-white rounded-2xl shadow-lg p-5 text-left relative max-w-xl mx-auto">
+        <p class="text-sm md:text-base leading-relaxed">
+          Bei jeder Frage geht es nicht nur darum, die richtige Antwort zu kennen - sondern darum,
+          <b>möglichst ALLE oder GAR KEINE</b> anderen Spieler auf deine Antwort zu holen! Die anderen sehen live,
+          welche Antwort du gerade gewählt hast - taktier klug, ob du der Masse folgst oder einen eigenen Weg gehst.
+        </p>
+        <div class="bg-[#f4f1ff] rounded-xl p-4 text-sm md:text-base mt-3">
+          <div class="font-jax font-extrabold mb-2">Punkte pro richtiger Antwort, je nach Gruppengröße:</div>
+          <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+            <div>🥇 Ganz allein richtig</div><div class="font-extrabold text-[#7ed957]">400 Punkte</div>
+            <div>👥 Zu zweit richtig</div><div class="font-extrabold text-[#ff2e93]">0 Punkte</div>
+            <div>👥 Zu dritt richtig</div><div class="font-extrabold text-[#ff2e93]">0 Punkte</div>
+            <div>👥 Zu viert richtig</div><div class="font-extrabold text-[#7ed957]">100 Punkte</div>
+            <div>👥 Zu fünft richtig</div><div class="font-extrabold text-[#7ed957]">200 Punkte</div>
+            <div>🌍 ALLE gemeinsam richtig</div><div class="font-extrabold text-[#7ed957]">300 Punkte</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="player-answer-area" class="space-y-6">
+      <div class="jax-card p-8 relative overflow-hidden text-[#1a1a2e]">
+        <h2 id="question-title" class="font-jax text-3xl md:text-5xl font-extrabold leading-relaxed text-[#1a1a2e]">
+          Warten auf Start der nächsten Frage durch den Host...
+        </h2>
+      </div>
+
+      <!-- TIMER (nur während 'Antworten Freigeben') -->
+      <div id="timer-display" class="hidden flex items-center gap-3 jax-card px-4 py-3 my-4 text-[#1a1a2e]">
+        <span class="text-[#7017c9]"><svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+        <span id="timer-seconds" class="text-2xl font-jax font-extrabold text-[#7ed957] tabular-nums">90s</span>
+        <div class="flex-1 h-3 bg-[#1a1a2e]/10 rounded-full overflow-hidden">
+          <div id="timer-bar" class="h-full bg-[#7ed957] transition-all duration-100 rounded-full" style="width: 100%"></div>
+        </div>
+      </div>
+
+      <!-- ANTWORT BUTTONS (2x2 GRID) -->
+      <div class="text-[#1a1a2e]/60 text-xs font-semibold -mb-2">Tippe deine Antwort an - alle sehen live, wer wo gewählt hat! Du kannst deine Auswahl jederzeit ändern, solange die Zeit läuft.</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="flex items-center gap-2">
+          <div id="opt-votes-0" class="flex flex-wrap items-center justify-end gap-1 min-h-[228px]"></div>
+          <button id="opt-btn-0" onclick="toggleOption(0)" class="flex-1 p-7 jax-btn font-jax font-extrabold text-2xl flex items-center space-x-4 bg-[#ff2e93] text-white opacity-40" disabled>
+            <span class="w-10 h-10 rounded-xl bg-black/20 flex items-center justify-center text-sm font-black">A</span>
+            <span class="opt-text flex-1 text-left">???</span>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="opt-btn-1" onclick="toggleOption(1)" class="flex-1 p-7 jax-btn font-jax font-extrabold text-2xl flex items-center space-x-4 bg-[#3ecbff] text-[#1a1a2e] opacity-40" disabled>
+            <span class="w-10 h-10 rounded-xl bg-black/10 flex items-center justify-center text-sm font-black">B</span>
+            <span class="opt-text flex-1 text-left">???</span>
+          </button>
+          <div id="opt-votes-1" class="flex flex-wrap items-center gap-1 min-h-[228px]"></div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div id="opt-votes-2" class="flex flex-wrap items-center justify-end gap-1 min-h-[228px]"></div>
+          <button id="opt-btn-2" onclick="toggleOption(2)" class="flex-1 p-7 jax-btn font-jax font-extrabold text-2xl flex items-center space-x-4 bg-[#ffd23f] text-[#1a1a2e] opacity-40" disabled>
+            <span class="w-10 h-10 rounded-xl bg-black/10 flex items-center justify-center text-sm font-black">C</span>
+            <span class="opt-text flex-1 text-left">???</span>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="opt-btn-3" onclick="toggleOption(3)" class="flex-1 p-7 jax-btn font-jax font-extrabold text-2xl flex items-center space-x-4 bg-[#7ed957] text-[#1a1a2e] opacity-40" disabled>
+            <span class="w-10 h-10 rounded-xl bg-black/10 flex items-center justify-center text-sm font-black">D</span>
+            <span class="opt-text flex-1 text-left">???</span>
+          </button>
+          <div id="opt-votes-3" class="flex flex-wrap items-center gap-1 min-h-[228px]"></div>
+        </div>
+      </div>
+
+      <div id="group-result-box" class="hidden jax-card p-5 text-center bg-white"></div>
+    </div>
+
+    <!-- SPIEL BEENDET -->
+    <div id="finished-area" class="hidden jax-card p-10 text-center text-[#1a1a2e]">
+      <div class="text-[#7017c9] flex justify-center mb-3"><svg class="w-14 h-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h13l-3 4 3 4H5"/></svg></div>
+      <div class="font-jax text-2xl font-extrabold text-[#7017c9]">Erledigt...</div>
+      <div class="text-[#1a1a2e]/50 text-xs mt-2">Der Moderator bringt euch gleich zurück ins Cockpit...</div>
+      <div id="finished-quote" class="text-xs mt-4 max-w-md mx-auto opacity-70"></div>
+    </div>
+  </main>
+
+  <!-- KONFETTI (bei richtiger Antwort) -->
+  <canvas id="confetti-canvas" class="hidden fixed inset-0 z-[60] pointer-events-none"></canvas>
+
+  <!-- FAIL-SCREEN (bei falscher/keiner Antwort) -->
+  <div id="fail-note" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] jax-card bg-white p-4 text-center pointer-events-none"></div>
+
+  <!-- FOOTER -->
+  <footer class="relative z-10 text-center text-xs text-white/50 pt-4">
+    <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9486-removebg-preview.png" class="inline-block h-4 w-4 align-middle mr-1 -mt-0.5" onerror="this.style.display='none'">Hirnschmalz-Arena
+  </footer>
+
+  <!-- RÜCKKEHR-ZWISCHENSZENE -->
+  <div id="return-countdown-overlay" class="hidden fixed inset-0 bg-black z-[80] flex flex-col items-center justify-center">
+    <div class="text-amber-200/70 text-xs tracking-[0.3em] uppercase mb-4" style="font-family: Georgia, 'Times New Roman', serif;">Rückkehr ins Cockpit in</div>
+    <div id="return-countdown-number" class="text-amber-100 border-4 border-amber-200/40 rounded-full w-40 h-40 flex items-center justify-center text-6xl" style="font-family: Georgia, 'Times New Roman', serif;">5</div>
+  </div>
+
+
+  <img id="brain-logo" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9455-removebg-preview.png"
+    onclick="clickBrainLogo()" class="fixed bottom-2 left-2 h-8 md:h-10 w-auto z-30 cursor-pointer transition-transform hover:scale-110"
+    onerror="this.style.display='none'" alt="">
+
+  <div id="winner-gif-modal" class="hidden fixed inset-0 bg-black/80 z-[95] flex flex-col items-center justify-center p-4">
+    <div class="winner-gif-modal-inner text-center space-y-3">
+      <div id="winner-gif-name" class="font-jax text-2xl md:text-3xl font-extrabold text-[#ffd23f]" style="text-shadow:2px 2px 0 #1a1006,-2px -2px 0 #1a1006,2px -2px 0 #1a1006,-2px 2px 0 #1a1006;">Name gewinnt!</div>
+      <img id="winner-gif-img" src="" class="max-w-xs md:max-w-sm rounded-2xl border-4 border-white shadow-2xl">
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Spiel 1: Kreuzverhör</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .font-jax { font-family: 'Baloo 2', sans-serif; }
+
+    .jax-bg {
+      background: linear-gradient(120deg, #2b0f54, #7017c9, #ff2e93, #ff8a3d);
+      background-size: 300% 300%;
+      animation: gradientShift 18s ease infinite;
+    }
+    @keyframes gradientShift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+    .blob { position: absolute; border-radius: 9999px; filter: blur(50px); opacity: 0.35; animation: floaty 12s ease-in-out infinite; }
+    @keyframes floaty { 0%,100% { transform: translate(0,0); } 50% { transform: translate(25px,-35px); } }
+
+    .jax-card {
+      background: #ffffff;
+      border: 4px solid #1a1a2e;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(0,0,0,0.85);
+    }
+    .jax-card-dark {
+      background: #1a1a2e;
+      border: 4px solid #ffffff;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(0,0,0,0.5);
+      color: #ffffff;
+    }
+    .jax-chip {
+      border: 3px solid #1a1a2e;
+      border-radius: 9999px;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.85);
+    }
+    .jax-btn {
+      font-family: 'Baloo 2', sans-serif;
+      border: 3px solid #1a1a2e;
+      border-radius: 20px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(3px,3px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+    .jax-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    @keyframes bounceIn { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+    .jax-pop { animation: bounceIn 0.5s cubic-bezier(.34,1.56,.64,1); }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0) rotate(0); }
+      20% { transform: translateX(-10px) rotate(-2deg); }
+      40% { transform: translateX(10px) rotate(2deg); }
+      60% { transform: translateX(-8px) rotate(-1deg); }
+      80% { transform: translateX(8px) rotate(1deg); }
+    }
+      @keyframes brainHop {
+      0% { transform: translateY(0) scale(1); }
+      30% { transform: translateY(-24px) scale(1.12); }
+      55% { transform: translateY(0) scale(0.94); }
+      75% { transform: translateY(-9px) scale(1.04); }
+      100% { transform: translateY(0) scale(1); }
+    }
+    .brain-hop { animation: brainHop 0.4s ease-out; }
+
+    @keyframes brainFlyAway {
+      0% { transform: translate(0,0) scale(1) rotate(0deg); opacity: 1; }
+      100% { transform: translate(50px, -180px) scale(0.15) rotate(35deg); opacity: 0; }
+    }
+    .brain-fly-away { animation: brainFlyAway 0.7s ease-in forwards; }
+
+    @keyframes brainBubblePop {
+      0% { transform: translateY(6px) scale(0.6); opacity: 0; }
+      20% { transform: translateY(0) scale(1.05); opacity: 1; }
+      80% { transform: translateY(-2px) scale(1); opacity: 1; }
+      100% { transform: translateY(-12px) scale(0.9); opacity: 0; }
+    }
+    .brain-bubble {
+      position: fixed; z-index: 40; pointer-events: none;
+      background: white; color: #1a1a2e; border: 2px solid #1a1a2e;
+      border-radius: 10px; padding: 4px 9px; font-size: 11px; font-weight: 800;
+      font-family: 'Baloo 2', sans-serif;
+      animation: brainBubblePop 1.4s ease-out forwards;
+      white-space: nowrap;
+    }
+    .brain-bubble-success {
+      background: #16a34a; color: white; border-color: #14532d; font-size: 14px;
+      padding: 6px 14px;
+    }
+      @keyframes timeTickingPop {
+      0% { transform: translateY(10px) scale(0.5) rotate(-8deg); opacity: 0; }
+      20% { transform: translateY(-4px) scale(1.15) rotate(4deg); opacity: 1; }
+      35% { transform: translateY(0) scale(1) rotate(-2deg); }
+      100% { transform: translateY(-6px) scale(1.05) rotate(0deg); opacity: 1; }
+    }
+    /* WICHTIG: animation darf hier NICHT "transform" anfassen - das JS steuert die
+       Größe live per style.transform, eine CSS-Animation mit "forwards" auf transform
+       würde das sonst permanent überschreiben/einfrieren. */
+    @keyframes timeTickingFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .time-ticking-popup {
+      position: fixed; z-index: 55; pointer-events: none;
+      animation: timeTickingFadeIn 0.3s ease-out;
+      transition: transform 0.15s ease-out;
+    }
+
+    /* ==== PICKAXE-LEMMING-EASTEREGG ==== */
+    .pickaxe-lemming {
+      position: fixed; top: 70px; left: 78%; margin-left: -35px;
+      width: 70px; height: 70px; z-index: 50; pointer-events: none;
+    }
+    .pickaxe-lemming img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+    .pickaxe-hitbox {
+      position: absolute; top: -22px; left: -22px; right: -22px; bottom: -22px;
+      pointer-events: none; /* erst während des Falls aktiv, siehe .falling .pickaxe-hitbox */
+    }
+    .pickaxe-lemming.falling .pickaxe-hitbox {
+      cursor: pointer; pointer-events: auto; /* deutlich größere Klickfläche als das Bild selbst */
+    }
+    @keyframes pickaxePointsPop {
+      0%   { transform: translateY(0) scale(0.6); opacity: 0; }
+      20%  { transform: translateY(-10px) scale(1.25); opacity: 1; }
+      100% { transform: translateY(-60px) scale(1); opacity: 0; }
+    }
+    .pickaxe-points-pop {
+      position: fixed; z-index: 60; pointer-events: none;
+      font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 26px; color: #ffd23f;
+      text-shadow: 2px 2px 0 #1a1006, -2px -2px 0 #1a1006, 2px -2px 0 #1a1006, -2px 2px 0 #1a1006;
+      animation: pickaxePointsPop 1.1s ease-out forwards;
+    }
+    @keyframes lemmingFallSpin {
+      0%   { transform: translateY(0) rotate(0deg); }
+      100% { transform: translateY(115vh) rotate(1080deg); }
+    }
+    .pickaxe-lemming.falling {
+      /* linear statt stark beschleunigend - vorher wurde er gegen Ende fast untreffbar schnell */
+      animation: lemmingFallSpin 4.2s linear forwards;
+    }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, update, onValue, get, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // ==== EIGENES ICON-SET (keine Emojis) ====
+    const ICONS = {
+      target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+      crown: '<path d="M4 18h16l1-9-5 3-4-6-4 6-5-3z"/>',
+      lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+      medal: '<circle cx="12" cy="15" r="5"/><path d="M9 10L7 3h2l3 6 3-6h2l-2 7"/>',
+      check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
+      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+      skull: '<path d="M12 3a7 7 0 0 0-7 7v3l-1 2h4l1 3h6l1-3h4l-1-2v-3a7 7 0 0 0-7-7z"/><circle cx="9.5" cy="11" r="1.2"/><circle cx="14.5" cy="11" r="1.2"/>',
+      book: '<path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M6 3v16"/>',
+      arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+      exit: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/>',
+      refresh: '<path d="M20 11a8 8 0 0 0-14.9-3.5M4 13a8 8 0 0 0 14.9 3.5"/><path d="M5 4v4h4M19 20v-4h-4"/>'
+    };
+    function icon(name, cls) {
+      return `<svg class="${cls || 'w-5 h-5'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+    }
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const playerId = localStorage.getItem("quiz_player_id");
+    let isHost = false;
+    let currentQuestionData = null;
+    let selectedIndices = [];
+    let latestQuestion = null;
+    let resultAlreadyProcessed = false;
+
+    // q.correct kann eine einzelne Zahl (eine richtige Antwort) oder ein Array
+    // (mehrere richtige Antworten) sein - hier immer als Array normalisiert.
+    function correctSetOf(q) {
+      if (!q) return [];
+      return Array.isArray(q.correct) ? q.correct : [q.correct];
+    }
+
+    // TIMER / SOUND STATE
+    const ANSWER_DURATION_MS = 60000; // 1 Minute
+    let timerInterval = null;
+    let timerExpiredHandled = false;
+    let audioCtx = null;
+
+    // FRAGEN-KATALOG (Standard-Fragen als Rückfallebene, falls im Editor noch nichts angelegt wurde)
+    let questions = [
+      {
+        id: 1,
+        question: "Wie heißt die Hauptfigur in „The Legend of Zelda\"-Reihe?",
+        options: ["Zelda", "Link", "Ganon", "Epona"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Link. Viele denken, die Serie sei nach dem Helden benannt – tatsächlich ist Zelda die Prinzessin, die es zu retten gilt. Der spielbare grünbemützte Held heißt Link, benannt nach seiner Rolle als Verbindung zwischen Spieler und Spielwelt."
+      },
+      {
+        id: 2,
+        question: "Warum wurden in den 1980ern tausende E.T.-Kassetten von Atari in der Wüste vergraben?",
+        options: ["Radioaktiv verseucht", "Lagerkosten sparen, Millionen blieben unverkauft", "Werbe-Gag", "Regierungsverbot"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Lagerkosten sparen. E.T. für das Atari 2600 gilt bis heute als eines der schlechtesten Spiele der Geschichte und wurde in nur fünf Wochen unter massivem Zeitdruck entwickelt. Millionen unverkaufter Module verstopften Ataris Lager, weshalb man sie 1983 heimlich mit Bulldozern in New Mexico vergrub."
+      },
+      {
+        id: 3,
+        question: "Wer entwickelte das Erfolgsspiel Stardew Valley (2016)?",
+        options: ["Ein 50-köpfiges Studio", "Eine einzige Person, komplett im Alleingang", "Nintendo intern", "Ein Team aus drei Freunden"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist eine einzige Person. Eric „ConcernedApe\" Barone programmierte, komponierte und zeichnete über vier Jahre lang alles selbst – ohne vorherige Branchenerfahrung, an einem günstigen Ikea-Tisch. Bis heute wurden über 40 Millionen Exemplare verkauft."
+      },
+      {
+        id: 4,
+        question: "Warum ist der Nebel in Silent Hill (1999) so charakteristisch dicht?",
+        options: ["Künstlerische Gruselstimmung", "PS1-Hardware-Limit kaschieren", "Wetter-Feature", "Zensur-Vorgabe"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist PS1-Hardware-Limit. Die PlayStation 1 konnte keine großen Sichtweiten in 3D-Umgebungen rendern, ohne dass Objekte sichtbar aus dem Nichts auftauchten. Der dichte Nebel kaschierte diese technische Schwäche elegant und wurde dadurch unbeabsichtigt zum ikonischen Markenzeichen der ganzen Reihe."
+      },
+      {
+        id: 5,
+        question: "Welches Spiel gilt als der größte Flop der Videospielgeschichte?",
+        options: ["Skull and Bones", "Concord (Sony, 2024)", "E.T. – The Extra-Terrestrial", "Redfall"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Concord. Nach rund acht Jahren Entwicklung und geschätzten 400 Millionen US-Dollar Kosten wurde der Hero-Shooter nur zwei Wochen nach Release wieder komplett vom Markt genommen. Bei nie mehr als 697 gleichzeitigen Spielern auf Steam schloss Sony danach das komplette Entwicklerstudio."
+      },
+      {
+        id: 6,
+        question: "Welches ist das meistverkaufte Videospiel aller Zeiten?",
+        options: ["Grand Theft Auto V", "Minecraft", "Super Mario (gesamte Reihe)", "Tetris"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Minecraft. Es hat mittlerweile über 350 Millionen verkaufte Exemplare erreicht – mit großem Abstand vor GTA V mit rund 205 Millionen. Damit übertrifft es sogar Michael Jacksons „Thriller\", das meistverkaufte Album aller Zeiten, um ein Vielfaches."
+      },
+      {
+        id: 7,
+        question: "Trugen Wikinger tatsächlich gehörnte Helme?",
+        options: ["Ja, historisch belegt", "Nein, reiner Mythos", "Nur Häuptlinge", "Nur bei Ritualen"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Nein, reiner Mythos. Kein einziger archäologischer Fund aus der Wikingerzeit zeigt gehörnte Helme – im Kampf wären Hörner sogar hinderlich gewesen. Das Bild entstand erst im 19. Jahrhundert durch Kostümbildner, unter anderem für Wagners Opern."
+      },
+      {
+        id: 8,
+        question: "Warum stoppt Pac-Man beim 256. Level abrupt (\"Kill Screen\")?",
+        options: ["Absichtliches Spielende", "8-Bit-Zähler-Überlauf", "Bug im Ghost-AI", "Fehlende Level-Daten"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist 8-Bit-Zähler-Überlauf. Der interne Level-Zähler ist nur 8-Bit groß und kann maximal bis 255 zählen. Bei Level 256 läuft er über, wodurch der rechte Bildschirmrand zu Buchstabensalat wird und das Level unspielbar ist."
+      },
+      {
+        id: 9,
+        question: "Woher stammt der Name „Mario\"?",
+        options: ["Nach einem italienischen Opernsänger", "Nach dem Vermieter von Nintendos US-Lager", "Erfindung Miyamotos ohne Vorbild", "Nach einem Nintendo-Mitarbeiter"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist der Vermieter von Nintendos US-Lager. Als Nintendo Anfang der 1980er mit der Miete in Seattle im Rückstand war, kam Vermieter Mario Segale vorbei, um sein Geld einzufordern. Das Team war so beeindruckt, dass sie die zuvor „Jumpman\" genannte Figur nach ihm benannten."
+      },
+      {
+        id: 10,
+        question: "Was passierte zwei Arma-3-Entwicklern 2012 auf der griechischen Insel Lemnos?",
+        options: ["Design-Preis gewonnen", "Festnahme wegen Spionageverdachts", "Nichts, reine Legende", "Vom Militär angeheuert"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Festnahme wegen Spionageverdachts. Die beiden tschechischen Entwickler von Bohemia Interactive fotografierten und filmten für die Kartenerstellung eine echte Militäranlage auf der Insel. Sie wurden festgenommen und saßen über 120 Tage in griechischer Untersuchungshaft, bevor sie gegen Kaution freikamen."
+      },
+      {
+        id: 11,
+        question: "Welcher ist der erfolgreichste Videospiel-Film aller Zeiten (nach Einspielergebnis)?",
+        options: ["The Super Mario Bros. Movie (2023)", "A Minecraft Movie (2025)", "Sonic the Hedgehog 2", "Detective Pikachu"],
+        correct: 0,
+        points: 150,
+        fact: "Die Antwort ist The Super Mario Bros. Movie (2023). Mit über 1,3 Milliarden Dollar Einspielergebnis bleibt er der erfolgreichste Videospiel-Film aller Zeiten - auch nach dem Super Mario Galaxy Film von 2026, der zwar A Minecraft Movie überholte, aber weiterhin auf Platz 2 liegt."
+      }
+    ];
+
+    // ==== RANG-TITEL: witziger Platzierungs-Hinweis statt exaktem Punktestand ====
+    const RANK_TITLES = [
+      "Sockenflicker",
+      "Krümelmonster-Praktikant",
+      "Wackelpudding-Ritter",
+      "Hobby-Rater",
+      "Quiz-Lehrling",
+      "Wissens-Gladiator",
+      "Fragen-Halbgott",
+      "Elite Übermensch Echse"
+    ];
+    function computeRankTitle(myId, allPlayersData) {
+      const activeIds = Object.keys(allPlayersData).filter(id => allPlayersData[id] && allPlayersData[id].name && !allPlayersData[id].name.includes("Host") && !allPlayersData[id].name.includes("Admin"));
+      if (activeIds.length === 0) return RANK_TITLES[4];
+      const sorted = [...activeIds].sort((a, b) => (allPlayersData[b].score || 0) - (allPlayersData[a].score || 0));
+      const rank = sorted.indexOf(myId) + 1;
+      const n = sorted.length;
+      const percentile = n > 1 ? (rank - 1) / (n - 1) : 0.5;
+      const tierIndex = Math.min(7, Math.max(0, Math.round((1 - percentile) * 7)));
+      return RANK_TITLES[tierIndex];
+    }
+
+    // INITIALISIERUNG
+    let allPlayers = {};
+    onValue(ref(db, 'players/'), (snapshot) => {
+      const allPlayersData = snapshot.val() || {};
+      allPlayers = allPlayersData;
+      const player = allPlayersData[playerId];
+      if (player) {
+        if (player.name && player.name.includes("Host")) {
+          isHost = true;
+          document.getElementById("brain-logo")?.classList.add("hidden"); // Host bekommt das Gehirn-Feature nicht
+          document.getElementById("host-controls").classList.remove("hidden");
+          document.getElementById("host-end-game-btn").classList.remove("hidden");
+          // Host spielt nicht mit: Antwortbereich ausblenden
+          document.getElementById("player-answer-area").classList.add("hidden");
+          document.getElementById("player-info-score").innerHTML = icon('crown', 'w-3.5 h-3.5 inline -mt-0.5') + ' MODERATOR';
+          renderHostPreview(latestQuestion);
+        } else {
+          document.getElementById("player-info-score").innerHTML = icon('medal', 'w-3.5 h-3.5 inline -mt-0.5') + ' ' + computeRankTitle(playerId, allPlayersData);
+        }
+        document.getElementById("player-info-name").innerText = player.name;
+      }
+    });
+
+    // LISTEN AUF SPIEL1 GAME STATE - erst NACHDEM die (evtl. im Editor angepassten) Fragen
+    // aus Firebase geladen wurden, damit nie mit einem leeren/falschen Katalog gestartet wird.
+    // FRAGEN-QUELLE laden: Host kann im Cockpit vor dem Start wählen, welcher Pool gilt
+    // (eigene / vorgefertigte / feste Vorlage / Mix aus allem). Erst danach den Spielzustand
+    // beobachten, damit nie mit dem falschen Katalog gestartet wird.
+    get(ref(db, 'content/spiel1/activeSource')).then((sourceSnap) => {
+      const source = sourceSnap.val() || 'custom';
+      const defaultQuestions = questions; // die eingebauten Standard-Fragen als Basis für "mix"
+
+      function withResolvedQuestions(resolved) {
+        if (Array.isArray(resolved) && resolved.length > 0) {
+          questions = resolved;
+        }
+        startListeningWithQuestions();
+      }
+
+      if (source === 'default') {
+        withResolvedQuestions(defaultQuestions);
+      } else if (source.indexOf('template:') === 0) {
+        const templateName = source.slice('template:'.length);
+        get(ref(db, 'content/spiel1/templates/' + templateName)).then((snap) => withResolvedQuestions(snap.val()));
+      } else if (source === 'mix') {
+        Promise.all([
+          get(ref(db, 'content/spiel1/questions')),
+          get(ref(db, 'content/spiel1/templates'))
+        ]).then(([customSnap, templatesSnap]) => {
+          let pool = [...defaultQuestions];
+          const custom = customSnap.val();
+          if (Array.isArray(custom)) pool = pool.concat(custom);
+          const templates = templatesSnap.val() || {};
+          Object.values(templates).forEach(t => { if (Array.isArray(t)) pool = pool.concat(t); });
+          for (let i = pool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+          }
+          withResolvedQuestions(pool);
+        });
+      } else {
+        get(ref(db, 'content/spiel1/questions')).then((snap) => withResolvedQuestions(snap.val()));
+      }
+    });
+
+    function startListeningWithQuestions() {
+      onValue(ref(db, 'game1State'), (snapshot) => {
+        const state = snapshot.val() || { questionIdx: 0, stage: 'waiting' }; // waiting, question_shown, options_shown, result
+        const q = questions[state.questionIdx || 0];
+        currentQuestionData = { ...q, stage: state.stage, correctOption: state.correctOption };
+        latestQuestion = q;
+
+        renderHostPreview(q);
+        updateUI(state, q);
+
+        // TIMER: läuft nur während 'options_shown', synchronisiert über optionsShownAt
+        if (state.stage === 'options_shown' && state.optionsShownAt) {
+          startAnswerTimer(state.optionsShownAt);
+        } else {
+          stopAnswerTimer();
+        }
+
+        maybeHandlePickaxeLemming(state);
+      });
+    }
+
+    // HOST-VORSCHAU: Host sieht Frage + Lösung schon, bevor sie den Spielern gezeigt wird
+    function renderHostPreview(q) {
+      if (!isHost || !q) return;
+      const box = document.getElementById("host-preview-box");
+      if (!box) return;
+      const correctSet = correctSetOf(q);
+      const optsHtml = q.options.map((opt, i) => {
+        const correct = correctSet.includes(i);
+        return `<div class="${correct ? 'text-[#7ed957] font-black' : 'text-[#1a1a2e]/60'} flex items-center gap-1">${String.fromCharCode(65 + i)}) ${opt}${correct ? icon('check','w-3.5 h-3.5') : ''}</div>`;
+      }).join('');
+      const multiHint = correctSet.length > 1 ? `<div class="text-[#ff2e93] font-jax font-bold text-xs mb-1">${correctSet.length} richtige Antworten!</div>` : '';
+      box.innerHTML = `<div class="text-[#7017c9] font-jax font-bold mb-2 flex items-center justify-center gap-1">${icon('book','w-4 h-4')} Vorschau (nur du siehst das):</div><div class="font-jax font-extrabold text-[#1a1a2e] text-xl md:text-2xl mb-3">${q.question}</div>${multiHint}<div class="space-y-1 text-base inline-block text-left">${optsHtml}</div>`;
+    }
+
+    // NAVIGATION: sobald der Host das Spiel-Ende einläutet (gameState != 'in_game'), zurück ins Cockpit
+    onValue(ref(db, 'gameState'), (snapshot) => {
+      const gs = snapshot.val();
+      if (gs && gs.status && gs.status !== 'in_game') {
+        window.location.href = "cockpit.html";
+      }
+    });
+
+    // HOST: zurück ins Cockpit (setzt Bereitschaft aller Spieler zurück für die nächste Runde)
+    window.hostRestartGame = function() {
+      if (!confirm("Spiel wirklich neu starten? Der Fortschritt dieser Runde geht verloren (Punkte bleiben erhalten).")) return;
+      set(ref(db, 'game1State'), { questionIdx: 0, stage: 'waiting' });
+    };
+
+    function generateRiddleClues(pid, sortedIds, players) {
+      const rank = sortedIds.indexOf(pid) + 1;
+      const n = sortedIds.length;
+      const pool = [];
+      if (rank > 1) pool.push('Du bist nicht Erster.');
+      if (rank < n) pool.push('Du bist nicht Letzter.');
+      if (rank > 1) pool.push('Du liegst hinter ' + players[sortedIds[rank - 2]].name + '.');
+      if (rank < n) pool.push('Du liegst vor ' + players[sortedIds[rank]].name + '.');
+      if (rank > 2) pool.push('Mindestens zwei Personen liegen vor dir.');
+      if (rank < n - 1) pool.push('Mindestens zwei Personen liegen hinter dir.');
+      if (pool.length === 0) pool.push('Die Truhe ist ratlos - du bist ganz allein im Rennen.');
+      const shuffled = pool.map(x => [Math.random(), x]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+      return shuffled.slice(0, Math.min(2, shuffled.length));
+    }
+
+        // ==== ZITATE ÜBER DAS SPIELEN (für den Abspann) ====
+    const GAME_QUOTES = [
+      { text: "Beim Spiel kann man einen Menschen in einer Stunde besser kennenlernen als im Gespräch in einem Jahr.", author: "Platon" },
+      { text: "Spiele, damit du ernst sein kannst. Denn das Spiel ist ein Ausruhen, und die Menschen bedürfen, da sie nicht immer tätig sein können, des Ausruhens.", author: "Aristoteles" },
+      { text: "Atome spalten ist ein Kinderspiel, verglichen mit einem Kinderspiel.", author: "Albert Einstein" },
+      { text: "Nur Arbeit und kein Spiel macht dumm.", author: "Karl Marx" },
+      { text: "Spielen ist eine Tätigkeit, die man gar nicht ernst genug nehmen kann.", author: "Jacques-Yves Cousteau" }
+    ];
+    function gameQuoteHtml() {
+      const q = GAME_QUOTES[Math.floor(Math.random() * GAME_QUOTES.length)];
+      return `<div class="italic">"${q.text}"</div><div class="mt-2 not-italic font-bold opacity-80">— ${q.author}</div>`;
+    }
+
+    // ==== RÜCKKEHR-ZWISCHENSZENE: schwarzer Bildschirm mit altertümlichem Countdown ====
+    let lastSeenReturnCountdownAt = null;
+    onValue(ref(db, 'gameState/returnCountdownAt'), (snapshot) => {
+      const startedAt = snapshot.val();
+      if (startedAt && startedAt !== lastSeenReturnCountdownAt) {
+        lastSeenReturnCountdownAt = startedAt;
+        runReturnCountdown(startedAt);
+      }
+    });
+
+    function runReturnCountdown(startedAt) {
+      const overlay = document.getElementById('return-countdown-overlay');
+      const numberEl = document.getElementById('return-countdown-number');
+      if (!overlay || !numberEl) return;
+      overlay.classList.remove('hidden');
+      const DURATION = 5;
+      let doneTriggered = false;
+      function tick() {
+        const elapsed = (Date.now() - startedAt) / 1000;
+        const remaining = Math.max(0, DURATION - elapsed);
+        numberEl.innerText = remaining > 0.05 ? Math.ceil(remaining) : '✓';
+        if (remaining > 0.05) {
+          requestAnimationFrame(tick);
+        } else if (!doneTriggered) {
+          doneTriggered = true;
+          if (isHost) window.hostBackToCockpit();
+        }
+      }
+      tick();
+    }
+
+    window.triggerReturnCountdown = function() {
+      if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
+      update(ref(db, 'gameState'), { returnCountdownAt: Date.now() });
+    };
+
+    window.hostBackToCockpit = function() {
+
+      get(ref(db, 'gameState/startScores')).then((startSnap) => {
+        const startScores = startSnap.val() || {};
+        get(ref(db, 'players/')).then((snapshot) => {
+          const players = snapshot.val() || {};
+          const activeIds = Object.keys(players).filter(id => players[id] && players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin"));
+          const rankedIds = [...activeIds].sort((a, b) => (players[b].score || 0) - (players[a].score || 0));
+          const updates = {};
+          for (let id in players) {
+            if (players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin")) {
+              updates['players/' + id + '/isReady'] = false;
+            }
+          }
+          activeIds.forEach(id => {
+            updates['players/' + id + '/riddleClues'] = generateRiddleClues(id, rankedIds, players);
+          });
+          update(ref(db), updates).then(() => {
+            activeIds.forEach(id => {
+              const delta = (players[id].score || 0) - (startScores[id] || 0);
+              if (delta !== 0) {
+                push(ref(db, 'gameLog'), {
+                  text: (delta > 0 ? '📈 ' : '📉 ') + players[id].name + ': ' + (delta > 0 ? '+' : '') + delta + ' Punkte in Spiel 1',
+                  at: Date.now()
+                });
+              }
+            });
+            set(ref(db, 'gameState'), { status: 'cockpit', chestPending: true, chestPendingAt: Date.now() });
+          });
+        });
+      });
+    };
+
+    // ==== TIMER (1,5 Min. pro Frage) MIT TICK-SOUND & WECKER ====
+    function ensureAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    // Audio-Kontext beim ersten Klick irgendwo auf der Seite freischalten (Browser-Autoplay-Regel)
+    document.addEventListener('click', () => ensureAudioContext(), { once: true });
+
+    function playTick(volume) {
+      try {
+        const ctx = ensureAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = 1000;
+        gain.gain.setValueAtTime(volume, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.07);
+      } catch (e) { /* Audio evtl. noch nicht freigeschaltet - ignorieren */ }
+    }
+
+    function playAlarm() {
+      try {
+        const ctx = ensureAudioContext();
+        const now = ctx.currentTime;
+        for (let i = 0; i < 6; i++) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.value = (i % 2 === 0) ? 880 : 660;
+          gain.gain.setValueAtTime(0.001, now + i * 0.25);
+          gain.gain.linearRampToValueAtTime(0.4, now + i * 0.25 + 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.25 + 0.24);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(now + i * 0.25);
+          osc.stop(now + i * 0.25 + 0.25);
+        }
+      } catch (e) { /* ignorieren */ }
+    }
+
+    function startAnswerTimer(startTimestamp) {
+      stopAnswerTimer();
+      timerExpiredHandled = false;
+      let lastTickAt = 0;
+      const timerWrap = document.getElementById("timer-display");
+      if (timerWrap) timerWrap.classList.remove("hidden");
+
+      timerInterval = setInterval(() => {
+        const elapsed = Date.now() - startTimestamp;
+        const remaining = Math.max(0, ANSWER_DURATION_MS - elapsed);
+        updateTimerUI(remaining, ANSWER_DURATION_MS);
+
+        // Tick wird mit sinkender Restzeit schneller UND lauter
+        const progress = 1 - (remaining / ANSWER_DURATION_MS); // 0 -> 1
+        const tickInterval = 1000 - progress * 820; // 1000ms -> 180ms
+        const volume = 0.08 + progress * 0.37;
+        if (remaining > 0 && Date.now() - lastTickAt >= tickInterval) {
+          playTick(volume);
+          lastTickAt = Date.now();
+        }
+
+        if (remaining <= 0 && !timerExpiredHandled) {
+          timerExpiredHandled = true;
+          playAlarm();
+          clearInterval(timerInterval);
+          timerInterval = null;
+          // Zeit abgelaufen: Lösung automatisch anzeigen (nur der Host schreibt den Status)
+          if (isHost) {
+            update(ref(db, 'game1State'), { stage: 'result' });
+          }
+        }
+      }, 100);
+    }
+
+    function stopAnswerTimer() {
+      if (timeTickingEl_updateTimerUI) { timeTickingEl_updateTimerUI.remove(); timeTickingEl_updateTimerUI = null; }
+      timeTickingStep_updateTimerUI = -1;
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      const timerWrap = document.getElementById("timer-display");
+      if (timerWrap) timerWrap.classList.add("hidden");
+    }
+
+    // "Time is ticking"-Anzeige: erscheint ab 25 Sekunden Restzeit, bleibt DAUERHAFT stehen
+    // (kein kurzer Popup mehr) und wird alle 5 Sekunden ruckartig (kein sanftes Wachsen)
+    // größer. Verschwindet erst exakt bei 0.
+    const TIME_TICKING_START_MS_updateTimerUI = 25000;
+    let timeTickingEl_updateTimerUI = null;
+    let timeTickingStep_updateTimerUI = -1;
+    function maybeShowTimeTicking_updateTimerUI(remaining) {
+      if (remaining > TIME_TICKING_START_MS_updateTimerUI || remaining <= 0) {
+        if (timeTickingEl_updateTimerUI) { timeTickingEl_updateTimerUI.remove(); timeTickingEl_updateTimerUI = null; }
+        timeTickingStep_updateTimerUI = -1;
+        return;
+      }
+      const anchor = document.getElementById("timer-seconds");
+      if (!anchor) return;
+
+      if (!timeTickingEl_updateTimerUI) {
+        const rect = anchor.getBoundingClientRect();
+        const img = document.createElement("img");
+        img.src = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/timeistickingGames.png";
+        img.className = "time-ticking-popup";
+        img.style.position = "fixed";
+        img.style.left = (rect.left + rect.width / 2 - 45) + "px";
+        img.style.top = (rect.top - 75) + "px";
+        img.style.width = "90px";
+        img.style.zIndex = "55";
+        img.style.pointerEvents = "none";
+        img.style.transition = "transform 0.15s ease-out";
+        document.body.appendChild(img);
+        timeTickingEl_updateTimerUI = img;
+      }
+
+      // Alle 5 Sek. ein ruckartiger Wachstumsschritt (25-21s = Stufe 0, 20-16s = Stufe 1, ...)
+      const step = Math.min(4, Math.floor((TIME_TICKING_START_MS_updateTimerUI - remaining) / 5000));
+      if (step !== timeTickingStep_updateTimerUI) {
+        timeTickingStep_updateTimerUI = step;
+        timeTickingEl_updateTimerUI.style.transform = "scale(" + (1 + step * 0.35) + ")";
+      }
+    }
+
+    function updateTimerUI(remaining, duration) {
+      maybeShowTimeTicking_updateTimerUI(remaining);
+      const numberEl = document.getElementById("timer-seconds");
+      const barEl = document.getElementById("timer-bar");
+      if (!numberEl || !barEl) return;
+      const secs = Math.ceil(remaining / 1000);
+      numberEl.innerText = secs + "s";
+      const pct = Math.max(0, (remaining / duration) * 100);
+      barEl.style.width = pct + "%";
+      if (pct > 50) {
+        barEl.className = "h-full bg-green-400 transition-all duration-100 rounded-full";
+        numberEl.className = "text-2xl font-black text-green-400";
+      } else if (pct > 20) {
+        barEl.className = "h-full bg-yellow-400 transition-all duration-100 rounded-full";
+        numberEl.className = "text-2xl font-black text-yellow-400";
+      } else {
+        barEl.className = "h-full bg-red-500 animate-pulse transition-all duration-100 rounded-full";
+        numberEl.className = "text-2xl font-black text-red-500 animate-pulse";
+      }
+    }
+
+    // ==== KONFETTI (richtig) / FAIL-SCREEN (falsch) ====
+    function fireConfetti() {
+      const canvas = document.getElementById("confetti-canvas");
+      if (!canvas) return;
+      canvas.classList.remove("hidden");
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      const ctx = canvas.getContext("2d");
+      const colors = ["#ff2e93", "#7017c9", "#ffd23f", "#3ecbff", "#7ed957", "#ff8a3d"];
+      const particles = [];
+      for (let i = 0; i < 160; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: -20 - Math.random() * canvas.height * 0.5,
+          size: 5 + Math.random() * 6,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          vx: (Math.random() - 0.5) * 4,
+          vy: 2 + Math.random() * 4,
+          rot: Math.random() * 360,
+          vrot: (Math.random() - 0.5) * 12
+        });
+      }
+      let frame = 0;
+      const maxFrames = 220;
+      function animate() {
+        frame++;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.04;
+          p.rot += p.vrot;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot * Math.PI / 180);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+          ctx.restore();
+        });
+        if (frame < maxFrames) {
+          requestAnimationFrame(animate);
+        } else {
+          canvas.classList.add("hidden");
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+      animate();
+    }
+
+    function playSadTrombone() {
+      try {
+        const ctx = ensureAudioContext();
+        const now = ctx.currentTime;
+        const notes = [329.63, 311.13, 293.66, 277.18]; // absteigend - klassischer "Wah-wah-wah-waaah"
+        const durations = [0.32, 0.32, 0.32, 0.95];
+        let t = now;
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.001, t);
+          gain.gain.linearRampToValueAtTime(0.22, t + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + durations[i]);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(t);
+          osc.stop(t + durations[i] + 0.05);
+          t += durations[i];
+        });
+      } catch (e) {}
+    }
+
+    function showFailNote() {
+      playSadTrombone();
+      const box = document.getElementById("fail-note");
+      if (!box) return;
+      box.classList.remove("hidden");
+      box.innerHTML = `<div class="text-4xl mb-1">🌧️😢</div><div class="font-jax font-bold text-[#3ecbff]">Leider falsch...</div>`;
+    }
+
+    function renderHostControlStage(stage) {
+      if (!isHost) return;
+      ["hc-waiting", "hc-question_shown", "hc-options_shown", "hc-result"].forEach(id => document.getElementById(id)?.classList.add("hidden"));
+      const map = { waiting: "hc-waiting", question_shown: "hc-question_shown", options_shown: "hc-options_shown", result: "hc-result" };
+      const target = map[stage];
+      if (target) document.getElementById(target)?.classList.remove("hidden");
+    }
+
+    // Haken-Benachrichtigung für den Host: sobald ALLE aktiven Spieler mindestens eine
+    // Antwort ausgewählt haben, wird das direkt am Feld angezeigt - der Host kann dann
+    // vorzeitig auflösen, statt auf die volle Zeit zu warten.
+    function updateAllAnsweredBadge(state) {
+      const badge = document.getElementById("all-answered-badge");
+      if (!badge) return;
+      if (!isHost || state.stage !== 'options_shown') { badge.classList.add("hidden"); return; }
+
+      const activeIds = Object.keys(allPlayers).filter(id => {
+        const n = allPlayers[id] && allPlayers[id].name;
+        return n && !n.includes("Host") && !n.includes("Admin");
+      });
+      const hasAnswered = state.hasAnswered || {};
+      const allDone = activeIds.length > 0 && activeIds.every(id => hasAnswered[id]);
+      badge.classList.toggle("hidden", !allDone);
+    }
+
+    function updateUI(state, q) {
+      const qTitle = document.getElementById("question-title");
+      const statusBadge = document.getElementById("status-badge");
+      renderHostControlStage(state.stage);
+      updateAllAnsweredBadge(state);
+
+      if (state.stage === 'finished') {
+        stopAnswerTimer();
+        if (!isHost) {
+          document.getElementById("player-answer-area").classList.add("hidden");
+          document.getElementById("finished-area").classList.remove("hidden");
+          const fq = document.getElementById("finished-quote"); if (fq && !fq.innerHTML) fq.innerHTML = gameQuoteHtml();
+        }
+        statusBadge.innerText = "SPIEL BEENDET";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#7017c9] text-white";
+        return;
+      }
+      if (!isHost) {
+        document.getElementById("player-answer-area").classList.remove("hidden");
+        document.getElementById("finished-area").classList.add("hidden");
+      }
+      
+      // Frage anzeigen oder verstecken
+      if (state.stage === 'waiting') {
+        qTitle.innerText = "Warten auf Start der nächsten Frage durch den Host...";
+        statusBadge.innerText = "BEREITSTELLUNG";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#ffd23f] text-[#1a1a2e]";
+        resetOptionButtons();
+        return;
+      }
+
+      qTitle.innerText = q.question;
+
+      if (state.stage === 'question_shown') {
+        statusBadge.innerText = "FRAGE FREIGEGEBEN - ANTWORTEN GESPERRT";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#3ecbff] text-[#1a1a2e]";
+        disableOptionButtons(true, "Warten auf Freigabe der Antworten...");
+      } else if (state.stage === 'options_shown') {
+        statusBadge.innerText = "ANTWORTEN FREIGEGEBEN - JETZT WÄHLEN!";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#7ed957] text-[#1a1a2e] animate-pulse";
+        enableOptionButtons(q);
+      } else if (state.stage === 'result') {
+        statusBadge.innerText = "AUFLÖSUNG";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#7017c9] text-white";
+        showResults(q);
+      }
+    }
+
+    function resetOptionButtons() {
+      selectedIndices = [];
+      resultAlreadyProcessed = false;
+      for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById(`opt-btn-${i}`);
+        btn.disabled = true;
+        btn.querySelector('.opt-text').innerText = "???";
+        btn.className = getButtonBaseStyle(i) + " opacity-40 cursor-not-allowed";
+      }
+      document.getElementById("fact-box")?.classList.add("hidden");
+      document.getElementById("fail-note")?.classList.add("hidden");
+    }
+
+    function disableOptionButtons(keepText, placeholder) {
+      for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById(`opt-btn-${i}`);
+        btn.disabled = true;
+        if (!keepText) btn.querySelector('.opt-text').innerText = placeholder;
+        btn.className = getButtonBaseStyle(i) + " opacity-50 cursor-not-allowed";
+      }
+    }
+
+    function enableOptionButtons(q) {
+      for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById(`opt-btn-${i}`);
+        btn.querySelector('.opt-text').innerText = q.options[i];
+        btn.disabled = isHost;
+        btn.className = getButtonBaseStyle(i) + (isHost ? " opacity-50 cursor-not-allowed" : renderSelectionSuffix(i));
+      }
+    }
+
+    function renderSelectionSuffix(i) {
+      return selectedIndices.includes(i) ? " ring-4 ring-white jax-pop cursor-pointer" : " cursor-pointer";
+    }
+
+    function showResults(q) {
+      const correctSet = correctSetOf(q);
+      for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById(`opt-btn-${i}`);
+        btn.disabled = true;
+        btn.querySelector('.opt-text').innerText = q.options[i];
+
+        if (correctSet.includes(i)) {
+          btn.className = getButtonBaseStyle(i) + " ring-4 ring-[#1a1a2e] scale-105 z-10";
+        } else {
+          btn.className = getButtonBaseStyle(i) + " opacity-30 grayscale";
+        }
+      }
+
+      // Hintergrundwissen zur Runde - für ALLE sichtbar, unabhängig davon ob richtig oder falsch
+      const factBox = document.getElementById("fact-box");
+      if (factBox) {
+        if (q.fact) {
+          factBox.innerHTML = `<div class="text-[#7017c9] text-xs font-bold uppercase tracking-wide mb-1">💡 Hintergrundwissen</div><div class="text-sm text-[#1a1a2e]/80">${q.fact}</div>`;
+          factBox.classList.remove("hidden");
+        } else {
+          factBox.classList.add("hidden");
+        }
+      }
+
+      // Punkte werden erst JETZT bei der Auflösung vergeben (nicht mehr sofort beim Klicken),
+      // damit die Auswahl bis dahin frei geändert/zurückgenommen werden kann.
+      if (!isHost && !resultAlreadyProcessed) {
+        resultAlreadyProcessed = true;
+        const sortedSelected = [...selectedIndices].sort();
+        const sortedCorrect = [...correctSet].sort();
+        const isFullyCorrect = sortedSelected.length > 0
+          && sortedSelected.length === sortedCorrect.length
+          && sortedSelected.every((v, idx) => v === sortedCorrect[idx]);
+
+        if (isFullyCorrect) {
+          fireConfetti();
+          onValue(ref(db, 'players/' + playerId + '/score'), (snapshot) => {
+            const currentScore = snapshot.val() || 0;
+            update(ref(db, 'players/' + playerId), {
+              score: currentScore + q.points
+            });
+          }, { onlyOnce: true });
+        } else {
+          showFailNote();
+        }
+      }
+    }
+
+    function getButtonBaseStyle(idx) {
+      const colors = [
+        "bg-[#ff2e93] text-white",
+        "bg-[#3ecbff] text-[#1a1a2e]",
+        "bg-[#ffd23f] text-[#1a1a2e]",
+        "bg-[#7ed957] text-[#1a1a2e]"
+      ];
+      return `p-7 jax-btn font-jax font-extrabold text-2xl flex items-center space-x-4 ${colors[idx]}`;
+    }
+
+    // ANTWORT AUSWÄHLEN/ZURÜCKNEHMEN (SPIELER) - frei umschaltbar, solange die Runde offen ist.
+    // Mehrere Antworten können gleichzeitig ausgewählt sein, falls die Frage mehrere richtige hat.
+    window.toggleOption = function(idx) {
+      if (isHost) return; // Host spielt nicht mit
+      if (!currentQuestionData || currentQuestionData.stage !== 'options_shown') return;
+
+      const pos = selectedIndices.indexOf(idx);
+      if (pos === -1) {
+        selectedIndices.push(idx);
+      } else {
+        selectedIndices.splice(pos, 1); // Antwort zurücknehmen
+      }
+
+      const btn = document.getElementById(`opt-btn-${idx}`);
+      btn.className = getButtonBaseStyle(idx) + renderSelectionSuffix(idx);
+
+      // Live an Firebase melden, ob dieser Spieler aktuell mind. eine Antwort ausgewählt hat -
+      // damit der Host sehen kann, sobald wirklich ALLE gewählt haben (Haken-Benachrichtigung).
+      update(ref(db, 'game1State/hasAnswered'), { [playerId]: selectedIndices.length > 0 });
+    };
+
+    // HOST CONTROLS AKTIONEN
+    window.hostReleaseQuestion = () => {
+      update(ref(db, 'game1State'), { stage: 'question_shown' });
+    };
+
+    window.hostReleaseOptions = () => {
+      update(ref(db, 'game1State'), { stage: 'options_shown', optionsShownAt: Date.now(), hasAnswered: null });
+    };
+
+    window.hostShowResults = () => {
+      update(ref(db, 'game1State'), { stage: 'result' });
+    };
+
+    // ==== PICKAXE-LEMMING-EASTEREGG: erscheint erst nach der 1. Runde, hackt oben eine
+    // Weile (Ladephase), fällt dann rotierend nach unten - fangbar NUR während des Falls. ====
+    const PICKAXE_LEMMING_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/lemmingpickaxe_%20easter-egg.gif";
+    const PICKAXE_LEMMING_POINTS = 50;
+    const PICKAXE_MINING_MS = 10000; // 10 Sekunden Hackzeit, bevor der Lemming fällt
+    let pickaxeLemmingRendered = null;
+
+    function maybeHandlePickaxeLemming(state) {
+      const ev = state.pickaxeLemming;
+      if (!ev || !ev.id) return;
+      if (pickaxeLemmingRendered === ev.id) return; // schon für dieses Gerät gestartet
+      if (ev.caughtBy) return; // war schon vorbei, bevor dieses Gerät reagieren konnte
+      pickaxeLemmingRendered = ev.id;
+
+      const el = document.createElement("div");
+      el.className = "pickaxe-lemming";
+      el.innerHTML = `<img src="${PICKAXE_LEMMING_URL}"><div class="pickaxe-hitbox"></div>`;
+      document.body.appendChild(el);
+
+      setTimeout(() => {
+        el.classList.add("falling");
+        el.querySelector(".pickaxe-hitbox").onclick = () => catchPickaxeLemming(ev.id, el);
+        setTimeout(() => { if (el.parentNode) el.remove(); }, 4300);
+      }, PICKAXE_MINING_MS);
+    }
+
+    window.catchPickaxeLemming = function(runId, el) {
+      runTransaction(ref(db, 'game1State/pickaxeLemming'), (current) => {
+        if (!current || current.id !== runId || current.caughtBy) return current;
+        current.caughtBy = playerId;
+        current.caughtAt = Date.now();
+        return current;
+      }).then((result) => {
+        const val = result && result.snapshot && result.snapshot.val();
+        if (result.committed && val && val.caughtBy === playerId) {
+          if (el) {
+            const rect = el.getBoundingClientRect();
+            const pop = document.createElement("div");
+            pop.className = "pickaxe-points-pop";
+            pop.style.left = (rect.left + rect.width / 2 - 30) + "px";
+            pop.style.top = rect.top + "px";
+            pop.innerText = "+" + PICKAXE_LEMMING_POINTS;
+            document.body.appendChild(pop);
+            setTimeout(() => pop.remove(), 1100);
+            if (el.parentNode) el.remove();
+          }
+          get(ref(db, 'players/' + playerId)).then((snap) => {
+            const data = snap.val() || {};
+            const newScore = (data.score || 0) + PICKAXE_LEMMING_POINTS;
+            update(ref(db, 'players/' + playerId), { score: newScore });
+            push(ref(db, 'gameLog'), {
+              text: '⛏️ ' + (data.name || 'Jemand') + ' hat den Pickaxe-Lemming gefangen: +' + PICKAXE_LEMMING_POINTS + ' Punkte',
+              at: Date.now()
+            });
+          });
+        }
+      });
+    };
+
+    window.hostNextQuestion = () => {
+      onValue(ref(db, 'game1State/questionIdx'), (snapshot) => {
+        const currentIdx = snapshot.val() || 0;
+        const nextIdx = currentIdx + 1;
+        if (nextIdx >= questions.length) {
+          update(ref(db, 'game1State'), { stage: 'finished' });
+        } else {
+          const updates = { questionIdx: nextIdx, stage: 'waiting' };
+          // Pickaxe-Lemming-Easteregg: erscheint erst, sobald die erste Runde vorbei ist
+          // (also beim Wechsel von Frage 1 auf Frage 2), danach nie wieder erneut ausgelöst.
+          if (currentIdx === 0) {
+            updates.pickaxeLemming = { id: Date.now(), caughtBy: null };
+          }
+          update(ref(db, 'game1State'), updates);
+        }
+      }, { onlyOnce: true });
+    };
+  
+    // ==== VERSTECKTES GEHIRN: gibt es in jedem Spiel + im Cockpit einmal zu finden.
+    // Jeder Klick lässt es hüpfen + eine kurze Sprechblase mit Klick-Fortschritt zeigen.
+    // Je mehr Gehirne man insgesamt schon aktiviert hat, desto öfter muss man das NÄCHSTE
+    // anklicken (1. Gehirn = 1 Klick, 2. Gehirn = 2 Klicks, usw.). Bei Aktivierung fliegt es
+    // weg. Der Host sieht/bekommt diese Funktion gar nicht erst (spielt nicht um Punkte).
+    const BRAIN_POINTS = 20;
+    let brainClicksSoFar_spiel1 = 0;
+    let brainNeededClicks_spiel1 = null;
+
+    function showBrainBubble_spiel1(text, isSuccess) {
+      const logoEl = document.getElementById("brain-logo");
+      if (!logoEl) return;
+      const rect = logoEl.getBoundingClientRect();
+      const bubble = document.createElement("div");
+      bubble.className = "brain-bubble" + (isSuccess ? " brain-bubble-success" : "");
+      bubble.style.left = (rect.left + rect.width / 2 - 30) + "px";
+      bubble.style.top = (rect.top - 24) + "px";
+      bubble.innerText = text;
+      document.body.appendChild(bubble);
+      setTimeout(() => bubble.remove(), 1400);
+    }
+
+    window.clickBrainLogo = function() {
+      if (isHost) return; // Host spielt nicht um Punkte - für ihn passiert hier nichts
+      const claimedField = "brainFound_spiel1";
+      const logoEl = document.getElementById("brain-logo");
+
+      if (logoEl) {
+        logoEl.classList.remove("brain-hop");
+        void logoEl.offsetWidth;
+        logoEl.classList.add("brain-hop");
+      }
+
+      function tryActivate() {
+        brainClicksSoFar_spiel1++;
+        // Bewusst KEINE Sprechblase bei Zwischen-Klicks - erst beim finalen, erfolgreichen Klick
+        if (brainClicksSoFar_spiel1 < brainNeededClicks_spiel1) return;
+
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data[claimedField]) return; // inzwischen (z.B. anderes Gerät) schon aktiviert
+          const foundCount = data.brainsFoundCount || 0;
+          const newScore = (data.score || 0) + BRAIN_POINTS;
+          update(ref(db, 'players/' + playerId), {
+            score: newScore,
+            [claimedField]: true,
+            brainsFoundCount: foundCount + 1
+          });
+          push(ref(db, 'gameLog'), {
+            text: '🧠 ' + (data.name || 'Jemand') + ' hat ein Gehirn aktiviert: +' + BRAIN_POINTS + ' Punkte',
+            at: Date.now()
+          });
+          showBrainBubble_spiel1("+" + BRAIN_POINTS + " Punkte", true);
+          if (logoEl) logoEl.classList.add("brain-fly-away");
+        });
+      }
+
+      if (brainNeededClicks_spiel1 === null) {
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data["brainFound_spiel1"]) { brainNeededClicks_spiel1 = 0; if (logoEl) logoEl.classList.add("hidden"); return; }
+          brainNeededClicks_spiel1 = (data.brainsFoundCount || 0) + 1;
+          tryActivate();
+        });
+      } else {
+        tryActivate();
+      }
+    };
+</script>
+</head>
+<body class="jax-bg text-white min-h-screen flex flex-col justify-between p-4 md:p-8 select-none relative overflow-x-hidden">
+
+  <!-- HINTERGRUND EFFEKTE -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden">
+    <div class="blob w-80 h-80 bg-pink-500 -top-20 -left-10"></div>
+    <div class="blob w-96 h-96 bg-purple-500 bottom-0 right-0" style="animation-delay:2s;"></div>
+  </div>
+
+  <!-- TOP HUD BAR -->
+  <header class="relative z-10 flex justify-between items-center jax-card p-4 text-[#1a1a2e]">
+    <div class="flex items-center space-x-3">      <span class="text-[#7017c9]"><svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></span>
+      <div>
+        <h1 class="font-jax text-lg font-extrabold tracking-wide text-[#1a1a2e]">SPIEL 1: KREUZVERHÖR</h1>
+        <div id="status-badge" class="jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#ffd23f] text-[#1a1a2e] inline-block mt-1">
+          INITIALISIERUNG
+        </div>
+      </div>
+    </div>
+
+    <!-- SPIELER PROFIL & PUNKTE -->
+    <div class="flex items-center space-x-4 jax-chip bg-[#f4f1ff] px-4 py-2">
+      <div class="text-right">
+        <div id="player-info-name" class="text-sm font-jax font-bold text-[#1a1a2e]">Lade...</div>
+        <div id="player-info-score" class="text-xs font-black text-[#7017c9]">0 Pkt.</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- HOST PANEL (NUR FÜR DEN HOST SICHTBAR) -->
+  <div id="host-controls" class="hidden relative z-20 my-4 jax-card-dark p-4">
+    <div class="text-xs font-jax font-bold text-[#ffd23f] tracking-wider uppercase mb-3 flex items-center space-x-2">
+      <span><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h16l1-9-5 3-4-6-4 6-5-3z"/></svg></span><span>HOST STEUERUNGS-PULT</span>
+    </div>
+    <div id="all-answered-badge" class="hidden bg-[#7ed957] text-[#1a1a2e] rounded-xl p-3 text-center mb-3 font-jax font-bold text-sm flex items-center justify-center gap-2">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+      Alle haben gewählt - du kannst jetzt auflösen!
+    </div>
+    <div id="host-preview-box" class="bg-white text-[#1a1a2e] rounded-xl p-6 text-center mb-3">
+      Lade Vorschau...
+    </div>
+    <div id="hc-waiting">
+      <button onclick="hostReleaseQuestion()" class="w-full py-6 jax-btn bg-[#3ecbff] text-[#1a1a2e] font-jax font-bold text-lg">
+        Frage freigeben
+      </button>
+    </div>
+    <div id="hc-question_shown" class="hidden">
+      <button onclick="hostReleaseOptions()" class="w-full py-6 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold text-lg">
+        Antworten freigeben
+      </button>
+    </div>
+    <div id="hc-options_shown" class="hidden">
+      <button onclick="hostShowResults()" class="w-full py-6 jax-btn bg-[#7017c9] text-white font-jax font-bold text-lg">
+        Auflösen
+      </button>
+    </div>
+    <div id="hc-result" class="hidden">
+      <button onclick="hostNextQuestion()" class="w-full py-6 jax-btn bg-white text-[#1a1a2e] font-jax font-bold text-lg flex items-center justify-center gap-2">
+        Nächste Frage <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+    <button onclick="hostRestartGame()" class="w-full mt-3 py-3 px-4 jax-btn bg-[#ffd23f] text-[#1a1a2e] font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.9-3.5M4 13a8 8 0 0 0 14.9 3.5"/><path d="M5 4v4h4M19 20v-4h-4"/></svg> Spiel neu starten
+    </button>
+  </div>
+
+  <!-- ZURÜCK-INS-COCKPIT: bewusst unten rechts fixiert, damit er nicht aus Versehen getroffen wird -->
+  <button id="host-end-game-btn" onclick="triggerReturnCountdown()" class="hidden fixed bottom-4 right-4 z-30 py-3 px-4 jax-btn bg-[#ff2e93] text-white font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/></svg> Spiel beenden & zurück ins Cockpit
+  </button>
+
+
+  <!-- FRAGE BEREICH -->
+  <main class="relative z-10 my-auto max-w-4xl w-full mx-auto text-center space-y-8 py-6">
+
+    <div id="player-answer-area" class="space-y-6">
+      <div class="jax-card p-8 relative overflow-hidden text-[#1a1a2e]">
+        <h2 id="question-title" class="font-jax text-3xl md:text-5xl font-extrabold leading-relaxed text-[#1a1a2e]">
+          Warten auf Start der nächsten Frage durch den Host...
+        </h2>
+      </div>
+
+      <!-- TIMER (nur während 'Antworten Freigeben') -->
+      <div id="timer-display" class="hidden flex items-center gap-3 jax-card px-4 py-3 my-4 text-[#1a1a2e]">
+        <span class="text-[#7017c9]"><svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+        <span id="timer-seconds" class="text-2xl font-jax font-extrabold text-[#7ed957] tabular-nums">60s</span>
+        <div class="flex-1 h-3 bg-[#1a1a2e]/10 rounded-full overflow-hidden">
+          <div id="timer-bar" class="h-full bg-[#7ed957] transition-all duration-100 rounded-full" style="width: 100%"></div>
+        </div>
+      </div>
+
+      <!-- ANTWORT BUTTONS (2x2 GRID) -->
+      <div class="text-[#1a1a2e]/60 text-xs font-semibold -mb-2">Tippe deine Antwort(en) an - du kannst deine Auswahl jederzeit wieder ändern, solange die Zeit läuft. Manchmal sind mehrere Antworten richtig!</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <button id="opt-btn-0" onclick="toggleOption(0)" class="p-7 jax-btn font-jax font-extrabold text-2xl flex items-center space-x-4 bg-[#ff2e93] text-white opacity-40" disabled>
+          <span class="w-10 h-10 rounded-xl bg-black/20 flex items-center justify-center text-sm font-black">A</span>
+          <span class="opt-text flex-1 text-left">???</span>
+        </button>
+
+        <button id="opt-btn-1" onclick="toggleOption(1)" class="p-7 jax-btn font-jax font-extrabold text-2xl flex items-center space-x-4 bg-[#3ecbff] text-[#1a1a2e] opacity-40" disabled>
+          <span class="w-10 h-10 rounded-xl bg-black/10 flex items-center justify-center text-sm font-black">B</span>
+          <span class="opt-text flex-1 text-left">???</span>
+        </button>
+
+        <button id="opt-btn-2" onclick="toggleOption(2)" class="p-7 jax-btn font-jax font-extrabold text-2xl flex items-center space-x-4 bg-[#ffd23f] text-[#1a1a2e] opacity-40" disabled>
+          <span class="w-10 h-10 rounded-xl bg-black/10 flex items-center justify-center text-sm font-black">C</span>
+          <span class="opt-text flex-1 text-left">???</span>
+        </button>
+
+        <button id="opt-btn-3" onclick="toggleOption(3)" class="p-7 jax-btn font-jax font-extrabold text-2xl flex items-center space-x-4 bg-[#7ed957] text-[#1a1a2e] opacity-40" disabled>
+          <span class="w-10 h-10 rounded-xl bg-black/10 flex items-center justify-center text-sm font-black">D</span>
+          <span class="opt-text flex-1 text-left">???</span>
+        </button>
+      </div>
+      <div id="fact-box" class="hidden jax-card bg-white p-5 text-left"></div>
+    </div>
+
+    <!-- SPIEL BEENDET -->
+    <div id="finished-area" class="hidden jax-card p-10 text-center text-[#1a1a2e]">
+      <div class="text-[#7017c9] flex justify-center mb-3"><svg class="w-14 h-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h13l-3 4 3 4H5"/></svg></div>
+      <div class="font-jax text-2xl font-extrabold text-[#7017c9]">Erledigt...</div>
+      <div class="text-[#1a1a2e]/50 text-xs mt-2">Der Moderator bringt euch gleich zurück ins Cockpit...</div>
+      <div id="finished-quote" class="text-xs mt-4 max-w-md mx-auto opacity-70"></div>
+    </div>
+  </main>
+
+  <!-- KONFETTI (bei richtiger Antwort) -->
+  <canvas id="confetti-canvas" class="hidden fixed inset-0 z-[60] pointer-events-none"></canvas>
+
+  <!-- FAIL-SCREEN (bei falscher/keiner Antwort) -->
+  <div id="fail-note" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] jax-card bg-white p-4 text-center pointer-events-none"></div>
+
+  <!-- FOOTER -->
+  <footer class="relative z-10 text-center text-xs text-white/50 pt-4">
+    <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9486-removebg-preview.png" class="inline-block h-4 w-4 align-middle mr-1 -mt-0.5" onerror="this.style.display='none'">Hirnschmalz-Arena • Synchronisierter Live-Modus
+  </footer>
+
+  <!-- RÜCKKEHR-ZWISCHENSZENE -->
+  <div id="return-countdown-overlay" class="hidden fixed inset-0 bg-black z-[80] flex flex-col items-center justify-center">
+    <div class="text-amber-200/70 text-xs tracking-[0.3em] uppercase mb-4" style="font-family: Georgia, 'Times New Roman', serif;">Rückkehr ins Cockpit in</div>
+    <div id="return-countdown-number" class="text-amber-100 border-4 border-amber-200/40 rounded-full w-40 h-40 flex items-center justify-center text-6xl" style="font-family: Georgia, 'Times New Roman', serif;">5</div>
+  </div>
+
+
+  <img id="brain-logo" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9455-removebg-preview.png"
+    onclick="clickBrainLogo()" class="fixed bottom-2 left-2 h-8 md:h-10 w-auto z-30 cursor-pointer transition-transform hover:scale-110"
+    onerror="this.style.display='none'" alt="">
+</body>
+</html>

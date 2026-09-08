@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Überwachungscockpit</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Courier New', monospace; background: #050302; }
+    .admin-panel {
+      background: rgba(15, 10, 5, 0.9);
+      border: 1px solid #eab308;
+      box-shadow: 0 0 15px rgba(234, 179, 8, 0.2), inset 0 0 15px rgba(234, 179, 8, 0.1);
+      backdrop-filter: blur(8px);
+    }
+    .glow-text-gold { text-shadow: 0 0 8px rgba(234, 179, 8, 0.6); }
+    pre { white-space: pre-wrap; word-break: break-word; }
+    table th, table td { padding: 6px 10px; text-align: left; border-bottom: 1px solid rgba(234,179,8,0.15); }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let playerId = localStorage.getItem("quiz_player_id");
+    if (!playerId) { window.location.href = "index.html"; }
+
+    // Zugriffsschutz: nur Host/Admin dürfen dieses Cockpit sehen
+    get(ref(db, 'players/' + playerId)).then((snap) => {
+      const data = snap.val();
+      if (!data || !data.name || !(data.name.includes("Host") || data.name.includes("Admin"))) {
+        window.location.href = "cockpit.html";
+      }
+    });
+
+    let allPlayersData = {};
+    let lastGameState = {};
+    let currentGameKey = null;
+    let unsubscribeGameStateRef = null;
+
+    // Felder, die üblicherweise pro Spieler innerhalb eines Spielzustands vorkommen -
+    // wird generisch für ALLE Spiele durchsucht, damit diese Seite nicht für jedes der
+    // 9 Spiele einzeln gepflegt werden muss.
+    const PER_PLAYER_FIELDS = [
+      'submissions', 'buzzes', 'answers', 'tally', 'declaredSolvers',
+      'respondedWrong', 'armed', 'awardedPoints'
+    ];
+
+    function renderPlayerRows() {
+      const wrap = document.getElementById("player-rows");
+      const ids = Object.keys(allPlayersData).filter(id => {
+        const n = allPlayersData[id] && allPlayersData[id].name;
+        return n && !n.includes("Host") && !n.includes("Admin");
+      });
+      if (ids.length === 0) {
+        wrap.innerHTML = `<tr><td colspan="4" class="text-yellow-600/50 text-center py-4">Keine Spieler angemeldet.</td></tr>`;
+        return;
+      }
+      wrap.innerHTML = ids.map(id => {
+        const p = allPlayersData[id] || {};
+        const bits = [];
+        PER_PLAYER_FIELDS.forEach(field => {
+          const val = lastGameState[field];
+          if (val && typeof val === 'object' && val[id] !== undefined) {
+            bits.push(`<span class="text-cyan-400">${field}</span>=${JSON.stringify(val[id])}`);
+          }
+        });
+        return `
+          <tr>
+            <td class="text-yellow-200 font-bold">${p.name || '?'}</td>
+            <td class="text-yellow-500">${p.score ?? 0}</td>
+            <td>${p.isReady ? '✅' : '⬜'}</td>
+            <td class="text-[11px] text-green-400/90">${bits.join(' &nbsp;·&nbsp; ') || '<span class="text-yellow-700/50">- kein aktiver Eintrag -</span>'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function watchGameState(gameKey) {
+      currentGameKey = gameKey;
+      const stateBox = document.getElementById("raw-state");
+      if (!gameKey) {
+        lastGameState = {};
+        stateBox.innerText = "(kein Mini-Spiel aktiv - alle sind in der Lobby/im Cockpit)";
+        renderPlayerRows();
+        return;
+      }
+      onValue(ref(db, gameKey + 'State'), (snap) => {
+        lastGameState = snap.val() || {};
+        stateBox.innerText = JSON.stringify(lastGameState, null, 2);
+        renderPlayerRows();
+      });
+    }
+
+    onValue(ref(db, 'gameState'), (snap) => {
+      const gs = snap.val() || {};
+      const activeGame = gs.activeGame || null;
+      const label = document.getElementById("current-game-label");
+      const match = activeGame ? activeGame.match(/^(spiel\d)\.html$/) : null;
+      const gameKey = match ? match[1] : null;
+
+      label.innerText = activeGame
+        ? (gameKey ? gameKey.toUpperCase() : activeGame)
+        : "Lobby / Cockpit (kein Mini-Spiel aktiv)";
+
+      if (gameKey !== currentGameKey) {
+        watchGameState(gameKey);
+      }
+    });
+
+    onValue(ref(db, 'players/'), (snap) => {
+      allPlayersData = snap.val() || {};
+      renderPlayerRows();
+    });
+  </script>
+</head>
+<body class="text-white min-h-screen p-4 md:p-8">
+
+  <div class="admin-panel rounded-xl p-4 mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-lg font-black tracking-widest text-yellow-300 glow-text-gold">🕵️ ÜBERWACHUNGSCOCKPIT</h1>
+      <p class="text-xs text-yellow-600 mt-1">Live-Ansicht: aktives Spiel &amp; individueller Spielerzustand</p>
+    </div>
+    <div class="text-right">
+      <div class="text-[10px] text-yellow-600 uppercase tracking-wide">Aktives Spiel</div>
+      <div id="current-game-label" class="text-sm font-bold text-cyan-400">lädt...</div>
+    </div>
+  </div>
+
+  <div class="admin-panel rounded-xl p-4 mb-6 overflow-x-auto">
+    <div class="text-xs text-yellow-500 font-bold uppercase tracking-wide mb-2">Spieler-Übersicht</div>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-yellow-600 text-xs uppercase">
+          <th>Name</th>
+          <th>Punkte</th>
+          <th>Bereit</th>
+          <th>Aktueller Zustand im laufenden Spiel</th>
+        </tr>
+      </thead>
+      <tbody id="player-rows"></tbody>
+    </table>
+  </div>
+
+  <div class="admin-panel rounded-xl p-4">
+    <div class="text-xs text-yellow-500 font-bold uppercase tracking-wide mb-2">Rohzustand des aktiven Spiels (live, Firebase-Daten unverändert)</div>
+    <pre id="raw-state" class="text-[11px] text-green-400/90 bg-black/50 rounded-lg p-3 max-h-[50vh] overflow-y-auto">lädt...</pre>
+  </div>
+
+</body>
+</html>

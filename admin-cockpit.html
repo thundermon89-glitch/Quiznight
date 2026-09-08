@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Admin Cockpit</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .admin-panel {
+      background: rgba(15, 10, 5, 0.9);
+      border: 1px solid #eab308;
+      box-shadow: 0 0 15px rgba(234, 179, 8, 0.2), inset 0 0 15px rgba(234, 179, 8, 0.1);
+      backdrop-filter: blur(8px);
+    }
+    .glow-text-gold {
+      text-shadow: 0 0 10px #eab308, 0 0 20px #eab308;
+    }
+    .wheel-outer { position: relative; width: 190px; height: 190px; margin: 0 auto; }
+    .wheel-pointer { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 1.6rem; z-index: 5; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6)); }
+    .wheel-disc { width: 190px; height: 190px; border-radius: 50%; position: relative; border: 5px solid #fbbf24; box-shadow: 0 0 25px rgba(251,191,36,0.4), inset 0 0 20px rgba(0,0,0,0.5); }
+    .wheel-label {
+      position: absolute; top: 50%; left: 50%; width: 76px; margin-left: -38px; margin-top: -8px;
+      text-align: center; font-size: 10px; font-weight: 900; color: white;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.9); pointer-events: none;
+    }
+    .wheel-center-dot { position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; margin: -7px; border-radius: 50%; background: #fbbf24; border: 2px solid #78350f; z-index: 4; }
+
+    /* ==== RAD-DES-WAHNSINNS ERGEBNIS: großer bunter Sticker-Look ==== */
+    @keyframes stickerPop {
+      0% { transform: scale(0) rotate(-25deg); opacity: 0; }
+      60% { transform: scale(1.15) rotate(8deg); opacity: 1; }
+      80% { transform: scale(0.95) rotate(-4deg); }
+      100% { transform: scale(1) rotate(-6deg); opacity: 1; }
+    }
+    .wheel-sticker {
+      width: 130px; height: 130px; margin: 0 auto;
+      background: radial-gradient(circle at 35% 30%, #ffe680, #ffd23f 60%, #ff9f1c 100%);
+      border: 5px solid #1a1a2e; border-radius: 50%;
+      box-shadow: 6px 6px 0 rgba(0,0,0,0.85), inset 0 0 0 4px rgba(255,255,255,0.5);
+      display: flex; align-items: center; justify-content: center;
+      animation: stickerPop 0.6s cubic-bezier(.34,1.56,.64,1);
+    }
+    .wheel-sticker-emoji { font-size: 64px; line-height: 1; filter: drop-shadow(2px 3px 0 rgba(0,0,0,0.25)); }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, update, remove, onValue, get, set, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let playerId = localStorage.getItem("quiz_player_id");
+    if (!playerId) {
+      window.location.href = "index.html";
+    }
+
+    let allPlayersCache = {};
+    let lastSeenChaosRolledAt = null;
+
+    // Zugriffsschutz: nur Host/Admin dürfen dieses Cockpit sehen
+    get(ref(db, 'players/' + playerId)).then((snap) => {
+      const data = snap.val();
+      if (!data || !data.name || !(data.name.includes("Host") || data.name.includes("Admin"))) {
+        window.location.href = "cockpit.html";
+      }
+    });
+
+    // ==== RAD DES WAHNSINNS: keine Runden, keine Verpflichtungen. Ein Dreh löst sofort
+    // eine Punkte-Umverteilung aus - komplett in diesem einen Moment erledigt. ====
+    const WHEEL_EFFECTS = [
+      { id: 'e1', icon: '💥', title: 'Punkte-Dusche' },
+      { id: 'e2', icon: '👑', title: 'Robin Hood' },
+      { id: 'e3', icon: '🔄', title: 'Tausch-Rausch' },
+      { id: 'e4', icon: '⭐', title: 'Zufalls-Bonus' },
+      { id: 'e5', icon: '📉', title: 'Zufalls-Abzug' },
+      { id: 'e6', icon: '⚖️', title: 'Gleichmacherei' },
+      { id: 'e7', icon: '🦹', title: 'Punkteklau' },
+      { id: 'e8', icon: '💀', title: 'Fehlalarm' },
+      { id: 'e9', icon: '📊', title: 'Platzierungs-Check' }
+    ];
+
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+    function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+    function getActiveIds(players) {
+      return Object.keys(players).filter(id => players[id] && players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin"));
+    }
+    function rollerName(id) { return (allPlayersCache[id] || {}).name || "Jemand"; }
+
+    function generateClues(pid, sortedIds, players) {
+      const rank = sortedIds.indexOf(pid) + 1;
+      const n = sortedIds.length;
+      const pool = [];
+      if (rank > 1) pool.push('Du bist nicht Erster.');
+      if (rank < n) pool.push('Du bist nicht Letzter.');
+      if (rank > 1) pool.push('Du liegst hinter ' + players[sortedIds[rank - 2]].name + '.');
+      if (rank < n) pool.push('Du liegst vor ' + players[sortedIds[rank]].name + '.');
+      if (rank > 2) pool.push('Mindestens zwei Personen liegen vor dir.');
+      if (rank < n - 1) pool.push('Mindestens zwei Personen liegen hinter dir.');
+      if (pool.length === 0) pool.push('Die Truhe ist ratlos - du bist ganz allein im Rennen.');
+      return shuffle(pool).slice(0, Math.min(2, pool.length));
+    }
+
+    // Berechnet die sofortige Punkte-Umverteilung für eine Rad-Karte. Gibt Firebase-Updates
+    // plus eine für alle lesbare Beschreibung zurück - keine offenen Verpflichtungen.
+    function computeWheelEffect(effect, activeIds, players) {
+      const score = (id) => (players[id] && players[id].score) || 0;
+      const updates = {};
+      let description = '';
+
+      if (effect.id === 'e1') {
+        activeIds.forEach(id => { updates['players/' + id + '/score'] = score(id) + 50; });
+        description = 'Alle bekommen +50 Punkte!';
+      } else if (effect.id === 'e2') {
+        const sorted = [...activeIds].sort((a, b) => score(b) - score(a));
+        const leader = sorted[0], last = sorted[sorted.length - 1];
+        if (leader && last && leader !== last) {
+          const amount = Math.min(100, score(leader));
+          updates['players/' + leader + '/score'] = score(leader) - amount;
+          updates['players/' + last + '/score'] = score(last) + amount;
+          description = rollerName(leader) + ' gibt ' + amount + ' Punkte an ' + rollerName(last) + ' ab!';
+        } else description = 'Niemand zum Umverteilen da...';
+      } else if (effect.id === 'e3') {
+        if (activeIds.length >= 2) {
+          const [a, b] = shuffle(activeIds);
+          const sa = score(a), sb = score(b);
+          updates['players/' + a + '/score'] = sb;
+          updates['players/' + b + '/score'] = sa;
+          description = rollerName(a) + ' und ' + rollerName(b) + ' tauschen ihre Punktestände!';
+        } else description = 'Zu wenig Spieler zum Tauschen...';
+      } else if (effect.id === 'e4') {
+        const lucky = pickRandom(activeIds);
+        updates['players/' + lucky + '/score'] = score(lucky) + 150;
+        description = rollerName(lucky) + ' bekommt +150 Punkte!';
+      } else if (effect.id === 'e5') {
+        const unlucky = pickRandom(activeIds);
+        updates['players/' + unlucky + '/score'] = Math.max(0, score(unlucky) - 80);
+        description = rollerName(unlucky) + ' verliert 80 Punkte!';
+      } else if (effect.id === 'e6') {
+        const total = activeIds.reduce((sum, id) => sum + score(id), 0);
+        const avg = Math.round(total / activeIds.length);
+        activeIds.forEach(id => { updates['players/' + id + '/score'] = avg; });
+        description = 'Alle Punktestände werden auf ' + avg + ' ausgeglichen!';
+      } else if (effect.id === 'e7') {
+        if (activeIds.length >= 2) {
+          const [thief, victim] = shuffle(activeIds);
+          const amount = 20 + Math.floor(Math.random() * 41);
+          updates['players/' + thief + '/score'] = score(thief) + amount;
+          updates['players/' + victim + '/score'] = Math.max(0, score(victim) - amount);
+          description = rollerName(thief) + ' klaut ' + amount + ' Punkte von ' + rollerName(victim) + '!';
+        } else description = 'Niemand zum Bestehlen da...';
+      } else if (effect.id === 'e8') {
+        description = 'Fehlalarm! Nichts passiert... diesmal.';
+      } else if (effect.id === 'e9') {
+        const sorted = [...activeIds].sort((a, b) => score(b) - score(a));
+        description = sorted.map((id, i) => (i + 1) + '. ' + rollerName(id) + ' (' + score(id) + ' Pkt.)').join('  ·  ');
+      }
+      return { updates, description };
+    }
+
+    function logEvent(text) {
+      push(ref(db, 'gameLog'), { text, at: Date.now() });
+    }
+
+    function runWheelSpin(onComplete) {
+      get(ref(db, 'players/')).then((playersSnap) => {
+        const players = playersSnap.val() || {};
+        const activeIds = getActiveIds(players);
+        if (activeIds.length === 0) { onComplete(null, null); return; }
+
+        const effect = pickRandom(WHEEL_EFFECTS);
+        const { updates, description } = computeWheelEffect(effect, activeIds, players);
+
+        const afterScores = { ...players };
+        Object.keys(updates).forEach(path => {
+          const [, pid] = path.split('/');
+          afterScores[pid] = { ...afterScores[pid], score: updates[path] };
+        });
+        const rankedIds = [...activeIds].sort((a, b) => (afterScores[b].score || 0) - (afterScores[a].score || 0));
+        activeIds.forEach(id => {
+          updates['players/' + id + '/riddleClues'] = generateClues(id, rankedIds, afterScores);
+        });
+
+        update(ref(db), updates).then(() => {
+          set(ref(db, 'wheelState'), {
+            effectId: effect.id,
+            description,
+            rolledAt: Date.now()
+          }).then(() => {
+            logEvent('🎡 ' + effect.title + ': ' + description);
+            onComplete(effect, description);
+          });
+        });
+      });
+    }
+
+    // ---- Drehrad: dreht sich klickernd und bleibt auf einem vorbestimmten Namen stehen ----
+    let wheelAudioCtx = null;
+    document.addEventListener('click', () => {
+      if (!wheelAudioCtx) wheelAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (wheelAudioCtx.state === 'suspended') wheelAudioCtx.resume();
+    }, { once: true });
+
+    function playWheelTick() {
+      try {
+        if (!wheelAudioCtx) return;
+        const osc = wheelAudioCtx.createOscillator();
+        const gain = wheelAudioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = 1400;
+        gain.gain.setValueAtTime(0.18, wheelAudioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, wheelAudioCtx.currentTime + 0.05);
+        osc.connect(gain).connect(wheelAudioCtx.destination);
+        osc.start();
+        osc.stop(wheelAudioCtx.currentTime + 0.06);
+      } catch (e) {}
+    }
+
+    function scheduleWheelTicks(durationMs, segmentCount) {
+      const totalTicks = Math.max(18, segmentCount * 6);
+      for (let k = 1; k <= totalTicks; k++) {
+        const t = durationMs * Math.pow(k / totalTicks, 2.1);
+        setTimeout(playWheelTick, t);
+      }
+    }
+
+    function spinWheel(containerEl, labels, targetIndex, onDone) {
+      const n = labels.length;
+      const segAngle = 360 / n;
+      const colors = ['#a16207', '#78350f'];
+      const stops = labels.map((_, i) => `${colors[i % 2]} ${i * segAngle}deg ${(i + 1) * segAngle}deg`).join(', ');
+      containerEl.innerHTML = `
+        <div class="wheel-outer">
+          <div class="wheel-pointer">🔻</div>
+          <div class="wheel-disc" id="wheel-disc-el" style="background: conic-gradient(${stops});">
+            ${labels.map((label, i) => {
+              const mid = i * segAngle + segAngle / 2;
+              return `<div class="wheel-label" style="transform: rotate(${mid}deg) translateY(-78px) rotate(${-mid}deg);">${label}</div>`;
+            }).join('')}
+          </div>
+          <div class="wheel-center-dot"></div>
+        </div>
+      `;
+      const disc = document.getElementById('wheel-disc-el');
+      const durationMs = 5200;
+      const spins = 6;
+      const targetMid = targetIndex * segAngle + segAngle / 2;
+      const finalAngle = spins * 360 + (360 - targetMid);
+
+      scheduleWheelTicks(durationMs, n);
+      disc.style.transition = `transform ${durationMs}ms cubic-bezier(0.1, 0.65, 0.15, 1)`;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { disc.style.transform = `rotate(${finalAngle}deg)`; });
+      });
+      setTimeout(onDone, durationMs + 300);
+    }
+
+    function finalContinueButtonHtml() {
+      return `<button onclick="document.getElementById('chaos-card-modal').classList.add('hidden')" class="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-sm rounded-lg transition">Verstanden</button>`;
+    }
+
+    // Zeigt das Rad-Ergebnis direkt an - wird ausschließlich synchron vom eigenen Klick auf
+    // "Rad drehen" aufgerufen, NIE über einen Firebase-Listener. So kann sich das Popup nie
+    // durch einen Seiten-Neuaufbau (z.B. Rückkehr aus einem Spiel) von selbst wiederholen.
+    function showWheelSpin(effect, description) {
+      const modal = document.getElementById("chaos-card-modal");
+      const introEl = document.getElementById("chaos-roll-intro");
+      const wheelEl = document.getElementById("chaos-wheel-container");
+      const resultEl = document.getElementById("chaos-card-result");
+      const continueBox = document.getElementById("chaos-modal-continue");
+
+      const labels = WHEEL_EFFECTS.map(e => e.title);
+      const targetIdx = WHEEL_EFFECTS.findIndex(e => e.id === effect.id);
+
+      modal.classList.remove("hidden");
+      resultEl.classList.add("hidden");
+      continueBox.classList.add("hidden");
+      wheelEl.classList.remove("hidden");
+      introEl.classList.remove("hidden");
+      introEl.innerHTML = `🎡 Das Rad des Wahnsinns entscheidet...`;
+
+      spinWheel(wheelEl, labels, targetIdx, () => {
+        wheelEl.classList.add("hidden");
+        resultEl.classList.remove("hidden");
+        resultEl.innerHTML = `
+          <div class="wheel-sticker">
+            <span class="wheel-sticker-emoji">${effect.icon}</span>
+          </div>
+          <div class="text-xl font-black text-yellow-300 mb-2 mt-3">${effect.title}</div>
+          <div class="text-sm text-white/80">${description || ''}</div>
+        `;
+        continueBox.classList.remove("hidden");
+        continueBox.innerHTML = finalContinueButtonHtml();
+      });
+    }
+
+    window.applyManualAdjust = function() {
+      const select = document.getElementById('manual-adjust-player');
+      const amountInput = document.getElementById('manual-adjust-amount');
+      const pid = select.value;
+      const amount = parseInt(amountInput.value, 10);
+      if (!pid || isNaN(amount) || amount === 0) return;
+      get(ref(db, 'players/' + pid + '/score')).then((snap) => {
+        const cur = snap.val() || 0;
+        update(ref(db, 'players/' + pid), { score: cur + amount });
+        logEvent('🛠️ ' + rollerName(pid) + ': ' + (amount > 0 ? '+' : '') + amount + ' Punkte (manuell)');
+        amountInput.value = '';
+      });
+    };
+
+    function renderManualAdjustDropdown() {
+      const select = document.getElementById('manual-adjust-player');
+      if (!select) return;
+      const activeIds = getActiveIds(allPlayersCache);
+      const current = select.value;
+      select.innerHTML = activeIds.map(id => `<option value="${id}">${allPlayersCache[id].name}</option>`).join('');
+      if (activeIds.includes(current)) select.value = current;
+    }
+
+    function renderRanking() {
+      const box = document.getElementById("chaos-overview");
+      if (!box) return;
+      const activeIds = getActiveIds(allPlayersCache);
+      const ranked = [...activeIds].sort((a, b) => (allPlayersCache[b].score || 0) - (allPlayersCache[a].score || 0));
+      if (ranked.length === 0) {
+        box.innerHTML = '<div class="text-[10px] text-yellow-600/60 italic">Noch keine Spieler in der Runde.</div>';
+        return;
+      }
+      box.innerHTML = `
+        <div class="text-[10px] text-yellow-500 font-bold uppercase tracking-wide mb-1">📊 Platzierung</div>
+        ${ranked.map((id, i) => `
+          <div class="flex justify-between text-[11px] text-yellow-100 py-0.5 border-b border-yellow-900/30 last:border-0">
+            <span>${i + 1}. ${rollerName(id)}</span>
+            <span class="font-bold text-white">${allPlayersCache[id].score || 0} Pkt.</span>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    // ---- Live-Konsole: durchscrollbares Protokoll aller Punkte-Ereignisse ----
+    function renderConsole() {
+      const box = document.getElementById("game-console");
+      if (!box) return;
+      onValue(ref(db, 'gameLog'), (snapshot) => {
+        const log = snapshot.val() || {};
+        const entries = Object.values(log).sort((a, b) => a.at - b.at);
+        if (entries.length === 0) {
+          box.innerHTML = '<div class="text-green-700/60 italic">Noch keine Ereignisse...</div>';
+          return;
+        }
+        box.innerHTML = entries.map(e => {
+          const t = new Date(e.at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          return `<div class="text-green-300 py-0.5 border-b border-green-900/20 last:border-0"><span class="text-green-600">[${t}]</span> ${e.text}</div>`;
+        }).join('');
+        box.scrollTop = box.scrollHeight;
+      });
+    }
+    renderConsole();
+
+    // Konsole leeren: löscht das gesamte Ereignis-Protokoll unwiderruflich für alle Geräte
+    window.clearConsole = function() {
+      if (!confirm("Live-Konsole wirklich komplett leeren? Das kann nicht rückgängig gemacht werden.")) return;
+      remove(ref(db, 'gameLog'));
+    };
+
+    // Prüft, ob alle Spieler bereit sind. Wird sowohl fürs Rad-Drehen als auch fürs
+    // Spiel-Starten genutzt - bei Erfolg wird onSuccess() aufgerufen.
+    const LATE_PENALTY_POINTS = 40;
+
+    function checkAllReadyThenRun(onSuccess) {
+      get(ref(db, 'players/')).then((snapshot) => {
+        const players = snapshot.val() || {};
+        const unreadyPlayers = [];
+        const alreadyPenalizedNames = [];
+
+        for (let id in players) {
+          const p = players[id];
+          const name = p && p.name; // defensiv: manche Einträge könnten unvollständig sein
+          if (!name) continue; // Spieler ohne Namen (noch nicht fertig angemeldet) überspringen
+          if (name.includes("Host") || name.includes("Admin")) continue;
+          if (!p.isReady) {
+            if (p.latePenaltyGiven) {
+              // Schon in einem früheren Versuch (derselbe "nicht bereit"-Phase) bestraft -
+              // sonst würde jeder erneute Klick auf "Spiel starten" dieselbe Person nochmal
+              // treffen, was zu unterschiedlich hohen Abzügen je nach Anzahl der Versuche führt.
+              alreadyPenalizedNames.push(name);
+            } else {
+              unreadyPlayers.push({ id: id, name: name, score: p.score || 0 });
+            }
+          }
+        }
+
+        if (unreadyPlayers.length > 0 || alreadyPenalizedNames.length > 0) {
+          // Sofortige Strafe schon beim ersten Verschlafen - kein zweiter Versuch nötig.
+          // Wird pro Person nur EINMAL vergeben (latePenaltyGiven-Sperre), bis sie sich
+          // bereit meldet.
+          unreadyPlayers.forEach(p => {
+            update(ref(db, 'players/' + p.id), { score: p.score - LATE_PENALTY_POINTS, latePenaltyGiven: true });
+          });
+
+          if (unreadyPlayers.length > 0) {
+            const names = unreadyPlayers.map(p => p.name);
+            const namesJoined = names.length > 1
+              ? names.slice(0, -1).join(', ') + ' und ' + names[names.length - 1]
+              : names[0];
+            logEvent('⏰ Verschlafen: ' + namesJoined + ' (-' + LATE_PENALTY_POINTS + ' Pkt. je Person)');
+            set(ref(db, 'gameState/latePenaltyEvent'), { names, amount: LATE_PENALTY_POINTS, at: Date.now() });
+          }
+
+          const listContainer = document.getElementById("admin-unready-list");
+          listContainer.innerHTML = "";
+          unreadyPlayers.forEach(p => {
+            const item = document.createElement("div");
+            item.className = "flex justify-between items-center text-red-400 font-bold bg-red-950/50 p-1.5 rounded border border-red-500/30 text-xs";
+            item.innerHTML = `<span>⚠️ ${p.name}</span> <span class="text-yellow-300">-${LATE_PENALTY_POINTS} Pkt. Strafe aktiv</span>`;
+            listContainer.appendChild(item);
+          });
+          alreadyPenalizedNames.forEach(name => {
+            const item = document.createElement("div");
+            item.className = "flex justify-between items-center text-orange-300 font-bold bg-orange-950/40 p-1.5 rounded border border-orange-500/30 text-xs";
+            item.innerHTML = `<span>⏳ ${name}</span> <span class="text-orange-200">bereits bestraft, wartet noch</span>`;
+            listContainer.appendChild(item);
+          });
+
+          document.getElementById("admin-penalty-info").innerText =
+            "⛔ Nicht alle Spieler haben auf 'Bereit' geklickt - " + LATE_PENALTY_POINTS + " Minuspunkte wurden verteilt (nur einmal pro Person)!";
+
+          document.getElementById("admin-error-modal").classList.remove("hidden");
+          return;
+        }
+
+        onSuccess();
+      }).catch((err) => {
+        // Falls hier je ein Fehler durchrutscht, wenigstens sichtbar machen statt stumm
+        // hängenzubleiben - das war zuvor das eigentliche Problem: nichts passierte.
+        alert("Fehler beim Prüfen der Spielerliste: " + err.message);
+      });
+    }
+
+    // Rad des Wahnsinns: völlig frei, keine Bereitschafts-Prüfung, keine Bindung an Runden.
+    // Der Host kann jederzeit und beliebig oft drehen.
+    window.triggerChaosSpin = function() {
+      runWheelSpin((effect, description) => {
+        if (effect) showWheelSpin(effect, description);
+      });
+    };
+
+    // Spiel starten: eigene Bereitschafts-Prüfung, unabhängig vom Rad
+    window.triggerAdminLaunch = function() {
+      checkAllReadyThenRun(() => {
+        EDITOR_GAMES.forEach(populateSourceSelect);
+        document.getElementById("admin-game-select-modal").classList.remove("hidden");
+      });
+    };
+
+    // ==== FRAGENKATALOG-QUELLE: für Spiele mit Editor (1, 3, 7) kann der Host vor dem
+    // Start wählen, welcher Fragen-Pool genutzt wird. ====
+    const EDITOR_GAMES = [1, 3, 5, 7];
+
+    function populateSourceSelect(gameNumber) {
+      const select = document.getElementById('source-select-' + gameNumber);
+      if (!select) return;
+      get(ref(db, 'content/spiel' + gameNumber + '/templates')).then((snap) => {
+        const templates = snap.val() || {};
+        let html = '<option value="custom">Eigene (aktueller Stand)</option>';
+        html += '<option value="default">Vorgefertigt (Standard)</option>';
+        html += '<option value="mix">Mix (alles zusammen)</option>';
+        const names = Object.keys(templates);
+        if (names.length > 0) {
+          html += '<optgroup label="Feste Vorlage">';
+          html += names.map(n => `<option value="template:${n}">${n}</option>`).join('');
+          html += '</optgroup>';
+        }
+        select.innerHTML = html;
+      });
+    }
+
+    window.launchGameWithSource = function(gameNumber) {
+      const select = document.getElementById('source-select-' + gameNumber);
+      const source = select ? select.value : 'custom';
+      set(ref(db, 'content/spiel' + gameNumber + '/activeSource'), source).then(() => {
+        launchGame(gameNumber);
+      });
+    };
+
+    window.launchConnect4 = function() {
+      if (!confirm("Vier Gewinnt starten? Alle Spieler werden zum Zwischenspiel mitgenommen (bis zu 6 können mitspielen).")) return;
+      set(ref(db, 'connect4State'), null).then(() => {
+        set(ref(db, 'gameState'), {
+          status: 'in_game',
+          activeGame: 'vier-gewinnt.html',
+          startTime: Date.now()
+        }).then(() => {
+          logEvent('🔴 Vier Gewinnt gestartet');
+        });
+      });
+    };
+
+    window.launchSnake = function() {
+      if (!confirm("Snake starten? Alle Spieler werden 2 Minuten lang zum Zwischenspiel mitgenommen.")) return;
+      set(ref(db, 'snakeState'), {
+        status: 'active',
+        startedAt: Date.now(),
+        scores: null,
+        finished: null
+      }).then(() => {
+        set(ref(db, 'gameState'), {
+          status: 'in_game',
+          activeGame: 'snake.html',
+          startTime: Date.now()
+        }).then(() => {
+          logEvent('🐍 Snake gestartet');
+        });
+      });
+    };
+
+    window.launchGoldregen = function() {
+      if (!confirm("Goldregen starten? Alle Spieler werden 30 Sekunden lang in den Münzregen-Raum mitgenommen.")) return;
+      set(ref(db, 'goldregenState'), {
+        status: 'active',
+        startedAt: Date.now(),
+        coins: null,
+        tally: null
+      }).then(() => {
+        set(ref(db, 'gameState'), {
+          status: 'in_game',
+          activeGame: 'goldregen.html',
+          startTime: Date.now()
+        }).then(() => {
+          logEvent('🪙 Goldregen gestartet');
+        });
+      });
+    };
+
+    window.launchSiegerehrung = function() {
+      if (!confirm("Zur Siegerehrung wechseln? Alle Spieler werden jetzt dorthin mitgenommen.")) return;
+      set(ref(db, 'gameState'), {
+        status: 'in_game',
+        activeGame: 'siegerehrung.html',
+        startTime: Date.now()
+      }).then(() => {
+        logEvent('🏆 Siegerehrung gestartet');
+      });
+    };
+
+    window.launchMovieGame = function() {
+      get(ref(db, 'players/')).then((snap) => {
+        const players = snap.val() || {};
+        const activeIds = getActiveIds(players);
+        const startScores = {};
+        activeIds.forEach(id => { startScores[id] = players[id].score || 0; });
+
+        // WICHTIG: alten Zustand von Spiel 6 IMMER zurücksetzen, bevor gestartet wird -
+        // sonst startet das Spiel im letzten (evtl. mitten in einer Runde hängenden) Zustand
+        // von der vorherigen Partie, und die Host-Steuerung zeigt keine passenden Buttons an.
+        set(ref(db, 'game6State'), null).then(() => {
+          set(ref(db, 'gameState'), {
+            status: 'in_game',
+            activeGame: 'spiel6.html',
+            startTime: Date.now(),
+            startScores
+          }).then(() => {
+            logEvent('🎬 Spiel 6 (Film-Zündschnur) gestartet');
+            document.getElementById("admin-game-select-modal").classList.add("hidden");
+          });
+        });
+      });
+    };
+
+    window.launchGame = function(gameNumber) {
+      get(ref(db, 'players/')).then((snap) => {
+        const players = snap.val() || {};
+        const activeIds = getActiveIds(players);
+        const startScores = {};
+        activeIds.forEach(id => { startScores[id] = players[id].score || 0; });
+
+        set(ref(db, 'gameState'), {
+          status: 'in_game',
+          activeGame: 'spiel' + gameNumber + '.html',
+          startTime: Date.now(),
+          startScores
+        }).then(() => {
+          logEvent('🚀 Spiel ' + gameNumber + ' gestartet');
+          document.getElementById("admin-game-select-modal").classList.add("hidden");
+        });
+      });
+    };
+
+    window.closeGameSelectModal = () => document.getElementById("admin-game-select-modal").classList.add("hidden");
+    window.closeAdminErrorModal = () => document.getElementById("admin-error-modal").classList.add("hidden");
+
+    window.kickPlayer = function(targetId, targetName) {
+      if (confirm(`Möchtest du ${targetName} wirklich aus dem System kicken?`)) {
+        remove(ref(db, 'players/' + targetId));
+      }
+    };
+
+    window.resetEntireLobby = function() {
+      if (confirm("🚨 ACHTUNG: Möchtest du die gesamte Session zurücksetzen und alle Spieler kicken?")) {
+        remove(ref(db, 'players/'));
+        set(ref(db, 'gameState'), { status: 'waiting', gameActive: false });
+        window.location.href = "index.html";
+      }
+    };
+
+    window.exitAdminCockpit = () => {
+      // Nimmt jetzt ALLE Spieler mit zurück zur Lobby, nicht nur den Host
+      set(ref(db, 'gameState'), { status: 'waiting' }).then(() => {
+        window.location.href = "index.html";
+      });
+    };
+
+    // NAVIGATION: sobald ein Spiel gestartet wird, nimmt es auch den Host/Admin selbst mit,
+    // damit er das Spiel von dort aus anleiten kann (jedes Spiel hat sein eigenes Host-Pult).
+    let lastGameStateStatus = null;
+    onValue(ref(db, 'gameState'), (snapshot) => {
+      const gs = snapshot.val();
+      if (gs && gs.status === 'in_game' && gs.activeGame) {
+        window.location.href = gs.activeGame;
+        return;
+      }
+
+      // Frisch aus einem Spiel zurückgekehrt (Übergang zu 'cockpit'): Bereitschaft aller
+      // Spieler zurücksetzen. Sonst bleibt "isReady" von der letzten Runde stehen, und wenn
+      // jemand aus Gewohnheit nochmal auf "Bereit" klickt, schaltet der Toggle-Button ihn
+      // versehentlich auf "nicht bereit" zurück - dadurch wirkte "Spiel starten & prüfen"
+      // hinterher wie kaputt, obwohl es korrekt auf Schlafmützen reagiert hat.
+      if (gs && gs.status === 'cockpit' && lastGameStateStatus !== 'cockpit') {
+        get(ref(db, 'players/')).then((snap) => {
+          const players = snap.val() || {};
+          const updates = {};
+          Object.keys(players).forEach(id => {
+            const n = players[id] && players[id].name;
+            if (n && !n.includes("Host") && !n.includes("Admin")) {
+              updates[id + '/isReady'] = false;
+              updates[id + '/latePenaltyGiven'] = false;
+            }
+          });
+          if (Object.keys(updates).length > 0) update(ref(db, 'players'), updates);
+        });
+      }
+      lastGameStateStatus = gs ? gs.status : null;
+    });
+
+    // Firebase Listener für Echtzeit-Übersicht im Admin-Cockpit
+    onValue(ref(db, 'players/'), (snapshot) => {
+      const players = snapshot.val() || {};
+      allPlayersCache = players;
+      renderManualAdjustDropdown();
+      renderRanking();
+      const managementList = document.getElementById("admin-player-management-list");
+      managementList.innerHTML = "";
+
+      let totalCount = 0;
+      let readyCount = 0;
+
+      for (let id in players) {
+        const p = players[id];
+        totalCount++;
+        if (p.isReady) readyCount++;
+
+        const div = document.createElement("div");
+        div.className = "flex items-center justify-between bg-yellow-950/20 p-2 rounded border border-yellow-500/30 text-xs";
+        div.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <img src="${p.avatar || ''}" class="w-6 h-6 rounded-full bg-black border border-yellow-500" onerror="this.style.visibility='hidden'">
+            <div>
+              <span class="text-white font-bold">${p.name}</span>
+              <span class="text-gray-400 block text-[10px]">${p.score || 0} Punkte | ${p.isReady ? '<span class="text-green-400 font-bold">Bereit</span>' : '<span class="text-red-400">Wartet</span>'}</span>
+            </div>
+          </div>
+          ${!p.name.includes("Host") && !p.name.includes("Admin") ? `<button onclick="kickPlayer('${id}', '${p.name}')" class="px-2 py-1 bg-red-900 hover:bg-red-800 text-red-200 rounded font-bold text-[10px]">KICK</button>` : '<span class="text-yellow-400 text-[10px] font-bold">ADMIN</span>'}
+        `;
+        managementList.appendChild(div);
+      }
+
+      document.getElementById("stat-total-players").innerText = totalCount;
+      document.getElementById("stat-ready-players").innerText = readyCount;
+    });
+  </script>
+</head>
+<body class="bg-[#080602] text-yellow-400 min-h-screen flex flex-col p-6 font-mono select-none overflow-hidden">
+  
+  <!-- ADMIN HEADER -->
+  <div class="flex justify-between items-center border-b-2 border-yellow-500/50 pb-4">
+    <div class="flex items-center space-x-4">
+      <div class="w-4 h-4 rounded-full bg-yellow-400 animate-ping"></div>      <div>
+        <h1 class="text-xl font-black tracking-widest text-yellow-300 glow-text-gold">👑 OVERLORD ADMIN COCKPIT</h1>
+        <p class="text-xs text-yellow-600">SEK QUIZ NIGHT - MASTER CONTROL SYSTEM</p>
+      </div>
+    </div>
+    <div class="admin-panel px-4 py-2 rounded-lg flex items-center space-x-3">
+      <div class="text-right">
+        <div class="text-sm font-bold text-white">STATUS: MASTER ADMIN</div>
+        <div class="text-[10px] text-yellow-500">SECURE TUNNEL: ACTIVE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HAUPTBEREICH (3 SPALTEN) -->
+  <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 my-6">
+    
+    <!-- SPALTE 1: SCHNELL-AKTIONEN & SPIELSTART -->
+    <div class="admin-panel rounded-xl p-4 flex flex-col justify-between space-y-4">
+      <div class="text-xs text-yellow-500 font-bold border-b border-yellow-500/30 pb-2">🚀 SPIEL-STEUERUNG & LAUNCH</div>
+      
+      <div class="space-y-3 my-auto">
+
+        <button onclick="triggerChaosSpin()" class="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-black text-sm rounded-xl border-2 border-purple-300 shadow-lg shadow-purple-500/20 transition transform active:scale-95 flex items-center justify-center space-x-2">
+          <span>🎡</span>
+          <span>RAD DES WAHNSINNS DREHEN</span>
+        </button>
+
+        <button onclick="triggerAdminLaunch()" class="w-full py-4 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-sm rounded-xl border-2 border-yellow-200 shadow-lg shadow-yellow-500/20 transition transform active:scale-95 flex items-center justify-center space-x-2">
+          <span>⚡</span>
+          <span>SPIEL STARTEN & PRÜFEN</span>
+        </button>
+
+        <div class="bg-black/40 p-3 rounded border border-yellow-500/20 text-xs space-y-1">
+          <div class="flex justify-between"><span>Verbunden total:</span> <span id="stat-total-players" class="font-bold text-white">0</span></div>
+          <div class="flex justify-between"><span>Bereit gemeldet:</span> <span id="stat-ready-players" class="font-bold text-green-400">0</span></div>
+        </div>
+
+        <div id="chaos-overview" class="bg-black/40 p-2 rounded border border-yellow-500/20 text-xs"></div>
+
+        <details class="bg-black/40 border border-yellow-700/40 rounded-lg p-2 text-left">
+          <summary class="text-[10px] text-yellow-400 font-bold cursor-pointer select-none">🛠️ Punkte manuell anpassen</summary>
+          <div class="flex gap-1 mt-2">
+            <select id="manual-adjust-player" class="flex-1 px-1 py-1 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
+            <input id="manual-adjust-amount" type="number" placeholder="±Pkt." class="w-16 px-1 py-1 rounded bg-black border border-yellow-700 text-white text-[11px]">
+            <button onclick="applyManualAdjust()" class="px-2 py-1 bg-yellow-600 text-black font-bold text-[11px] rounded">OK</button>
+          </div>
+        </details>
+      </div>
+
+      <button onclick="resetEntireLobby()" class="w-full py-2 bg-red-950/60 hover:bg-red-900 border border-red-500 text-red-300 text-xs font-bold rounded transition">
+        🗑️ LOBBY KOMPLETT ZURÜCKSETZEN
+      </button>
+    </div>
+
+    <!-- SPALTE 2: SPIELER-VERWALTUNG (KICKEN & ÜBERWACHEN) -->
+    <div class="admin-panel rounded-xl p-4 flex flex-col justify-between border-2 border-yellow-400">
+      <div class="text-xs text-yellow-500 font-bold border-b border-yellow-500/30 pb-2 flex justify-between items-center">
+        <span>👥 LIVE SPIELER-KONTROLLE</span>
+        <span class="text-[10px] bg-yellow-950 px-2 py-0.5 rounded text-yellow-300">Live Sync</span>
+      </div>
+      
+      <div id="admin-player-management-list" class="space-y-2 overflow-y-auto max-h-72 my-2 pr-1">
+        <!-- Spieler werden hier dynamisch eingefügt -->
+      </div>
+
+      <div class="text-[10px] text-yellow-600 text-center">
+        Admin hat die absolute Befehlsgewalt über die Session.
+      </div>
+    </div>
+
+    <!-- SPALTE 3: LIVE-KONSOLE -->
+    <div class="admin-panel rounded-xl p-4 flex flex-col justify-between">
+      <div class="text-xs text-yellow-500 font-bold border-b border-yellow-500/30 pb-2 flex items-center justify-between gap-1.5">
+        <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span> 📡 LIVE-KONSOLE</span>
+        <button onclick="clearConsole()" class="text-[10px] px-2 py-0.5 bg-red-950/60 hover:bg-red-900 border border-red-500 text-red-300 font-bold rounded transition">Leeren</button>
+      </div>
+
+      <div id="game-console" class="bg-black/60 p-3 rounded h-48 overflow-y-auto text-[10px] font-mono text-green-400 space-y-0.5 border border-yellow-500/20"></div>
+
+      <a href="editor.html" class="w-full py-2 bg-purple-900/50 hover:bg-purple-800 border border-purple-400 text-purple-200 text-xs font-bold rounded transition text-center block">
+        📝 FRAGEN-EDITOR ÖFFNEN
+      </a>
+      <a href="ueberwachung.html" target="_blank" rel="noopener" class="w-full py-2 bg-cyan-950/50 hover:bg-cyan-900 border border-cyan-500 text-cyan-200 text-xs font-bold rounded transition text-center block">
+        🕵️ ÜBERWACHUNGSCOCKPIT ÖFFNEN (neuer Tab)
+      </a>
+      <button onclick="launchConnect4()" class="w-full py-2.5 bg-gradient-to-r from-pink-600 to-red-500 hover:from-pink-500 hover:to-red-400 text-white text-xs font-black rounded transition">
+        🔴 VIER GEWINNT STARTEN (bis zu 6 Spieler)
+      </button>
+      <button onclick="launchSnake()" class="w-full py-2.5 bg-gradient-to-r from-green-600 to-emerald-400 hover:from-green-500 hover:to-emerald-300 text-black text-xs font-black rounded transition">
+        🐍 SNAKE STARTEN (2 Min.)
+      </button>
+      <button onclick="launchGoldregen()" class="w-full py-2.5 bg-gradient-to-r from-yellow-500 to-yellow-300 hover:from-yellow-400 hover:to-yellow-200 text-black text-xs font-black rounded transition">
+        🪙 GOLDREGEN STARTEN (30 Sek.)
+      </button>
+      <button onclick="launchSiegerehrung()" class="w-full py-2.5 bg-gradient-to-r from-yellow-600 to-amber-500 hover:from-yellow-500 hover:to-amber-400 text-black text-xs font-black rounded transition">
+        🏆 ZUR SIEGEREHRUNG
+      </button>
+      <button onclick="exitAdminCockpit()" class="w-full py-2 bg-yellow-950/40 hover:bg-yellow-900 border border-yellow-500 text-yellow-300 text-xs font-bold rounded transition">
+        ZURÜCK ZUR LOBBY
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ADMIN FEHLER / STRAF-MODAL -->
+  <div id="admin-error-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <div class="admin-panel p-6 w-full max-w-lg border-2 border-red-500 space-y-4">
+      <div class="text-red-400 font-bold text-sm flex items-center space-x-2">
+        <span>🚨</span>
+        <span>START ABGEBROCHEN: SCHLAFMÜTZEN GEFUNDEN!</span>
+      </div>
+      
+      <div id="admin-unready-list" class="space-y-1.5 max-h-40 overflow-y-auto"></div>
+      
+      <div id="admin-penalty-info" class="text-xs font-bold text-yellow-400 bg-yellow-950/40 p-2 border border-yellow-500/30 rounded"></div>
+      
+      <div class="flex justify-end">
+        <button onclick="closeAdminErrorModal()" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded transition">
+          Verstanden
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPIEL-AUSWAHL MODAL (ADMIN) -->
+  <div id="admin-game-select-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <div class="admin-panel p-6 w-full max-w-lg border-2 border-yellow-400 space-y-3 max-h-[85vh] overflow-y-auto">
+      <div class="text-yellow-300 font-bold text-sm">✅ Alle Crew-Mitglieder bereit! Welches Spiel soll starten?</div>
+      <div class="grid grid-cols-1 gap-2">
+
+        <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
+          <div class="text-white text-xs font-bold">🎯 Spiel 1: Kreuzverhör</div>
+          <div class="flex gap-2">
+            <select id="source-select-1" class="flex-1 px-2 py-1.5 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
+            <button onclick="launchGameWithSource(1)" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded">Starten</button>
+          </div>
+        </div>
+
+        <button onclick="launchGame(2)" class="w-full py-3 px-4 bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-500 text-white text-left font-bold text-xs rounded-lg transition">🎮 Spiel 2: Rätselfeuer</button>
+
+        <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
+          <div class="text-white text-xs font-bold">🐑🐺 Spiel 3: Schaf oder Wolf?</div>
+          <div class="flex gap-2">
+            <select id="source-select-3" class="flex-1 px-2 py-1.5 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
+            <button onclick="launchGameWithSource(3)" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded">Starten</button>
+          </div>
+        </div>
+
+        <button onclick="launchGame(4)" class="w-full py-3 px-4 bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-500 text-white text-left font-bold text-xs rounded-lg transition">👾 Spiel 4: Pi mal Daumen</button>
+
+        <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
+          <div class="text-white text-xs font-bold">🏆 Spiel 5: Verpixelt!</div>
+          <div class="flex gap-2">
+            <select id="source-select-5" class="flex-1 px-2 py-1.5 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
+            <button onclick="launchGameWithSource(5)" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded">Starten</button>
+          </div>
+        </div>
+
+        <button onclick="launchMovieGame()" class="w-full py-3 px-4 bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-500 text-white text-left font-bold text-xs rounded-lg transition">🎬 Spiel 6: Film-Zündschnur</button>
+
+        <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
+          <div class="text-white text-xs font-bold">🔮 Spiel 7: Mythos-Check</div>
+          <div class="flex gap-2">
+            <select id="source-select-7" class="flex-1 px-2 py-1.5 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
+            <button onclick="launchGameWithSource(7)" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded">Starten</button>
+          </div>
+        </div>
+
+        <button onclick="launchGame(8)" class="w-full py-3 px-4 bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-500 text-white text-left font-bold text-xs rounded-lg transition">🔤 Spiel 8: Schriftzug-Salat</button>
+        <button onclick="launchGame(9)" class="w-full py-3 px-4 bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-500 text-white text-left font-bold text-xs rounded-lg transition">🕰️ Spiel 9: Zeitreise</button>
+      </div>
+      <div class="flex justify-end">
+        <button onclick="closeGameSelectModal()" class="px-4 py-1 bg-slate-700 text-white font-bold text-xs rounded">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RAD DES WAHNSINNS MODAL -->
+  <div id="chaos-card-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+    <div class="admin-panel p-8 w-full max-w-sm border-2 border-yellow-400 text-center space-y-3">
+      <div class="text-yellow-300 font-black text-sm tracking-widest">🎡 RAD DES WAHNSINNS 🎡</div>
+      <div class="text-[10px] text-yellow-100/50 -mt-2">Kleine Dinge geschehen...</div>
+      <div id="chaos-roll-intro" class="text-sm text-yellow-100 min-h-[2.5rem] flex items-center justify-center"></div>
+      <div id="chaos-wheel-container" class="py-2"></div>
+      <div id="chaos-card-result" class="hidden"></div>
+      <div id="chaos-modal-continue" class="hidden"></div>
+    </div>
+  </div>
+
+</body>
+</html>

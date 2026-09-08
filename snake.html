@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Snake</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Baloo 2', sans-serif; }
+    .sky-bg { background: radial-gradient(ellipse at top, #163a1f 0%, #050a06 70%); }
+    .jax-card {
+      background: #ffffff; border: 4px solid #1a1a2e; border-radius: 22px;
+      box-shadow: 7px 7px 0 rgba(0,0,0,0.85);
+    }
+    .jax-btn {
+      font-family: 'Baloo 2', sans-serif; border: 3px solid #1a1a2e; border-radius: 18px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85); transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+    #snake-canvas { background: #0a1a0d; border: 4px solid #1a1a2e; border-radius: 14px; touch-action: none; }
+    @keyframes countdownPop {
+      0% { transform: scale(0.3); opacity: 0; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .countdown-pop { animation: countdownPop 0.5s cubic-bezier(.34,1.56,.64,1); }
+
+    @keyframes titlePop {
+      0% { transform: scale(0.3); opacity: 0; }
+      60% { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .title-pop { animation: titlePop 0.6s cubic-bezier(.34,1.56,.64,1); }
+    .dpad-btn {
+      width: 56px; height: 56px; border: 3px solid #1a1a2e; border-radius: 14px;
+      background: white; box-shadow: 4px 4px 0 rgba(0,0,0,0.85);
+      display: flex; align-items: center; justify-content: center; font-size: 22px;
+      user-select: none; -webkit-user-select: none;
+    }
+    .dpad-btn:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 rgba(0,0,0,0.85); }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, get, set, update, push, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const ROUND_DURATION_MS = 120000; // schnelle Runde: 2 Minuten
+    const COUNTDOWN_MS = 3000; // 3-2-1-Los-Countdown vor Spielbeginn
+    const POINTS_PER_FOOD = 2.5;
+    const GRID_SIZE = 18;
+    const CELL_PX = 18;
+    const TICK_MS = 130;
+
+    let playerId = localStorage.getItem("quiz_player_id");
+    let isHost = false;
+    let allPlayers = {};
+    let myFinished = false;
+    let resolvingResults = false; // verhindert doppelte Punktevergabe
+
+    onValue(ref(db, 'players/'), (snap) => { allPlayers = snap.val() || {}; });
+
+    // NAVIGATION: sobald der Host alle zurückholt, folgen alle automatisch
+    onValue(ref(db, 'gameState'), (snap) => {
+      const gs = snap.val();
+      if (gs && gs.status && gs.status !== 'in_game') {
+        window.location.href = gs.status === 'waiting' ? "index.html" : "cockpit.html";
+      }
+    });
+
+    window.hostEndSnake = function() {
+      set(ref(db, 'snakeState'), null);
+      update(ref(db, 'gameState'), { status: 'cockpit' });
+    };
+
+    // ================= SNAKE-SPIELLOGIK (pro Gerät eigenständig) =================
+    let snake, direction, nextDirection, food, score, gameOver, tickInterval, roundStartedAt;
+    let ctx;
+
+    function resetSnake() {
+      snake = [{ x: 8, y: 9 }, { x: 7, y: 9 }, { x: 6, y: 9 }];
+      direction = 'right';
+      nextDirection = 'right';
+      score = 0;
+      gameOver = false;
+      placeFood();
+    }
+
+    function placeFood() {
+      let pos;
+      do {
+        pos = { x: Math.floor(Math.random() * GRID_SIZE), y: Math.floor(Math.random() * GRID_SIZE) };
+      } while (snake.some(s => s.x === pos.x && s.y === pos.y));
+      food = pos;
+    }
+
+    function tick() {
+      if (gameOver || myFinished) return;
+      direction = nextDirection;
+      const head = { ...snake[0] };
+      if (direction === 'up') head.y--;
+      else if (direction === 'down') head.y++;
+      else if (direction === 'left') head.x--;
+      else if (direction === 'right') head.x++;
+
+      // Wand oder sich selbst getroffen -> Runde für diesen Spieler vorbei
+      if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE ||
+          snake.some(s => s.x === head.x && s.y === head.y)) {
+        endMyRound();
+        return;
+      }
+
+      snake.unshift(head);
+      if (head.x === food.x && head.y === food.y) {
+        score += POINTS_PER_FOOD;
+        document.getElementById("snake-score").innerText = score;
+        placeFood();
+      } else {
+        snake.pop();
+      }
+      drawSnake();
+    }
+
+    function drawSnake() {
+      if (!ctx) return;
+      ctx.clearRect(0, 0, GRID_SIZE * CELL_PX, GRID_SIZE * CELL_PX);
+      ctx.fillStyle = "#ff2e93";
+      ctx.fillRect(food.x * CELL_PX + 2, food.y * CELL_PX + 2, CELL_PX - 4, CELL_PX - 4);
+      snake.forEach((s, i) => {
+        ctx.fillStyle = i === 0 ? "#7ed957" : "#38bdf8";
+        ctx.fillRect(s.x * CELL_PX + 1, s.y * CELL_PX + 1, CELL_PX - 2, CELL_PX - 2);
+      });
+    }
+
+    function setDirection(dir) {
+      const opposite = { up: 'down', down: 'up', left: 'right', right: 'left' };
+      if (opposite[dir] === direction) return; // nicht direkt umkehren
+      nextDirection = dir;
+    }
+
+    window.addEventListener('keydown', (e) => {
+      const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' };
+      if (map[e.key]) { e.preventDefault(); setDirection(map[e.key]); }
+    });
+    window.setDpad = setDirection;
+
+    function endMyRound() {
+      if (myFinished) return;
+      myFinished = true;
+      gameOver = true;
+      clearInterval(tickInterval);
+      update(ref(db, 'snakeState/scores'), { [playerId]: score });
+      update(ref(db, 'snakeState/finished'), { [playerId]: true });
+      document.getElementById("snake-overlay").classList.remove("hidden");
+      document.getElementById("snake-overlay-text").innerText = "Vorbei! " + score + " Punkte. Warte auf die anderen...";
+    }
+
+    function startMyRound() {
+      resetSnake();
+      myFinished = false;
+      document.getElementById("snake-overlay").classList.add("hidden");
+      document.getElementById("snake-score").innerText = "0";
+      drawSnake();
+      clearInterval(tickInterval);
+      tickInterval = setInterval(tick, TICK_MS);
+    }
+
+    // 3-2-1-Los-Countdown vor Spielbeginn, synchron für alle (basiert auf dem gemeinsamen
+    // startedAt-Zeitstempel, nicht auf lokaler Zeit) - erst danach startet die eigentliche
+    // Schlange/der 2-Minuten-Timer.
+    function showPreGameCountdown(startedAt, onDone) {
+      const overlay = document.getElementById("countdown-overlay");
+      const numEl = document.getElementById("countdown-number");
+      if (!overlay || !numEl) { onDone(); return; }
+
+      function tick() {
+        const remaining = startedAt + COUNTDOWN_MS - Date.now();
+        if (remaining <= 0) {
+          overlay.classList.add("hidden");
+          onDone();
+          return;
+        }
+        const secs = Math.ceil(remaining / 1000);
+        numEl.innerText = secs;
+        numEl.classList.remove("countdown-pop");
+        void numEl.offsetWidth;
+        numEl.classList.add("countdown-pop");
+        overlay.classList.remove("hidden");
+        setTimeout(tick, remaining % 1000 || 1000);
+      }
+      tick();
+    }
+
+    function updateRoundTimerUI(remainingMs) {
+      const secsEl = document.getElementById("snake-timer");
+      if (!secsEl) return;
+      secsEl.innerText = Math.max(0, Math.ceil(remainingMs / 1000)) + "s";
+    }
+
+    let globalTimerInterval = null;
+    function startGlobalTimer(startedAt) {
+      clearInterval(globalTimerInterval);
+      globalTimerInterval = setInterval(() => {
+        const remaining = ROUND_DURATION_MS - (Date.now() - startedAt);
+        updateRoundTimerUI(remaining);
+        if (remaining <= 0) {
+          clearInterval(globalTimerInterval);
+          if (!myFinished && !isHost) endMyRound(); // Zeit abgelaufen -> auch ohne Crash fertig
+        }
+      }, 150);
+    }
+
+    function renderResults(scores) {
+      const ids = Object.keys(allPlayers).filter(id => {
+        const n = allPlayers[id] && allPlayers[id].name;
+        return n && !n.includes("Host") && !n.includes("Admin");
+      });
+      const sorted = ids.sort((a, b) => (scores[b] || 0) - (scores[a] || 0));
+      document.getElementById("results-list").innerHTML = sorted.map(id => `
+        <div class="flex items-center justify-between jax-card px-5 py-3">
+          <span class="font-extrabold text-[#1a1a2e]">${allPlayers[id].name}</span>
+          <span class="text-[#7017c9] font-extrabold">${scores[id] || 0} Punkte</span>
+        </div>
+      `).join('') || `<div class="text-white/50">Keine Ergebnisse...</div>`;
+    }
+
+    onValue(ref(db, 'snakeState'), (snap) => {
+      const state = snap.val() || {};
+      const playArea = document.getElementById("play-area");
+      const resultArea = document.getElementById("result-area");
+
+      if (!state.status) return;
+
+      const finished = state.finished || {};
+      const activeIds = Object.keys(allPlayers).filter(id => {
+        const n = allPlayers[id] && allPlayers[id].name;
+        return n && !n.includes("Host") && !n.includes("Admin");
+      });
+      const allDone = activeIds.length > 0 && activeIds.every(id => finished[id]);
+      const timeUp = state.startedAt && (Date.now() - state.startedAt) >= ROUND_DURATION_MS;
+
+      if (state.status === 'active' && (allDone || timeUp)) {
+        if (isHost && !resolvingResults) {
+          resolvingResults = true;
+          // Punkte den echten Spieler-Konten gutschreiben - nur einmal, vom Host aus
+          const scores = state.scores || {};
+          const promises = activeIds.map((id) => {
+            const pts = scores[id] || 0;
+            if (pts <= 0) return Promise.resolve();
+            return get(ref(db, 'players/' + id + '/score')).then((s) => {
+              const cur = s.val() || 0;
+              return update(ref(db, 'players/' + id), { score: cur + pts }).then(() => {
+                push(ref(db, 'gameLog'), {
+                  text: '🐍 ' + ((allPlayers[id] || {}).name || 'Jemand') + ' hat bei Snake ' + pts + ' Punkte geholt',
+                  at: Date.now()
+                });
+              });
+            });
+          });
+          Promise.all(promises).then(() => {
+            update(ref(db, 'snakeState'), { status: 'finished' });
+          });
+        }
+      }
+
+      if (state.status === 'finished') {
+        clearInterval(globalTimerInterval);
+        clearInterval(tickInterval);
+        playArea.classList.add("hidden");
+        resultArea.classList.remove("hidden");
+        renderResults(state.scores || {});
+        if (isHost) document.getElementById("host-end-btn").classList.remove("hidden");
+        return;
+      }
+
+      playArea.classList.remove("hidden");
+      resultArea.classList.add("hidden");
+
+      if (state.startedAt && state.startedAt !== roundStartedAt) {
+        roundStartedAt = state.startedAt;
+        showPreGameCountdown(state.startedAt, () => {
+          if (!isHost) startMyRound();
+          startGlobalTimer(state.startedAt + COUNTDOWN_MS);
+        });
+      }
+    });
+
+    window.onload = () => {
+      if (!playerId) { window.location.href = "index.html"; return; }
+      get(ref(db, 'players/' + playerId)).then((snap) => {
+        const data = snap.val();
+        if (data && data.name && (data.name.includes("Host") || data.name.includes("Admin"))) {
+          isHost = true;
+          document.getElementById("player-canvas-wrap").classList.add("hidden");
+          document.getElementById("host-hint").classList.remove("hidden");
+          document.getElementById("host-end-btn").classList.remove("hidden");
+        } else {
+          ctx = document.getElementById("snake-canvas").getContext("2d");
+        }
+      });
+    };
+  </script>
+</head>
+<body class="sky-bg text-white min-h-screen flex flex-col items-center justify-center p-4 overflow-hidden relative select-none">
+
+  <div id="countdown-overlay" class="hidden fixed inset-0 z-[90] bg-black/85 flex items-center justify-center">
+    <div id="countdown-number" class="countdown-pop font-jax text-9xl font-extrabold text-[#7ed957]" style="text-shadow: 4px 4px 0 #08150a, -4px -4px 0 #08150a, 4px -4px 0 #08150a, -4px 4px 0 #08150a;">3</div>
+  </div>
+
+  <div id="play-area" class="relative z-10 text-center">
+    <h1 class="font-jax text-2xl md:text-4xl font-extrabold text-[#7ed957] title-pop mb-1" style="text-shadow: 3px 3px 0 #08150a, -3px -3px 0 #08150a, 3px -3px 0 #08150a, -3px 3px 0 #08150a;">
+      🐍 SNAKE!
+    </h1>
+    <div class="flex items-center justify-center gap-4 mb-3 text-sm">
+      <div>⏱️ <span id="snake-timer" class="font-black text-[#ffd23f]">120s</span></div>
+      <div>🍎 <span id="snake-score" class="font-black text-[#7ed957]">0</span> Punkte</div>
+    </div>
+
+    <div id="player-canvas-wrap" class="relative inline-block">
+      <canvas id="snake-canvas" width="324" height="324"></canvas>
+      <div id="snake-overlay" class="hidden absolute inset-0 bg-black/80 rounded-xl flex items-center justify-center p-4">
+        <div id="snake-overlay-text" class="text-white font-bold text-center text-sm"></div>
+      </div>
+    </div>
+
+    <div id="host-hint" class="hidden jax-card p-8 max-w-sm">
+      <div class="text-lg font-extrabold text-[#1a1a2e]">Du bist Moderator - schau den Spielern beim Krabbeln zu!</div>
+      <div class="text-xs text-[#1a1a2e]/60 mt-2">Sobald alle fertig sind (Crash oder Zeit abgelaufen), geht's automatisch weiter zur Auswertung.</div>
+    </div>
+
+    <!-- Steuerkreuz für Touch/Handy -->
+    <div class="grid grid-cols-3 gap-2 justify-center mt-4 mx-auto" style="width: 190px;">
+      <div></div>
+      <button class="dpad-btn" onmousedown="setDpad('up')" ontouchstart="setDpad('up')">⬆️</button>
+      <div></div>
+      <button class="dpad-btn" onmousedown="setDpad('left')" ontouchstart="setDpad('left')">⬅️</button>
+      <button class="dpad-btn" onmousedown="setDpad('down')" ontouchstart="setDpad('down')">⬇️</button>
+      <button class="dpad-btn" onmousedown="setDpad('right')" ontouchstart="setDpad('right')">➡️</button>
+    </div>
+    <div class="text-white/40 text-xs mt-3">Pfeiltasten (oder WASD) zum Steuern</div>
+  </div>
+
+  <div id="result-area" class="hidden relative z-10 text-center w-full max-w-md space-y-4">
+    <h1 class="font-jax text-2xl md:text-4xl font-extrabold text-[#7ed957] title-pop" style="text-shadow: 3px 3px 0 #08150a, -3px -3px 0 #08150a, 3px -3px 0 #08150a, -3px 3px 0 #08150a;">
+      🏁 Runde vorbei!
+    </h1>
+    <div id="results-list" class="space-y-2"></div>
+    <button id="host-end-btn" onclick="hostEndSnake()" class="hidden jax-btn bg-[#ff2e93] text-white font-jax font-bold px-6 py-3 mt-4">
+      Alle zurück ins Cockpit
+    </button>
+  </div>
+
+</body>
+</html>

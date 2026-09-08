@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Spiel 2: Rätselfeuer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; }
+    .font-story { font-family: Georgia, 'Times New Roman', serif; }
+
+    .candle-glow {
+      background: radial-gradient(circle, rgba(255, 166, 64, 0.16), transparent 65%);
+      animation: flicker 4s ease-in-out infinite;
+    }
+    @keyframes flicker {
+      0%, 100% { opacity: 0.75; }
+      25% { opacity: 0.55; }
+      50% { opacity: 1; }
+      75% { opacity: 0.65; }
+    }
+    .glow-amber { text-shadow: 0 0 10px rgba(240, 181, 106, 0.7), 0 0 22px rgba(240, 181, 106, 0.35); }
+    .glow-red { text-shadow: 0 0 12px rgba(239, 68, 68, 0.8); }
+    .glow-green { text-shadow: 0 0 12px rgba(74, 222, 128, 0.8); }
+
+    .story-card {
+      background: linear-gradient(160deg, #1c150c 0%, #0e0a05 100%);
+      border: 1px solid #6b4a25;
+      box-shadow: 0 0 35px rgba(255, 166, 64, 0.07), inset 0 0 45px rgba(0,0,0,0.55);
+    }
+    .wood-panel {
+      background: linear-gradient(160deg, #17120c 0%, #0b0805 100%);
+      border: 1px solid #4a3620;
+    }
+    .dice-face {
+      transition: transform 0.15s ease;
+    }
+    .dice-cube {
+      width: 60px; height: 60px;
+      background: linear-gradient(145deg, #f5ead1, #d9c39a);
+      border: 3px solid #1a1006;
+      border-radius: 14px;
+      box-shadow: inset 0 2px 5px rgba(255,255,255,0.6), inset 0 -3px 6px rgba(0,0,0,0.15), 0 6px 14px rgba(0,0,0,0.55);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      padding: 9px;
+      gap: 2px;
+      margin: 0 auto;
+    }
+    .dice-pip {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #4a2f14, #1a1006);
+      margin: auto;
+      opacity: 0;
+      transform: scale(0.5);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+    }
+    .dice-pip.on { opacity: 1; transform: scale(1); }
+    @keyframes diceTumble {
+      0%   { transform: rotateX(0deg) rotateY(0deg) scale(1); }
+      25%  { transform: rotateX(150deg) rotateY(90deg) scale(1.1); }
+      50%  { transform: rotateX(260deg) rotateY(210deg) scale(0.92); }
+      75%  { transform: rotateX(330deg) rotateY(300deg) scale(1.08); }
+      100% { transform: rotateX(360deg) rotateY(360deg) scale(1); }
+    }
+    .dice-rolling { animation: diceTumble 0.45s linear infinite; }
+    @keyframes diceLand {
+      0%   { transform: scale(1.35) rotate(-10deg); }
+      50%  { transform: scale(0.88) rotate(5deg); }
+      100% { transform: scale(1) rotate(0deg); }
+    }
+    .dice-land { animation: diceLand 0.4s cubic-bezier(.34,1.56,.64,1); }
+    .dice-winner {
+      box-shadow: inset 0 2px 5px rgba(255,255,255,0.6), 0 0 0 4px #ffd23f, 0 0 22px rgba(255,210,63,0.8);
+      animation: diceWinnerPulse 1.1s ease-in-out infinite;
+    }
+    @keyframes diceWinnerPulse {
+      0%, 100% { box-shadow: inset 0 2px 5px rgba(255,255,255,0.6), 0 0 0 4px #ffd23f, 0 0 16px rgba(255,210,63,0.6); }
+      50% { box-shadow: inset 0 2px 5px rgba(255,255,255,0.6), 0 0 0 6px #ffd23f, 0 0 28px rgba(255,210,63,0.95); }
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-10px) rotate(-2deg); }
+      40% { transform: translateX(10px) rotate(2deg); }
+      60% { transform: translateX(-8px) rotate(-1deg); }
+      80% { transform: translateX(8px) rotate(1deg); }
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.5); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes pointsFly {
+      0% { transform: translateY(20px) scale(0.6); opacity: 0; }
+      15% { transform: translateY(0) scale(1.15); opacity: 1; }
+      75% { transform: translateY(-10px) scale(1); opacity: 1; }
+      100% { transform: translateY(-60px) scale(1); opacity: 0; }
+    }
+    .points-fly-pop { animation: pointsFly 2.2s ease-out forwards; }
+      @keyframes brainHop {
+      0% { transform: translateY(0) scale(1); }
+      30% { transform: translateY(-24px) scale(1.12); }
+      55% { transform: translateY(0) scale(0.94); }
+      75% { transform: translateY(-9px) scale(1.04); }
+      100% { transform: translateY(0) scale(1); }
+    }
+    .brain-hop { animation: brainHop 0.4s ease-out; }
+
+    @keyframes brainFlyAway {
+      0% { transform: translate(0,0) scale(1) rotate(0deg); opacity: 1; }
+      100% { transform: translate(50px, -180px) scale(0.15) rotate(35deg); opacity: 0; }
+    }
+    .brain-fly-away { animation: brainFlyAway 0.7s ease-in forwards; }
+
+    @keyframes brainBubblePop {
+      0% { transform: translateY(6px) scale(0.6); opacity: 0; }
+      20% { transform: translateY(0) scale(1.05); opacity: 1; }
+      80% { transform: translateY(-2px) scale(1); opacity: 1; }
+      100% { transform: translateY(-12px) scale(0.9); opacity: 0; }
+    }
+    .brain-bubble {
+      position: fixed; z-index: 40; pointer-events: none;
+      background: white; color: #1a1a2e; border: 2px solid #1a1a2e;
+      border-radius: 10px; padding: 4px 9px; font-size: 11px; font-weight: 800;
+      font-family: 'Baloo 2', sans-serif;
+      animation: brainBubblePop 1.4s ease-out forwards;
+      white-space: nowrap;
+    }
+    .brain-bubble-success {
+      background: #16a34a; color: white; border-color: #14532d; font-size: 14px;
+      padding: 6px 14px;
+    }
+      @keyframes timeTickingPop {
+      0% { transform: translateY(10px) scale(0.5) rotate(-8deg); opacity: 0; }
+      20% { transform: translateY(-4px) scale(1.15) rotate(4deg); opacity: 1; }
+      35% { transform: translateY(0) scale(1) rotate(-2deg); }
+      100% { transform: translateY(-6px) scale(1.05) rotate(0deg); opacity: 1; }
+    }
+    /* WICHTIG: animation darf hier NICHT "transform" anfassen - das JS steuert die
+       Größe live per style.transform, eine CSS-Animation mit "forwards" auf transform
+       würde das sonst permanent überschreiben/einfrieren. */
+    @keyframes timeTickingFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .time-ticking-popup {
+      position: fixed; z-index: 55; pointer-events: none;
+      animation: timeTickingFadeIn 0.3s ease-out;
+      transition: transform 0.15s ease-out;
+    }
+
+    @keyframes catRunLoop {
+      0%   { left: -50px; transform: scaleX(1); }
+      49%  { left: calc(100% - 10px); transform: scaleX(1); }
+      50%  { left: calc(100% - 10px); transform: scaleX(-1); }
+      99%  { left: -50px; transform: scaleX(-1); }
+      100% { left: -50px; transform: scaleX(1); }
+    }
+    .cat-runner {
+      position: absolute; top: 50%; margin-top: -20px; width: 60px; height: 40px;
+      cursor: pointer; z-index: 25; pointer-events: auto;
+      animation: catRunLoop 6s linear infinite;
+    }
+    .cat-runner img { width: 100%; height: 100%; object-fit: contain; }
+
+      @keyframes winnerGifPop {
+      0% { transform: scale(0.5); opacity: 0; }
+      60% { transform: scale(1.08); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .winner-gif-modal-inner { animation: winnerGifPop 0.4s cubic-bezier(.34,1.56,.64,1); }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, update, onValue, get, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const playerId = localStorage.getItem("quiz_player_id");
+    let isHost = false;
+    let allPlayers = {};
+
+    const WINNER_GIFS = [
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/a-man-with-a-beard-and-long-blonde-hair-is-sitting-in-the-woods-holding-a-sword-h5ucdvwr8fi723k7.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/bh187-austin-powers.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/cartoon-clippy-confused-mathematic-9gftw2cvivr1ngi8.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/cartoon-man-gaming-on-couch-with-8-hour-chips-ham4lovwzdb3jorf.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/claynosaurz-is-the-name-of-the-dinosaur-in-this-cartoon-x423n06ilmm451v2.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/hand-inserting-super-nintendo-cartridge-into-video-game-console-21wnh6albyo5yia3.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/hulk-hogan-mic-drop-meme-cnc2ps6ain3yz0eg.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/i-am-a-mastermind-samuel-l-jackson.gif"
+    ];
+
+    let lastSeenWinnerGifId = null;
+    function maybeShowWinnerGif(state) {
+      const ev = state.winnerGifEvent;
+      if (!ev || !ev.id || ev.id === lastSeenWinnerGifId) return;
+      if (Date.now() - ev.id > 12000) { lastSeenWinnerGifId = ev.id; return; }
+      lastSeenWinnerGifId = ev.id;
+      const modal = document.getElementById("winner-gif-modal");
+      const nameEl = document.getElementById("winner-gif-name");
+      const imgEl = document.getElementById("winner-gif-img");
+      if (!modal || !nameEl || !imgEl) return;
+      nameEl.innerText = "+" + (ev.points || 0) + " Punkte für " + (ev.name || "Jemand") + "!";
+      imgEl.src = ev.gifUrl;
+      modal.classList.remove("hidden");
+      setTimeout(() => modal.classList.add("hidden"), 8200);
+    }
+    let latestState = null;
+    let latestStory = null;
+    let bonusStoriesUsed = false; // true, sobald die 4 Bonus-Storys einmal angehängt wurden
+    let storyImageTimerStoryIdx = null; // welche Story bereits ihren 20s-Bild-Timer bekam
+    let storyImageHideTimeout = null;
+    let lastRenderedRollId = null;
+
+    // ==== STORY-KATALOG (Host kennt Lösung, Spieler nur den Teaser) ====
+    // Hier kannst du beliebig viele weitere Storys ergänzen - die Auswertung
+    // erscheint automatisch nach jeder 3. gespielten Runde (unabhängig davon,
+    // wie viele Storys hier insgesamt drinstehen).
+    const stories = [
+      {
+        id: 1,
+        teaser: "Was wurde 2005 in die National Toy Hall of Fame (Rochester, New York) aufgenommen?",
+        solution: "Ein Pappkarton",
+        points: 250
+      },
+      {
+        id: 2,
+        teaser: "Wer oder was sind die Cocaine Hippos?",
+        solution: "In den 1980er-Jahren baute sich der berüchtigte Drogenbaron Pablo Escobar ein riesiges privates Anwesen (Hacienda Nápoles) mit einem illegalen Privatzoo. Dafür importierte er unter anderem vier Nilpferde aus Afrika. Nach seinem Tod 1993 wurden die meisten Tiere des Zoos in andere Hände übergeben, aber die Flusspferde wurden ihrem Schicksal überlassen, weil ihr Transport schlicht zu gefährlich und teuer war. Sie überlebten, fanden in Kolumbien perfekte Bedingungen ohne natürliche Feinde und vermehrten sich rasant zu einer echten Plage.",
+        image: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/HpAQuPc.gif",
+        points: 250
+      },
+      {
+        id: 3,
+        teaser: "Warum helfen Menschen weltweit Fischen in Utrecht?",
+        solution: "Weil sie über eine Live-Webcam an einer Schleuse in Utrecht (Niederlande) zusehen können, wie Fische auf ihrer Wanderung zu den Laichgründen feststecken. Sobald genug Fische vor der geschlossenen Schleuse warten, drückt man online einen virtuellen „Klingel\"-Button auf visdeurbel.nl, und ein echter Schleusenwärter öffnet die Schleuse für sie. So kann jeder von überall auf der Welt Fischen aus der Ferne beim Durchkommen helfen.",
+        points: 250
+      }
+    ];
+
+    // Bonus-Storys: kommen NICHT im normalen 3er-Zyklus dran, sondern nur wenn der Host in
+    // der Auswertung auf "Das ging zu schnell, ich will mehr!" klickt.
+    const bonusStories = [
+      {
+        id: 101,
+        teaser: "Welchen ungewöhnlichen Zeugen rief Anwalt Mike McCray 1981 in einer Klage wegen schwerer Körperverletzung an einem 9-jährigen Mädchen in den Zeugenstand?",
+        solution: "Der Anwalt rief Robert Hill, einen Angestellten von Disneyland, in den Zeugenstand, der in seinem Winnie-Pooh-Kostüm beweisen musste, dass es unmöglich war, das Mädchen zu schlagen.",
+        points: 250
+      },
+      {
+        id: 102,
+        teaser: "Welche ungewöhnliche Voraussetzung müssen Masseure in Südkorea erfüllen?",
+        solution: "Sie müssen blind sein.",
+        points: 250
+      },
+      {
+        id: 103,
+        teaser: "Wofür nutzte ein Berliner Künstler 99 Handys und einen Bollerwagen?",
+        solution: "Er hat über Google Maps einen künstlichen Stau produziert.",
+        points: 250
+      },
+      {
+        id: 104,
+        teaser: "Welchen sportlichen Weltrekord solltet ihr besser nicht zu brechen versuchen?",
+        solution: "Den Geschwindigkeitsweltrekord auf dem Wasser. Der Rekord liegt bei 511 km/h, und alle, die versucht haben, ihn zu brechen, sind gestorben.",
+        points: 250
+      }
+    ];
+
+    // ==== SPIELER-LISTE (live) ====
+    function getActivePlayerIds() {
+      return Object.keys(allPlayers).filter(id => allPlayers[id] && allPlayers[id].name && !allPlayers[id].name.includes("Host"));
+    }
+
+    onValue(ref(db, 'players/'), (snapshot) => {
+      allPlayers = snapshot.val() || {};
+      if (latestState) renderAll(latestState);
+    });
+
+    // INITIALISIERUNG (eigener Header-Bereich)
+        // ==== RANG-TITEL: witziger Platzierungs-Hinweis statt exaktem Punktestand ====
+    const RANK_TITLES = [
+      "Sockenflicker",
+      "Krümelmonster-Praktikant",
+      "Wackelpudding-Ritter",
+      "Hobby-Rater",
+      "Quiz-Lehrling",
+      "Wissens-Gladiator",
+      "Fragen-Halbgott",
+      "Elite Übermensch Echse"
+    ];
+    function computeRankTitle(myId, allPlayersData) {
+      const activeIds = Object.keys(allPlayersData).filter(id => allPlayersData[id] && allPlayersData[id].name && !allPlayersData[id].name.includes("Host") && !allPlayersData[id].name.includes("Admin"));
+      if (activeIds.length === 0) return RANK_TITLES[4];
+      const sorted = [...activeIds].sort((a, b) => (allPlayersData[b].score || 0) - (allPlayersData[a].score || 0));
+      const rank = sorted.indexOf(myId) + 1;
+      const n = sorted.length;
+      const percentile = n > 1 ? (rank - 1) / (n - 1) : 0.5;
+      const tierIndex = Math.min(7, Math.max(0, Math.round((1 - percentile) * 7)));
+      return RANK_TITLES[tierIndex];
+    }
+    onValue(ref(db, 'players/'), (snapshot) => {
+      const allPlayersData = snapshot.val() || {};
+      const player = allPlayersData[playerId];
+      if (player) {
+        if (player.name && player.name.includes("Host")) {
+          isHost = true;
+          document.getElementById("brain-logo")?.classList.add("hidden"); // Host bekommt das Gehirn-Feature nicht
+          document.getElementById("host-controls").classList.remove("hidden");
+          document.getElementById("player-info-score").innerText = "MODERATOR";
+        } else {
+          document.getElementById("player-info-score").innerText = computeRankTitle(playerId, allPlayersData);
+        }
+        document.getElementById("player-info-name").innerText = player.name;
+        if (latestState) renderAll(latestState);
+      }
+    });
+
+    // LISTEN AUF SPIEL2 GAME STATE
+    let lastSeenAnnounceEventId = null;
+    let lastSeenResultAnnounceId = null;
+
+    onValue(ref(db, 'game2State'), (snapshot) => {
+      const state = snapshot.val() || { storyIdx: 0, stage: 'waiting' };
+
+      // Bonus-Storys einmalig lokal anhängen, sobald der Host sie freigeschaltet hat -
+      // läuft bei JEDEM Client gleich ab, damit alle dieselbe erweiterte Story-Liste haben.
+      if (state.bonusStoriesActive && !bonusStoriesUsed) {
+        bonusStoriesUsed = true;
+        stories.push(...bonusStories);
+      }
+
+      latestState = state;
+      latestStory = stories[state.storyIdx || 0] || stories[0];
+      renderAll(state);
+      maybeShowWinnerGif(state);
+      maybeShowAnnounceModal(state);
+      maybeShowPointsFlyAnimation(state);
+      maybeHandleCatRun(state);
+    });
+
+    function maybeShowAnnounceModal(state) {
+      const ev = state.announceEvent;
+      if (!ev || !ev.id || ev.id === lastSeenAnnounceEventId) return;
+      if (Date.now() - ev.id > 20000) { lastSeenAnnounceEventId = ev.id; return; } // zu alt, nicht mehr zeigen
+      lastSeenAnnounceEventId = ev.id;
+
+      const name = (allPlayers[ev.playerId] || {}).name || "Jemand";
+      const modal = document.getElementById("announce-modal");
+      const gifEl = document.getElementById("announce-modal-gif");
+      const nameEl = document.getElementById("announce-modal-name");
+      if (!modal || !gifEl || !nameEl) return;
+
+      gifEl.src = ev.gifUrl;
+      nameEl.innerText = "Achtung, Ansage: " + name + " will es beim nächsten Mal lösen!";
+      modal.classList.remove("hidden");
+      setTimeout(() => { modal.classList.add("hidden"); }, 10000);
+    }
+
+    // Für ALLE Spieler sichtbar: +500/-50-Animation, sobald eine Ansage aufgelöst wurde
+    function maybeShowPointsFlyAnimation(state) {
+      const ev = state.resultAnnounceEvent;
+      if (!ev || !ev.id || ev.id === lastSeenResultAnnounceId) return;
+      if (Date.now() - ev.id > 15000) { lastSeenResultAnnounceId = ev.id; return; }
+      lastSeenResultAnnounceId = ev.id;
+
+      const layer = document.getElementById("points-fly-layer");
+      if (!layer) return;
+      const name = (allPlayers[ev.playerId] || {}).name || "Jemand";
+      const isPositive = ev.delta > 0;
+      const el = document.createElement("div");
+      el.className = "points-fly-pop text-center";
+      el.innerHTML = `
+        <div class="font-story text-lg text-white/90 mb-1 drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">${name}</div>
+        <div class="font-black text-6xl md:text-7xl ${isPositive ? 'text-emerald-400' : 'text-red-500'}" style="text-shadow: 3px 3px 0 #1a1006, -3px -3px 0 #1a1006, 3px -3px 0 #1a1006, -3px 3px 0 #1a1006;">
+          ${isPositive ? '+' : ''}${ev.delta}
+        </div>
+      `;
+      layer.appendChild(el);
+      setTimeout(() => { el.remove(); }, 2200);
+    }
+
+    // ==== KATZE-EASTEREGG: läuft durchgehend hin und her, bis sie gefangen wird ====
+    const CAT_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/16bit-80s.gif";
+    const CAT_POINTS = 50;
+    let catRunRendered = null; // ID des aktuell dargestellten Laufs
+
+    function maybeHandleCatRun(state) {
+      const run = state.catRun;
+      const lane = document.getElementById("cat-lane");
+      if (!lane) return;
+
+      if (!run || !run.id) { lane.innerHTML = ""; catRunRendered = null; return; }
+
+      if (run.caughtBy) {
+        // Gefangen: Lauf stoppen, kurze Punkte-Feier zeigen, dann leeren
+        if (catRunRendered === run.id + ":caught") return;
+        catRunRendered = run.id + ":caught";
+        const name = (allPlayers[run.caughtBy] || {}).name || "Jemand";
+        lane.innerHTML = `<div class="absolute inset-x-0 top-1 text-center text-[11px] font-jax font-bold text-[#7ed957] bg-black/70 py-0.5 rounded-full mx-8">🐱 ${name} hat sie gefangen! +${CAT_POINTS} Punkte</div>`;
+        setTimeout(() => { lane.innerHTML = ""; }, 3000);
+        return;
+      }
+
+      if (catRunRendered === run.id) return; // läuft schon für dieses Gerät
+      catRunRendered = run.id;
+      lane.innerHTML = `<div class="cat-runner" onclick="catchCat()"><img src="${CAT_URL}"></div>`;
+    }
+
+    window.catchCat = function() {
+      get(ref(db, 'game2State/catRun')).then((snap) => {
+        const run = snap.val();
+        if (!run || run.caughtBy) return;
+        runTransaction(ref(db, 'game2State/catRun'), (current) => {
+          if (!current || current.caughtBy) return current;
+          current.caughtBy = playerId;
+          current.caughtAt = Date.now();
+          return current;
+        }).then((result) => {
+          const val = result && result.snapshot && result.snapshot.val();
+          if (result.committed && val && val.caughtBy === playerId) {
+            get(ref(db, 'players/' + playerId)).then((pSnap) => {
+              const data = pSnap.val() || {};
+              const newScore = (data.score || 0) + CAT_POINTS;
+              update(ref(db, 'players/' + playerId), { score: newScore });
+              push(ref(db, 'gameLog'), {
+                text: '🐱 ' + (data.name || 'Jemand') + ' hat die Katze gefangen: +' + CAT_POINTS + ' Punkte',
+                at: Date.now()
+              });
+            });
+          }
+        });
+      });
+    };
+
+    // NAVIGATION: sobald der Host das Spiel-Ende einläutet (gameState != 'in_game'), zurück ins Cockpit
+    onValue(ref(db, 'gameState'), (snapshot) => {
+      const gs = snapshot.val();
+      if (gs && gs.status && gs.status !== 'in_game') {
+        window.location.href = "cockpit.html";
+      }
+    });
+
+    // HOST: zurück ins Cockpit (setzt Bereitschaft aller Spieler zurück für die nächste Runde)
+    window.hostRestartGame = function() {
+      if (!confirm("Spiel wirklich neu starten? Der Fortschritt dieser Runde geht verloren (Punkte bleiben erhalten).")) return;
+      set(ref(db, 'game2State'), { storyIdx: 0, stage: 'waiting' });
+    };
+
+    function generateRiddleClues(pid, sortedIds, players) {
+      const rank = sortedIds.indexOf(pid) + 1;
+      const n = sortedIds.length;
+      const pool = [];
+      if (rank > 1) pool.push('Du bist nicht Erster.');
+      if (rank < n) pool.push('Du bist nicht Letzter.');
+      if (rank > 1) pool.push('Du liegst hinter ' + players[sortedIds[rank - 2]].name + '.');
+      if (rank < n) pool.push('Du liegst vor ' + players[sortedIds[rank]].name + '.');
+      if (rank > 2) pool.push('Mindestens zwei Personen liegen vor dir.');
+      if (rank < n - 1) pool.push('Mindestens zwei Personen liegen hinter dir.');
+      if (pool.length === 0) pool.push('Die Truhe ist ratlos - du bist ganz allein im Rennen.');
+      const shuffled = pool.map(x => [Math.random(), x]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+      return shuffled.slice(0, Math.min(2, shuffled.length));
+    }
+
+        // ==== ZITATE ÜBER DAS SPIELEN (für den Abspann) ====
+    const GAME_QUOTES = [
+      { text: "Beim Spiel kann man einen Menschen in einer Stunde besser kennenlernen als im Gespräch in einem Jahr.", author: "Platon" },
+      { text: "Spiele, damit du ernst sein kannst. Denn das Spiel ist ein Ausruhen, und die Menschen bedürfen, da sie nicht immer tätig sein können, des Ausruhens.", author: "Aristoteles" },
+      { text: "Atome spalten ist ein Kinderspiel, verglichen mit einem Kinderspiel.", author: "Albert Einstein" },
+      { text: "Nur Arbeit und kein Spiel macht dumm.", author: "Karl Marx" },
+      { text: "Spielen ist eine Tätigkeit, die man gar nicht ernst genug nehmen kann.", author: "Jacques-Yves Cousteau" }
+    ];
+    function gameQuoteHtml() {
+      const q = GAME_QUOTES[Math.floor(Math.random() * GAME_QUOTES.length)];
+      return `<div class="italic">"${q.text}"</div><div class="mt-2 not-italic font-bold opacity-80">— ${q.author}</div>`;
+    }
+
+    // ==== RÜCKKEHR-ZWISCHENSZENE: schwarzer Bildschirm mit altertümlichem Countdown ====
+    let lastSeenReturnCountdownAt = null;
+    onValue(ref(db, 'gameState/returnCountdownAt'), (snapshot) => {
+      const startedAt = snapshot.val();
+      if (startedAt && startedAt !== lastSeenReturnCountdownAt) {
+        lastSeenReturnCountdownAt = startedAt;
+        runReturnCountdown(startedAt);
+      }
+    });
+
+    function runReturnCountdown(startedAt) {
+      const overlay = document.getElementById('return-countdown-overlay');
+      const numberEl = document.getElementById('return-countdown-number');
+      if (!overlay || !numberEl) return;
+      overlay.classList.remove('hidden');
+      const DURATION = 5;
+      let doneTriggered = false;
+      function tick() {
+        const elapsed = (Date.now() - startedAt) / 1000;
+        const remaining = Math.max(0, DURATION - elapsed);
+        numberEl.innerText = remaining > 0.05 ? Math.ceil(remaining) : '✓';
+        if (remaining > 0.05) {
+          requestAnimationFrame(tick);
+        } else if (!doneTriggered) {
+          doneTriggered = true;
+          if (isHost) window.hostBackToCockpit();
+        }
+      }
+      tick();
+    }
+
+    window.hostWantsMoreStories = function() {
+      get(ref(db, 'game2State')).then((snap) => {
+        const s = snap.val() || {};
+        const currentIdx = s.storyIdx || 0;
+        const extendedLength = stories.length + (bonusStoriesUsed ? 0 : bonusStories.length);
+        const nextIdx = (currentIdx + 1) % extendedLength;
+        update(ref(db, 'game2State'), {
+          bonusStoriesActive: true,
+          storyIdx: nextIdx,
+          stage: 'waiting',
+          diceRolls: null,
+          order: null,
+          currentTurnIndex: 0,
+          declaredSolvers: null,
+          lastAnswer: null,
+          winnerId: null,
+          winnerDouble: null,
+          pointsAwarded: null
+        });
+      });
+    };
+
+    window.triggerReturnCountdown = function() {
+      update(ref(db, 'gameState'), { returnCountdownAt: Date.now() });
+    };
+
+    window.hostBackToCockpit = function() {
+
+      get(ref(db, 'gameState/startScores')).then((startSnap) => {
+        const startScores = startSnap.val() || {};
+        get(ref(db, 'players/')).then((snapshot) => {
+          const players = snapshot.val() || {};
+          const activeIds = Object.keys(players).filter(id => players[id] && players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin"));
+          const rankedIds = [...activeIds].sort((a, b) => (players[b].score || 0) - (players[a].score || 0));
+          const updates = {};
+          for (let id in players) {
+            if (players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin")) {
+              updates['players/' + id + '/isReady'] = false;
+            }
+          }
+          activeIds.forEach(id => {
+            updates['players/' + id + '/riddleClues'] = generateRiddleClues(id, rankedIds, players);
+          });
+          update(ref(db), updates).then(() => {
+            activeIds.forEach(id => {
+              const delta = (players[id].score || 0) - (startScores[id] || 0);
+              if (delta !== 0) {
+                push(ref(db, 'gameLog'), {
+                  text: (delta > 0 ? '📈 ' : '📉 ') + players[id].name + ': ' + (delta > 0 ? '+' : '') + delta + ' Punkte in Spiel 2',
+                  at: Date.now()
+                });
+              }
+            });
+            set(ref(db, 'gameState'), { status: 'cockpit', chestPending: true, chestPendingAt: Date.now() });
+          });
+        });
+      });
+    };
+
+    // ================= HOST AKTIONEN =================
+
+    window.hostRevealStory = () => {
+      update(ref(db, 'game2State'), { stage: 'story_shown' });
+    };
+
+    window.hostRollOrder = () => {
+      const ids = getActivePlayerIds();
+      if (ids.length === 0) return;
+      const shuffled = [...ids].sort(() => Math.random() - 0.5);
+      const diceRolls = {};
+      shuffled.forEach(id => { diceRolls[id] = Math.floor(Math.random() * 6) + 1; });
+      const rollId = Date.now();
+      update(ref(db, 'game2State'), { stage: 'rolling', diceRolls, rollId }).then(() => {
+        setTimeout(() => {
+          const order = [...shuffled].sort((a, b) => diceRolls[b] - diceRolls[a]);
+          update(ref(db, 'game2State'), { stage: 'order_set', order, currentTurnIndex: 0, declaredSolvers: null });
+        }, 2600);
+      });
+    };
+
+    window.hostStartRound = () => {
+      update(ref(db, 'game2State'), { stage: 'in_progress', lastAnswer: null, declaredSolvers: null, turnStartedAt: Date.now() });
+    };
+
+    window.hostTimeoutPass = () => {
+      get(ref(db, 'game2State')).then((snap) => {
+        const s = snap.val() || {};
+        const order = s.order || [];
+        if (!order.length || s.stage !== 'in_progress') return;
+        const activeId = order[s.currentTurnIndex || 0];
+        const nextIdx = ((s.currentTurnIndex || 0) + 1) % order.length;
+        const updates = {
+          currentTurnIndex: nextIdx,
+          lastAnswer: 'timeout',
+          lastAnswerAt: Date.now(),
+          turnStartedAt: Date.now()
+        };
+        applyDeclaredFailurePenalty(activeId, updates);
+        update(ref(db, 'game2State'), updates);
+      });
+    };
+
+    window.hostAnswerJa = () => {
+      get(ref(db, 'game2State')).then((snap) => {
+        const s = snap.val() || {};
+        const order = s.order || [];
+        const activeId = order[s.currentTurnIndex || 0];
+        if (!activeId) return;
+        const tally = s.tally || {};
+        const cur = tally[activeId] || { ja: 0, nein: 0 };
+        const updates = {};
+        updates['tally/' + activeId + '/ja'] = (cur.ja || 0) + 1;
+        updates['lastAnswer'] = 'ja';
+        updates['lastAnswerAt'] = Date.now();
+        updates['turnStartedAt'] = Date.now();
+        update(ref(db, 'game2State'), updates);
+      });
+    };
+
+    window.hostAnswerNein = () => {
+      get(ref(db, 'game2State')).then((snap) => {
+        const s = snap.val() || {};
+        const order = s.order || [];
+        if (!order.length) return;
+        const activeId = order[s.currentTurnIndex || 0];
+        const tally = s.tally || {};
+        const cur = tally[activeId] || { ja: 0, nein: 0 };
+        const nextIdx = ((s.currentTurnIndex || 0) + 1) % order.length;
+        const updates = {};
+        updates['tally/' + activeId + '/nein'] = (cur.nein || 0) + 1;
+        updates['currentTurnIndex'] = nextIdx;
+        updates['lastAnswer'] = 'nein';
+        updates['lastAnswerAt'] = Date.now();
+        updates['turnStartedAt'] = Date.now();
+        applyDeclaredFailurePenalty(activeId, updates);
+        update(ref(db, 'game2State'), updates);
+      });
+    };
+
+    window.hostMarkWrong = () => {
+      get(ref(db, 'game2State')).then((snap) => {
+        const s = snap.val() || {};
+        const order = s.order || [];
+        if (!order.length) return;
+        const activeId = order[s.currentTurnIndex || 0];
+        const nextIdx = ((s.currentTurnIndex || 0) + 1) % order.length;
+        const updates = {
+          currentTurnIndex: nextIdx,
+          lastAnswer: 'falsch',
+          lastAnswerAt: Date.now(),
+          turnStartedAt: Date.now()
+        };
+        applyDeclaredFailurePenalty(activeId, updates);
+        update(ref(db, 'game2State'), updates);
+      });
+    };
+
+    // Zieht 100 Punkte ab und löscht die Ansage, falls der Spieler, dessen Runde gerade
+    // endet, sich vorher zum Lösen angesagt hatte, aber jetzt NICHT gewonnen hat.
+    const ANNOUNCE_FAIL_PENALTY = 50;
+    function applyDeclaredFailurePenalty(activeId, updatesOut) {
+      if (!activeId) return;
+      get(ref(db, 'game2State/declaredSolvers/' + activeId)).then((declSnap) => {
+        if (!declSnap.val()) return;
+        update(ref(db, 'game2State/declaredSolvers'), { [activeId]: null });
+        get(ref(db, 'players/' + activeId + '/score')).then((scoreSnap) => {
+          const currentScore = scoreSnap.val() || 0;
+          update(ref(db, 'players/' + activeId), { score: currentScore - ANNOUNCE_FAIL_PENALTY });
+          push(ref(db, 'gameLog'), {
+            text: '📣 ' + ((allPlayers[activeId] || {}).name || 'Jemand') + ' hat die angesagte Lösung nicht geschafft: -' + ANNOUNCE_FAIL_PENALTY + ' Punkte',
+            at: Date.now()
+          });
+        });
+      });
+    }
+
+    window.hostMarkSolved = () => {
+      get(ref(db, 'game2State')).then((snap) => {
+        const s = snap.val() || {};
+        const order = s.order || [];
+        const activeId = order[s.currentTurnIndex || 0];
+        if (!activeId) return;
+        const story = stories[s.storyIdx || 0] || stories[0];
+        const isDeclared = !!(s.declaredSolvers || {})[activeId];
+        const points = story.points * (isDeclared ? 2 : 1);
+        get(ref(db, 'players/' + activeId + '/score')).then((scoreSnap) => {
+          const currentScore = scoreSnap.val() || 0;
+          const updates = {
+            stage: 'solved',
+            winnerId: activeId,
+            winnerDouble: isDeclared,
+            pointsAwarded: points,
+            declaredSolvers: null
+          };
+          if (isDeclared) {
+            updates.resultAnnounceEvent = { id: Date.now(), playerId: activeId, delta: points, success: true };
+          }
+          updates.winnerGifEvent = {
+            id: Date.now(),
+            name: (allPlayers[activeId] || {}).name || 'Jemand',
+            points: points,
+            gifUrl: WINNER_GIFS[Math.floor(Math.random() * WINNER_GIFS.length)]
+          };
+          update(ref(db, 'players/' + activeId), { score: currentScore + points });
+          update(ref(db, 'game2State'), updates);
+        });
+      });
+    };
+
+    // Eigenes Fenster für den Host: sobald der angesagte Spieler dran ist, entscheidet der
+    // Host hier direkt "Gelöst"/"Nicht gelöst" - Punkte werden sofort verrechnet.
+    window.hostAnnounceResolveSolved = () => {
+      closeAnnounceResolveModal();
+      hostMarkSolved();
+    };
+
+    window.hostAnnounceResolveFailed = () => {
+      get(ref(db, 'game2State')).then((snap) => {
+        const s = snap.val() || {};
+        const order = s.order || [];
+        if (!order.length) return;
+        const activeId = order[s.currentTurnIndex || 0];
+        const nextIdx = ((s.currentTurnIndex || 0) + 1) % order.length;
+        closeAnnounceResolveModal();
+        get(ref(db, 'players/' + activeId + '/score')).then((scoreSnap) => {
+          const currentScore = scoreSnap.val() || 0;
+          update(ref(db, 'players/' + activeId), { score: currentScore - ANNOUNCE_FAIL_PENALTY });
+          update(ref(db, 'game2State'), {
+            currentTurnIndex: nextIdx,
+            ['declaredSolvers/' + activeId]: null,
+            lastAnswer: 'falsch',
+            lastAnswerAt: Date.now(),
+            turnStartedAt: Date.now(),
+            resultAnnounceEvent: { id: Date.now(), playerId: activeId, delta: -ANNOUNCE_FAIL_PENALTY, success: false }
+          });
+          push(ref(db, 'gameLog'), {
+            text: '📣 ' + ((allPlayers[activeId] || {}).name || 'Jemand') + ' hat die angesagte Lösung nicht geschafft: -' + ANNOUNCE_FAIL_PENALTY + ' Punkte',
+            at: Date.now()
+          });
+        });
+      });
+    };
+
+    function closeAnnounceResolveModal() {
+      document.getElementById("announce-resolve-modal")?.classList.add("hidden");
+    }
+
+    // ANSAGE (Ansage zum Lösen): aktivierbar, sobald die eigene Runde vorbei ist, aber nur
+    // solange noch mind. 2 andere Spieler vor der eigenen nächsten Runde dran sind. Wenn die
+    // eigene Runde dann kommt, gibt's statt einer Ja/Nein-Frage die Möglichkeit, die komplette
+    // Lösung zu nennen - doppelte Punkte bei Erfolg, -100 Punkte bei Misserfolg.
+    // GIFs, die beim Ansagen für ALLE Spieler eingeblendet werden (zufällig ausgewählt,
+    // aber für alle gleich - wird mit dem Ereignis mitgespeichert statt pro Gerät gewürfelt)
+    const ANNOUNCE_GIFS = [
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/bh187-austin-powers.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/i-am-a-mastermind-samuel-l-jackson.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/take-that-thats-right.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/trump-you-know-it.gif"
+    ];
+
+    window.declareSolveAttempt = function() {
+      get(ref(db, 'game2State')).then((snap) => {
+        const s = snap.val() || {};
+        const order = s.order || [];
+        if (!order.length) return;
+        const myPos = order.indexOf(playerId);
+        if (myPos === -1) return;
+        const turnsUntilMyTurn = (myPos - (s.currentTurnIndex || 0) + order.length) % order.length;
+        if (turnsUntilMyTurn < 2) return; // Fenster schon zu (Sicherheitsprüfung serverseitig)
+        if ((s.declaredSolvers || {})[playerId]) return; // schon angesagt
+        // Nie zweimal hintereinander dasselbe GIF - unabhängig davon, wer als Nächstes ansagt
+        const lastGifUrl = (s.announceEvent || {}).gifUrl;
+        const availableGifs = ANNOUNCE_GIFS.filter(g => g !== lastGifUrl);
+        const pool = availableGifs.length > 0 ? availableGifs : ANNOUNCE_GIFS;
+        const gifUrl = pool[Math.floor(Math.random() * pool.length)];
+        update(ref(db, 'game2State'), {
+          ['declaredSolvers/' + playerId]: true,
+          announceEvent: { id: Date.now(), playerId, gifUrl }
+        });
+      });
+    };
+
+    window.hostNextStory = () => {
+      get(ref(db, 'game2State')).then((snap) => {
+        const s = snap.val() || {};
+        const roundsCompleted = (s.roundsCompleted || 0) + 1;
+        if (roundsCompleted % 3 === 0) {
+          // SPIELENDE NACH 3 GELÖSTEN STORYS: Sonderpunkte für die beste "Spürnase" (meiste Ja-Antworten)
+          const tally = s.tally || {};
+          let maxJa = 0;
+          Object.keys(tally).forEach(id => {
+            if ((tally[id].ja || 0) > maxJa) maxJa = tally[id].ja || 0;
+          });
+          const bonusWinners = maxJa > 0 ? Object.keys(tally).filter(id => (tally[id].ja || 0) === maxJa) : [];
+          const BONUS_POINTS = 150;
+
+          const scorePromises = bonusWinners.map(id =>
+            get(ref(db, 'players/' + id + '/score')).then((scoreSnap) => {
+              const cur = scoreSnap.val() || 0;
+              return update(ref(db, 'players/' + id), { score: cur + BONUS_POINTS });
+            })
+          );
+
+          Promise.all(scorePromises).then(() => {
+            update(ref(db, 'game2State'), {
+              stage: 'evaluation',
+              roundsCompleted,
+              bonusWinners,
+              bonusPoints: BONUS_POINTS
+            });
+          });
+        } else {
+          const nextIdx = ((s.storyIdx || 0) + 1) % stories.length;
+          const updates = {
+            storyIdx: nextIdx,
+            stage: 'waiting',
+            roundsCompleted,
+            diceRolls: null,
+            order: null,
+            currentTurnIndex: 0,
+            declaredSolvers: null,
+            lastAnswer: null,
+            winnerId: null,
+            winnerDouble: null,
+            pointsAwarded: null
+          };
+          // Katzen-Easteregg: taucht irgendwann während des Spiels auf (60% Chance je
+          // Rundenwechsel, nur solange sie noch nicht gefangen wurde) und läuft danach
+          // durchgehend hin und her, bis jemand sie fängt.
+          if (!s.catRun && Math.random() < 0.6) {
+            updates.catRun = { id: Date.now(), startedAt: Date.now(), caughtBy: null };
+          }
+          update(ref(db, 'game2State'), updates);
+        }
+      });
+    };
+
+    window.hostResetSession = () => {
+      set(ref(db, 'game2State'), { storyIdx: 0, stage: 'waiting' });
+    };
+
+    // ================= RENDERING =================
+
+    function renderAll(state) {
+      const story = stories[state.storyIdx || 0] || stories[0];
+      renderHostPreview(story);
+      renderHostControls(state, story);
+      renderPlayerView(state, story);
+    }
+
+    function renderHostPreview(story) {
+      if (!isHost) return;
+      const box = document.getElementById("host-preview-box");
+      if (!box || !story) return;
+      box.innerHTML = `
+        <div class="text-amber-300 font-black mb-1">📖 Vorschau (nur du siehst das):</div>
+        <div class="font-story text-white/90 italic mb-2">${story.teaser}</div>
+        <div class="text-amber-400 font-bold text-[11px] uppercase tracking-wide mb-1">Auflösung</div>
+        <div class="font-story text-emerald-300/90">${story.solution}</div>
+        <div class="text-amber-500/70 text-[10px] mt-2">Punkte bei Lösung: ${story.points} (${story.points * 2} mit Ansage)</div>
+      `;
+    }
+
+    function show(id) { document.getElementById(id)?.classList.remove("hidden"); }
+    function hide(id) { document.getElementById(id)?.classList.add("hidden"); }
+
+    let lastAnnounceResolveModalKey = null;
+    function maybeShowAnnounceResolveModal(activeId, name, turnStartedAt) {
+      const key = activeId + "|" + (turnStartedAt || 0);
+      if (key === lastAnnounceResolveModalKey) return; // schon für diese Runde gezeigt
+      lastAnnounceResolveModalKey = key;
+      const modal = document.getElementById("announce-resolve-modal");
+      const nameEl = document.getElementById("announce-resolve-name");
+      if (!modal || !nameEl) return;
+      nameEl.innerText = name;
+      modal.classList.remove("hidden");
+    }
+
+    function renderHostControls(state, story) {
+      if (!isHost) return;
+      const stage = state.stage || 'waiting';
+      ["hc-waiting", "hc-story_shown", "hc-rolling", "hc-order_set", "hc-in_progress", "hc-solved", "hc-evaluation"].forEach(hide);
+      show("hc-" + stage);
+
+      if (stage === 'in_progress') {
+        const badge = document.getElementById("hc-double-badge");
+        const order = state.order || [];
+        const activeId = order[state.currentTurnIndex || 0];
+        const declaredSolvers = state.declaredSolvers || {};
+        if (activeId && declaredSolvers[activeId]) {
+          const name = (allPlayers[activeId] || {}).name || "Spieler";
+          badge.innerText = "📣 " + name + " hat sich angesagt - JETZT die Lösungs-Buttons nutzen! (2x Punkte / -" + ANNOUNCE_FAIL_PENALTY + " bei Fehlschlag)";
+          badge.classList.remove("hidden");
+          maybeShowAnnounceResolveModal(activeId, name, state.turnStartedAt);
+        } else {
+          badge.classList.add("hidden");
+        }
+      }
+
+      if (stage === 'solved') {
+        const btn = document.getElementById("hc-next-story-btn");
+        const willBeEvaluation = ((state.roundsCompleted || 0) + 1) % 3 === 0;
+        if (btn) btn.innerText = willBeEvaluation ? "🏁 Spiel beenden & Auswertung zeigen" : "➡️ Nächste Story";
+      }
+    }
+
+    function renderPlayerView(state, story) {
+      const stage = state.stage || 'waiting';
+      const teaserEl = document.getElementById("story-teaser-text");
+      const teaserImgEl = document.getElementById("story-teaser-image");
+      const teaserStatus = document.getElementById("story-status-badge");
+
+      if (stage === 'waiting') {
+        teaserEl.innerText = "Der Erzähler bereitet die nächste Story vor...";
+        teaserImgEl.classList.add("hidden");
+        storyImageTimerStoryIdx = null; // Timer-Reset, damit die nächste Story wieder 20s bekommt
+        teaserStatus.innerText = "WARTET";
+        teaserStatus.className = "px-3 py-1 rounded-full text-xs font-bold bg-amber-900/40 text-amber-300 border border-amber-700/50";
+      } else {
+        teaserEl.innerText = story.teaser;
+        if (story.image) {
+          teaserImgEl.src = story.image;
+          teaserImgEl.classList.remove("hidden");
+          // Bild wird nur 20 Sekunden lang gezeigt, dann automatisch ausgeblendet - nur EINMAL
+          // pro Story starten, nicht bei jedem Render neu.
+          if (storyImageTimerStoryIdx !== state.storyIdx) {
+            storyImageTimerStoryIdx = state.storyIdx;
+            if (storyImageHideTimeout) clearTimeout(storyImageHideTimeout);
+            storyImageHideTimeout = setTimeout(() => {
+              teaserImgEl.classList.add("hidden");
+            }, 20000);
+          }
+        } else {
+          teaserImgEl.classList.add("hidden");
+        }
+        if (stage === 'story_shown') { teaserStatus.innerText = "STORY ENTHÜLLT"; teaserStatus.className = "px-3 py-1 rounded-full text-xs font-bold bg-amber-900/40 text-amber-300 border border-amber-700/50"; }
+        else if (stage === 'rolling' || stage === 'order_set') { teaserStatus.innerText = "REIHENFOLGE WIRD BESTIMMT"; teaserStatus.className = "px-3 py-1 rounded-full text-xs font-bold bg-orange-900/40 text-orange-300 border border-orange-700/50"; }
+        else if (stage === 'in_progress') { teaserStatus.innerText = "BEFRAGUNG LÄUFT"; teaserStatus.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-900/40 text-emerald-300 border border-emerald-700/50 animate-pulse"; }
+        else if (stage === 'solved') { teaserStatus.innerText = "GELÖST"; teaserStatus.className = "px-3 py-1 rounded-full text-xs font-bold bg-yellow-900/40 text-yellow-300 border border-yellow-700/50"; }
+        else if (stage === 'evaluation') { teaserStatus.innerText = "AUSWERTUNG"; teaserStatus.className = "px-3 py-1 rounded-full text-xs font-bold bg-purple-900/40 text-purple-300 border border-purple-700/50"; }
+      }
+
+      ["dice-roll-area", "turn-order-strip", "turn-interaction", "solved-area", "evaluation-area"].forEach(hide);
+
+      if (stage !== 'in_progress') {
+        stopTurnTimer();
+        lastTurnStartedAt = null;
+      }
+
+      if (stage === 'rolling') {
+        renderDiceArea(state);
+        show("dice-roll-area");
+      } else if (stage === 'order_set' || stage === 'in_progress') {
+        renderTurnOrderStrip(state);
+        show("turn-order-strip");
+        if (stage === 'in_progress') {
+          renderTurnInteraction(state);
+          show("turn-interaction");
+        }
+      } else if (stage === 'solved') {
+        renderSolvedArea(state, story);
+        show("solved-area");
+      } else if (stage === 'evaluation') {
+        renderEvaluationArea(state);
+        show("evaluation-area");
+      }
+    }
+
+    // Klassische Würfel-Augen-Muster (3x3-Raster, 1-indiziert: Reihe,Spalte)
+    const DICE_PIP_PATTERNS = {
+      1: [[2,2]],
+      2: [[1,1],[3,3]],
+      3: [[1,1],[2,2],[3,3]],
+      4: [[1,1],[1,3],[3,1],[3,3]],
+      5: [[1,1],[1,3],[2,2],[3,1],[3,3]],
+      6: [[1,1],[1,3],[2,1],[2,3],[3,1],[3,3]]
+    };
+
+    function diceCubeHTML(n) {
+      const active = DICE_PIP_PATTERNS[n] || [];
+      const isActive = (r, c) => active.some(([ar, ac]) => ar === r && ac === c);
+      let cells = "";
+      for (let r = 1; r <= 3; r++) {
+        for (let c = 1; c <= 3; c++) {
+          cells += `<div class="dice-pip${isActive(r, c) ? ' on' : ''}"></div>`;
+        }
+      }
+      return cells;
+    }
+
+    function renderDiceArea(state) {
+      const wrap = document.getElementById("dice-roll-area");
+      const diceRolls = state.diceRolls || {};
+      const ids = Object.keys(diceRolls);
+      const isNewRoll = state.rollId !== lastRenderedRollId;
+      lastRenderedRollId = state.rollId;
+      const maxRoll = Math.max(0, ...Object.values(diceRolls));
+
+      wrap.innerHTML = ids.map(id => `
+        <div class="wood-panel rounded-xl p-4 text-center">
+          <div class="text-xs text-amber-400 font-bold mb-3 truncate">${(allPlayers[id] || {}).name || "Spieler"}</div>
+          <div id="dice-cube-${id}" class="dice-cube dice-face">${diceCubeHTML(1)}</div>
+        </div>
+      `).join('');
+
+      if (isNewRoll) {
+        ids.forEach(id => {
+          const el = document.getElementById("dice-cube-" + id);
+          if (!el) return;
+          el.classList.add("dice-rolling");
+          let ticks = 0;
+          const maxTicks = 16 + Math.floor(Math.random() * 6);
+          const spin = setInterval(() => {
+            ticks++;
+            if (ticks >= maxTicks) {
+              clearInterval(spin);
+              el.classList.remove("dice-rolling");
+              el.innerHTML = diceCubeHTML(diceRolls[id]);
+              el.classList.add("dice-land");
+              setTimeout(() => {
+                el.classList.remove("dice-land");
+                // Höchster Wurf leuchtet golden auf, sobald alle Würfel gelandet sind
+                if (diceRolls[id] === maxRoll && maxRoll > 0) {
+                  el.classList.add("dice-winner");
+                }
+              }, 400);
+            } else {
+              el.innerHTML = diceCubeHTML(1 + Math.floor(Math.random() * 6));
+            }
+          }, 90);
+        });
+      } else {
+        ids.forEach(id => {
+          const el = document.getElementById("dice-cube-" + id);
+          if (el) {
+            el.innerHTML = diceCubeHTML(diceRolls[id]);
+            if (diceRolls[id] === maxRoll && maxRoll > 0) el.classList.add("dice-winner");
+          }
+        });
+      }
+    }
+
+    function renderTurnOrderStrip(state) {
+      const wrap = document.getElementById("turn-order-strip");
+      const order = state.order || [];
+      const activeIdx = state.currentTurnIndex || 0;
+      wrap.innerHTML = `
+        <div class="text-amber-500/80 text-[9px] font-bold uppercase tracking-wide mb-1.5 text-center">Reihenfolge</div>
+        <div class="space-y-1">
+          ${order.map((id, i) => {
+            const active = i === activeIdx;
+            const name = (allPlayers[id] || {}).name || "Spieler";
+            return `<div class="px-2 py-1 rounded-lg text-[10px] font-bold border truncate ${active ? 'bg-amber-500 text-black border-amber-300' : 'bg-black/30 text-amber-300 border-amber-800/50'} transition">
+                      ${i + 1}. ${name}
+                    </div>`;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function renderTurnInteraction(state) {
+      const wrap = document.getElementById("turn-interaction");
+      const order = state.order || [];
+      const activeId = order[state.currentTurnIndex || 0];
+      const activeName = (allPlayers[activeId] || {}).name || "Spieler";
+      const isMyTurn = activeId === playerId;
+      const declaredSolvers = state.declaredSolvers || {};
+      const activeIsDeclared = !!declaredSolvers[activeId];
+
+      let flashHtml = "";
+      if (state.lastAnswer && (Date.now() - (state.lastAnswerAt || 0)) < 4000) {
+        if (state.lastAnswer === 'ja') flashHtml = `<div class="text-emerald-400 font-black text-lg glow-green">✅ JA</div>`;
+        else if (state.lastAnswer === 'nein') flashHtml = `<div class="text-red-400 font-black text-lg glow-red">❌ NEIN</div>`;
+        else if (state.lastAnswer === 'falsch') flashHtml = `<div class="text-red-400 font-black text-lg glow-red">💥 Falsch geraten</div>`;
+        else if (state.lastAnswer === 'timeout') flashHtml = `<div class="text-red-400 font-black text-lg glow-red">⏰ Zeit abgelaufen!</div>`;
+      }
+
+      // ANSAGE-BUTTON: nur sichtbar für Spieler, die NICHT gerade dran sind, deren eigene
+      // Runde schon vorbei ist, und solange noch mind. 2 andere Spieler vor ihrer nächsten
+      // Runde dran sind. Einmal angesagt, bleibt es bis zur eigenen Runde bestehen.
+      let declareHtml = "";
+      if (!isMyTurn) {
+        const myPos = order.indexOf(playerId);
+        if (myPos !== -1) {
+          const turnsUntilMyTurn = (myPos - (state.currentTurnIndex || 0) + order.length) % order.length;
+          if (declaredSolvers[playerId]) {
+            declareHtml = `<div class="mt-4 text-yellow-400 font-bold text-sm">⚡ Du hast dich angesagt - wenn du dran bist, nenne die komplette Lösung!</div>`;
+          } else if (turnsUntilMyTurn >= 2) {
+            declareHtml = `<button onclick="declareSolveAttempt()" class="mt-4 px-5 py-3 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-sm rounded-xl shadow-lg transition active:scale-95">
+              📣 Ansage: Ich löse es, wenn ich dran bin! (2x Punkte, -${ANNOUNCE_FAIL_PENALTY} bei Fehlschlag)
+            </button>`;
+          }
+        }
+      } else if (isMyTurn && activeIsDeclared) {
+        declareHtml = `<div class="mt-4 text-yellow-400 font-bold text-sm">⚡ Du hast dich angesagt - nenne jetzt die komplette Lösung!</div>`;
+      }
+
+      wrap.innerHTML = `
+        <div class="text-center space-y-2">
+          ${isMyTurn
+            ? (activeIsDeclared
+                ? `<div class="text-3xl md:text-4xl font-black text-yellow-300 glow-amber">📣 JETZT LÖSEN!</div>
+                   <div class="text-amber-500/70 text-xs">Nenne laut die komplette Lösung der Story - der Erzähler wertet.</div>`
+                : `<div class="text-3xl md:text-4xl font-black text-amber-300 glow-amber">🎯 DU BIST DRAN!</div>
+                   <div class="text-amber-500/70 text-xs">Stell deine Ja/Nein-Frage laut - der Erzähler antwortet.</div>`)
+            : `<div class="text-xl md:text-2xl font-bold text-white/80">🕯️ Gerade dran: <span class="text-amber-300">${activeName}</span></div>
+               <div class="text-amber-500/50 text-xs">Warte, bis du an der Reihe bist...</div>`
+          }
+          ${flashHtml}
+          <div class="pt-2">
+            ${activeIsDeclared ? `
+              <div class="text-yellow-500/70 text-xs font-bold">⏳ Kein Zeitlimit beim Lösen - der Erzähler wertet, wenn bereit.</div>
+            ` : `
+              <div class="flex items-center gap-2 justify-center">
+                <span id="turn-timer-seconds" class="text-sm font-black text-emerald-400 tabular-nums">2:00</span>
+                <div class="flex-1 max-w-xs h-2.5 bg-black/40 rounded-full overflow-hidden border border-amber-900/40">
+                  <div id="turn-timer-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-150" style="width: 100%"></div>
+                </div>
+              </div>
+              <div class="text-amber-600/50 text-[10px] mt-1">Zeit für diese Frage - danach ist automatisch der Nächste dran</div>
+            `}
+          </div>
+          ${declareHtml}
+        </div>
+      `;
+
+      if (activeIsDeclared) {
+        // Während der Ansage-Lösung läuft KEIN Timer - sonst könnte ein automatischer
+        // Timeout mitten in die Entscheidung des Hosts (Gelöst/Nicht gelöst) hineinlaufen.
+        stopTurnTimer();
+        lastTurnStartedAt = null;
+      } else if (state.turnStartedAt && state.turnStartedAt !== lastTurnStartedAt) {
+        lastTurnStartedAt = state.turnStartedAt;
+        startTurnTimer(state.turnStartedAt);
+      } else if (state.turnStartedAt) {
+        const elapsed = Date.now() - state.turnStartedAt;
+        updateTurnTimerUI(Math.max(0, TURN_DURATION_MS - elapsed), TURN_DURATION_MS);
+      }
+    }
+
+    function renderSolvedArea(state, story) {
+      const wrap = document.getElementById("solved-area");
+      const winnerName = (allPlayers[state.winnerId] || {}).name || "Jemand";
+      const isWinner = state.winnerId === playerId;
+      wrap.innerHTML = `
+        <div class="text-center space-y-4">
+          <div class="text-5xl">${isWinner ? '🏆' : '🕯️'}</div>
+          <div class="text-2xl md:text-3xl font-black text-amber-300 glow-amber">${winnerName} hat die Story gelöst!</div>
+          <div class="text-yellow-400 font-bold">${state.pointsAwarded || story.points} Punkte${state.winnerDouble ? ' (📣 Ansage - VERDOPPELT!)' : ''}</div>
+          <div class="story-card rounded-2xl p-5 text-left mt-4">
+            <div class="text-amber-500 font-bold text-[11px] uppercase tracking-wide mb-1">Die vollständige Auflösung</div>
+            <div class="font-story text-white/90">${story.solution}</div>
+          </div>
+        </div>
+      `;
+      if (isWinner) fireConfetti();
+    }
+
+    function renderEvaluationArea(state) {
+      const wrap = document.getElementById("evaluation-area");
+      const tally = state.tally || {};
+      const ids = getActivePlayerIds();
+      const bonusWinners = state.bonusWinners || [];
+      const bonusNames = bonusWinners.map(id => (allPlayers[id] || {}).name || "Spieler");
+      const rows = ids.map(id => {
+        const t = tally[id] || { ja: 0, nein: 0 };
+        const total = (t.ja || 0) + (t.nein || 0);
+        return { id, name: (allPlayers[id] || {}).name || "Spieler", ja: t.ja || 0, nein: t.nein || 0, total, score: (allPlayers[id] || {}).score || 0, bonus: bonusWinners.includes(id) };
+      }).sort((a, b) => b.total - a.total);
+
+      wrap.innerHTML = `
+        <div class="text-center mb-4">
+          <div class="text-3xl font-black text-amber-300 glow-amber">🏁 Erledigt - Auswertung</div>
+          <div class="text-amber-500/60 text-xs mt-1">3 Storys gespielt. Wer hat am meisten Ja- bzw. Nein-Antworten kassiert?</div>
+        </div>
+        ${bonusNames.length ? `
+        <div class="bg-yellow-900/20 border border-yellow-700/40 rounded-xl p-3 text-center mb-4">
+          <div class="text-yellow-400 font-black text-sm">🕵️ Spürnasen-Bonus (+${state.bonusPoints || 150} Punkte)</div>
+          <div class="text-yellow-200/80 text-xs mt-1">für die meisten Ja-Antworten: ${bonusNames.join(', ')}</div>
+        </div>` : ''}
+        <div class="space-y-2 max-w-xl mx-auto">
+          ${rows.map(r => `
+            <div class="wood-panel rounded-xl p-3 flex items-center justify-between ${r.bonus ? 'border-yellow-600/60' : ''}">
+              <div class="font-bold text-white/90 flex items-center gap-1.5">${r.bonus ? '🕵️' : ''} ${r.name}</div>
+              <div class="flex items-center gap-3 text-sm">
+                <span class="text-emerald-400 font-black">✅ ${r.ja}</span>
+                <span class="text-red-400 font-black">❌ ${r.nein}</span>
+                <span class="text-amber-500/60">·</span>
+                <span class="text-amber-300 font-bold">${r.score} Pkt.</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="text-xs mt-6 max-w-md mx-auto opacity-80 text-center">${gameQuoteHtml()}</div>
+        ${isHost ? `
+        ${!bonusStoriesUsed ? `
+        <button onclick="hostWantsMoreStories()" class="w-full mt-6 max-w-md mx-auto block py-4 px-4 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-sm rounded-xl shadow-lg transition active:scale-95">
+          😅 Das ging zu schnell, ich will mehr!
+        </button>` : ''}
+        <button onclick="triggerReturnCountdown()" class="w-full mt-3 max-w-md mx-auto block py-4 px-4 bg-amber-700 hover:bg-amber-600 text-white font-black text-sm rounded-xl shadow-lg transition active:scale-95">
+          🏁 Spiel beenden & zurück ins Cockpit
+        </button>` : `
+        <div class="text-amber-500/50 text-xs mt-6 text-center">Der Moderator beendet gleich das Spiel...</div>`}
+      `;
+    }
+
+    // ==== 2-MINUTEN TIMER PRO FRAGE ====
+    const TURN_DURATION_MS = 120000; // 2 Minuten
+    let turnTimerInterval = null;
+    let lastTurnStartedAt = null;
+
+    function startTurnTimer(startTimestamp) {
+      stopTurnTimer();
+      turnTimerInterval = setInterval(() => {
+        const elapsed = Date.now() - startTimestamp;
+        const remaining = Math.max(0, TURN_DURATION_MS - elapsed);
+        updateTurnTimerUI(remaining, TURN_DURATION_MS);
+        if (remaining <= 0) {
+          clearInterval(turnTimerInterval);
+          turnTimerInterval = null;
+          if (isHost) hostTimeoutPass();
+        }
+      }, 150);
+    }
+
+    function stopTurnTimer() {
+      if (timeTickingEl_updateTurnTimerUI) { timeTickingEl_updateTurnTimerUI.remove(); timeTickingEl_updateTurnTimerUI = null; }
+      timeTickingStep_updateTurnTimerUI = -1;
+      if (turnTimerInterval) {
+        clearInterval(turnTimerInterval);
+        turnTimerInterval = null;
+      }
+    }
+
+    // "Time is ticking"-Anzeige: erscheint ab 25 Sekunden Restzeit, bleibt DAUERHAFT stehen
+    // (kein kurzer Popup mehr) und wird alle 5 Sekunden ruckartig (kein sanftes Wachsen)
+    // größer. Verschwindet erst exakt bei 0.
+    const TIME_TICKING_START_MS_updateTurnTimerUI = 25000;
+    let timeTickingEl_updateTurnTimerUI = null;
+    let timeTickingStep_updateTurnTimerUI = -1;
+    function maybeShowTimeTicking_updateTurnTimerUI(remaining) {
+      if (remaining > TIME_TICKING_START_MS_updateTurnTimerUI || remaining <= 0) {
+        if (timeTickingEl_updateTurnTimerUI) { timeTickingEl_updateTurnTimerUI.remove(); timeTickingEl_updateTurnTimerUI = null; }
+        timeTickingStep_updateTurnTimerUI = -1;
+        return;
+      }
+      const anchor = document.getElementById("turn-timer-seconds");
+      if (!anchor) return;
+
+      if (!timeTickingEl_updateTurnTimerUI) {
+        const rect = anchor.getBoundingClientRect();
+        const img = document.createElement("img");
+        img.src = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/timeistickingGames.png";
+        img.className = "time-ticking-popup";
+        img.style.position = "fixed";
+        img.style.left = (rect.left + rect.width / 2 - 45) + "px";
+        img.style.top = (rect.top - 75) + "px";
+        img.style.width = "90px";
+        img.style.zIndex = "55";
+        img.style.pointerEvents = "none";
+        img.style.transition = "transform 0.15s ease-out";
+        document.body.appendChild(img);
+        timeTickingEl_updateTurnTimerUI = img;
+      }
+
+      // Alle 5 Sek. ein ruckartiger Wachstumsschritt (25-21s = Stufe 0, 20-16s = Stufe 1, ...)
+      const step = Math.min(4, Math.floor((TIME_TICKING_START_MS_updateTurnTimerUI - remaining) / 5000));
+      if (step !== timeTickingStep_updateTurnTimerUI) {
+        timeTickingStep_updateTurnTimerUI = step;
+        timeTickingEl_updateTurnTimerUI.style.transform = "scale(" + (1 + step * 0.35) + ")";
+      }
+    }
+
+    function updateTurnTimerUI(remaining, duration) {
+      maybeShowTimeTicking_updateTurnTimerUI(remaining);
+      const barEl = document.getElementById("turn-timer-bar");
+      const numEl = document.getElementById("turn-timer-seconds");
+      if (!barEl || !numEl) return;
+      const secs = Math.ceil(remaining / 1000);
+      const mm = Math.floor(secs / 60);
+      const ss = String(secs % 60).padStart(2, '0');
+      numEl.innerText = mm + ":" + ss;
+      const pct = Math.max(0, (remaining / duration) * 100);
+      barEl.style.width = pct + "%";
+      if (pct > 50) {
+        barEl.className = "h-full bg-emerald-500 rounded-full transition-all duration-150";
+        numEl.className = "text-sm font-black text-emerald-400 tabular-nums";
+      } else if (pct > 20) {
+        barEl.className = "h-full bg-yellow-500 rounded-full transition-all duration-150";
+        numEl.className = "text-sm font-black text-yellow-400 tabular-nums";
+      } else {
+        barEl.className = "h-full bg-red-600 rounded-full transition-all duration-150 animate-pulse";
+        numEl.className = "text-sm font-black text-red-500 tabular-nums animate-pulse";
+      }
+    }
+
+    // ==== KONFETTI (bei gelöster Story für den Gewinner) ====
+    function fireConfetti() {
+      const canvas = document.getElementById("confetti-canvas");
+      if (!canvas) return;
+      canvas.classList.remove("hidden");
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      const ctx = canvas.getContext("2d");
+      const colors = ["#f0b56a", "#d4af37", "#e0a355", "#4ade80", "#facc15", "#ffffff"];
+      const particles = [];
+      for (let i = 0; i < 160; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: -20 - Math.random() * canvas.height * 0.5,
+          size: 5 + Math.random() * 6,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          vx: (Math.random() - 0.5) * 4,
+          vy: 2 + Math.random() * 4,
+          rot: Math.random() * 360,
+          vrot: (Math.random() - 0.5) * 12
+        });
+      }
+      let frame = 0;
+      const maxFrames = 220;
+      function animate() {
+        frame++;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.04;
+          p.rot += p.vrot;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot * Math.PI / 180);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+          ctx.restore();
+        });
+        if (frame < maxFrames) {
+          requestAnimationFrame(animate);
+        } else {
+          canvas.classList.add("hidden");
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+      animate();
+    }
+
+    // Periodisches Neu-Rendern, damit die "letzte Antwort"-Einblendung nach 4s verschwindet
+    setInterval(() => { if (latestState && latestState.stage === 'in_progress') renderTurnInteraction(latestState); }, 1000);
+  
+    // ==== VERSTECKTES GEHIRN: gibt es in jedem Spiel + im Cockpit einmal zu finden.
+    // Jeder Klick lässt es hüpfen + eine kurze Sprechblase mit Klick-Fortschritt zeigen.
+    // Je mehr Gehirne man insgesamt schon aktiviert hat, desto öfter muss man das NÄCHSTE
+    // anklicken (1. Gehirn = 1 Klick, 2. Gehirn = 2 Klicks, usw.). Bei Aktivierung fliegt es
+    // weg. Der Host sieht/bekommt diese Funktion gar nicht erst (spielt nicht um Punkte).
+    const BRAIN_POINTS = 20;
+    let brainClicksSoFar_spiel2 = 0;
+    let brainNeededClicks_spiel2 = null;
+
+    function showBrainBubble_spiel2(text, isSuccess) {
+      const logoEl = document.getElementById("brain-logo");
+      if (!logoEl) return;
+      const rect = logoEl.getBoundingClientRect();
+      const bubble = document.createElement("div");
+      bubble.className = "brain-bubble" + (isSuccess ? " brain-bubble-success" : "");
+      bubble.style.left = (rect.left + rect.width / 2 - 30) + "px";
+      bubble.style.top = (rect.top - 24) + "px";
+      bubble.innerText = text;
+      document.body.appendChild(bubble);
+      setTimeout(() => bubble.remove(), 1400);
+    }
+
+    window.clickBrainLogo = function() {
+      if (isHost) return; // Host spielt nicht um Punkte - für ihn passiert hier nichts
+      const claimedField = "brainFound_spiel2";
+      const logoEl = document.getElementById("brain-logo");
+
+      if (logoEl) {
+        logoEl.classList.remove("brain-hop");
+        void logoEl.offsetWidth;
+        logoEl.classList.add("brain-hop");
+      }
+
+      function tryActivate() {
+        brainClicksSoFar_spiel2++;
+        // Bewusst KEINE Sprechblase bei Zwischen-Klicks - erst beim finalen, erfolgreichen Klick
+        if (brainClicksSoFar_spiel2 < brainNeededClicks_spiel2) return;
+
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data[claimedField]) return; // inzwischen (z.B. anderes Gerät) schon aktiviert
+          const foundCount = data.brainsFoundCount || 0;
+          const newScore = (data.score || 0) + BRAIN_POINTS;
+          update(ref(db, 'players/' + playerId), {
+            score: newScore,
+            [claimedField]: true,
+            brainsFoundCount: foundCount + 1
+          });
+          push(ref(db, 'gameLog'), {
+            text: '🧠 ' + (data.name || 'Jemand') + ' hat ein Gehirn aktiviert: +' + BRAIN_POINTS + ' Punkte',
+            at: Date.now()
+          });
+          showBrainBubble_spiel2("+" + BRAIN_POINTS + " Punkte", true);
+          if (logoEl) logoEl.classList.add("brain-fly-away");
+        });
+      }
+
+      if (brainNeededClicks_spiel2 === null) {
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data["brainFound_spiel2"]) { brainNeededClicks_spiel2 = 0; if (logoEl) logoEl.classList.add("hidden"); return; }
+          brainNeededClicks_spiel2 = (data.brainsFoundCount || 0) + 1;
+          tryActivate();
+        });
+      } else {
+        tryActivate();
+      }
+    };
+</script>
+</head>
+<body class="bg-[#070503] text-white min-h-screen flex flex-col justify-between p-4 md:p-8 select-none relative overflow-x-hidden">
+
+  <!-- HINTERGRUND: KERZENSCHEIN-EFFEKT -->
+  <div class="fixed inset-0 pointer-events-none">
+    <div class="candle-glow absolute top-1/4 left-1/3 w-[36rem] h-[36rem] rounded-full blur-3xl"></div>
+    <div class="candle-glow absolute bottom-0 right-0 w-96 h-96 rounded-full blur-3xl" style="animation-delay: 1.5s;"></div>
+  </div>
+
+  <!-- TOP HUD BAR -->
+  <header class="relative z-10 flex justify-between items-center wood-panel p-4 rounded-2xl shadow-2xl overflow-hidden">
+    <!-- KATZE-EASTEREGG: läuft durchgehend im Banner hin und her, bis sie gefangen wird -->
+    <div id="cat-lane" class="absolute inset-0 z-20 overflow-hidden pointer-events-none"></div>
+
+    <div class="flex items-center space-x-3">      <span class="text-3xl">🕯️</span>
+      <div>
+        <h1 class="text-lg font-black tracking-wider text-amber-300 glow-amber">SPIEL 2: RÄTSELFEUER</h1>
+        <div id="story-status-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-amber-900/40 text-amber-300 border border-amber-700/50 inline-block mt-1">
+          INITIALISIERUNG
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-4 bg-black/40 px-4 py-2 rounded-xl border border-amber-900/40">
+      <div class="text-right">
+        <div id="player-info-name" class="text-sm font-bold text-white">Lade...</div>
+        <div id="player-info-score" class="text-xs font-black text-amber-400">0 Pkt.</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- HOST PANEL (NUR FÜR DEN HOST SICHTBAR) -->
+  <div id="host-controls" class="hidden relative z-20 my-4 wood-panel border-2 border-amber-700/40 p-4 rounded-2xl">
+    <div class="text-xs font-black text-amber-400 tracking-wider uppercase mb-3 flex items-center space-x-2">
+      <span>👑 ERZÄHLER-PULT</span>
+    </div>
+    <div id="host-preview-box" class="bg-black/40 border border-amber-700/40 rounded-xl p-3 text-xs mb-3">
+      Lade Vorschau...
+    </div>
+
+    <!-- Stufe: waiting -->
+    <div id="hc-waiting">
+      <button onclick="hostRevealStory()" class="w-full py-3 px-4 bg-amber-700 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-lg transition active:scale-95">
+        📖 Story enthüllen
+      </button>
+    </div>
+
+    <!-- Stufe: story_shown -->
+    <div id="hc-story_shown" class="hidden">
+      <button onclick="hostRollOrder()" class="w-full py-3 px-4 bg-orange-700 hover:bg-orange-600 text-white font-bold text-xs rounded-xl shadow-lg transition active:scale-95">
+        🎲 Reihenfolge auslosen
+      </button>
+    </div>
+
+    <!-- Stufe: rolling -->
+    <div id="hc-rolling" class="hidden text-center text-amber-400 text-xs font-bold py-2">
+      🎲 Die Würfel rollen...
+    </div>
+
+    <!-- Stufe: order_set -->
+    <div id="hc-order_set" class="hidden">
+      <button onclick="hostStartRound()" class="w-full py-3 px-4 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-lg transition active:scale-95">
+        ▶️ Runde starten
+      </button>
+    </div>
+
+    <!-- Stufe: in_progress -->
+    <div id="hc-in_progress" class="hidden space-y-2">
+      <div id="hc-double-badge" class="hidden text-center text-yellow-400 text-xs font-bold bg-yellow-900/20 border border-yellow-700/40 rounded-lg py-1.5"></div>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="hostAnswerJa()" class="py-3 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-sm rounded-xl shadow-lg transition active:scale-95">✅ JA</button>
+        <button onclick="hostAnswerNein()" class="py-3 px-3 bg-red-800 hover:bg-red-700 text-white font-black text-sm rounded-xl shadow-lg transition active:scale-95">❌ NEIN</button>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="hostMarkSolved()" class="py-3 px-3 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-xs rounded-xl shadow-lg transition active:scale-95">🏆 Lösung korrekt!</button>
+        <button onclick="hostMarkWrong()" class="py-3 px-3 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs rounded-xl shadow-lg transition active:scale-95">💥 Falsch geraten</button>
+      </div>
+    </div>
+
+    <!-- Stufe: solved -->
+    <div id="hc-solved" class="hidden">
+      <button id="hc-next-story-btn" onclick="hostNextStory()" class="w-full py-3 px-4 bg-amber-700 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-lg transition active:scale-95">
+        ➡️ Nächste Story
+      </button>
+    </div>
+
+    <!-- Stufe: evaluation -->
+    <div id="hc-evaluation" class="hidden">
+      <button onclick="hostResetSession()" class="w-full py-3 px-4 bg-purple-700 hover:bg-purple-600 text-white font-bold text-xs rounded-xl shadow-lg transition active:scale-95">
+        🔄 Neue Session starten (Storys von vorn)
+      </button>
+    </div>
+
+    <button onclick="hostRestartGame()" class="w-full mt-3 py-2 px-4 bg-amber-900/60 hover:bg-amber-800 border border-amber-500 text-amber-300 font-bold text-xs rounded-xl transition">
+      🔄 Spiel neu starten
+    </button>
+    <button onclick="triggerReturnCountdown()" class="w-full mt-3 py-2 px-4 bg-red-950/60 hover:bg-red-900 border border-red-800 text-red-300 font-bold text-xs rounded-xl transition">
+      🔙 Spiel beenden & zurück ins Cockpit (nächste Runde)
+    </button>
+  </div>
+
+  <!-- HAUPTBEREICH -->
+  <main class="relative z-10 my-auto max-w-xl w-full mx-auto py-6">
+    <div class="relative rounded-3xl overflow-hidden border border-amber-900/40 shadow-2xl bg-black" style="aspect-ratio: 3 / 4; min-height: 520px;">
+
+      <!-- ATMOSPHÄRE: Lagerfeuer-Loop als großer Hintergrund, sieht aus wie ein GIF. object-contain,
+           damit das Video NIE beschnitten wird (auch das untere Ende bleibt immer sichtbar). -->
+      <video autoplay loop muted playsinline disablepictureinpicture class="absolute inset-0 w-full h-full object-contain pointer-events-none">
+        <source src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/video_2026-08-31_20-07-54.mp4" type="video/mp4">
+      </video>
+      <div class="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/70"></div>
+
+      <!-- INHALT ÜBER DEM VIDEO -->
+      <div class="relative z-10 h-full flex flex-col items-center justify-center text-center gap-4 p-6 md:p-8">
+
+        <img id="story-teaser-image" src="" class="hidden max-h-40 rounded-2xl border-2 border-amber-800/50 shadow-xl" alt="">
+
+        <p id="story-teaser-text" class="font-story text-base md:text-lg text-white/95 italic leading-relaxed max-w-md drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
+          Der Erzähler bereitet die nächste Story vor...
+        </p>
+
+        <!-- WÜRFEL-ANIMATION: über dem Video eingeblendet, verschwindet danach automatisch wieder -->
+        <div id="dice-roll-area" class="hidden grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+
+        <!-- BEFRAGUNG LÄUFT -->
+        <div id="turn-interaction" class="hidden story-card rounded-3xl p-6 w-full max-w-md"></div>
+
+        <!-- GELÖST -->
+        <div id="solved-area" class="hidden w-full max-w-md"></div>
+
+        <!-- AUSWERTUNG -->
+        <div id="evaluation-area" class="hidden story-card rounded-3xl p-6 w-full max-w-md"></div>
+
+      </div>
+
+      <!-- REIHENFOLGE-LEISTE: kompakt am rechten Rand -->
+      <div id="turn-order-strip" class="hidden absolute top-3 right-3 z-20 wood-panel rounded-xl p-2 max-w-[150px] text-xs"></div>
+
+    </div>
+  </main>
+
+  <!-- KONFETTI -->
+  <canvas id="confetti-canvas" class="hidden fixed inset-0 z-[60] pointer-events-none"></canvas>
+
+  <!-- FOOTER -->
+  <footer class="relative z-10 text-center text-xs text-amber-900/60 pt-4">
+    <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9486-removebg-preview.png" class="inline-block h-4 w-4 align-middle mr-1 -mt-0.5" onerror="this.style.display='none'">Hirnschmalz-Arena v2.6 • Fakten-Blackstory-Modus
+  </footer>
+
+  <!-- RÜCKKEHR-ZWISCHENSZENE -->
+  <div id="return-countdown-overlay" class="hidden fixed inset-0 bg-black z-[80] flex flex-col items-center justify-center">
+    <div class="text-amber-200/70 text-xs tracking-[0.3em] uppercase mb-4" style="font-family: Georgia, 'Times New Roman', serif;">Rückkehr ins Cockpit in</div>
+    <div id="return-countdown-number" class="text-amber-100 border-4 border-amber-200/40 rounded-full w-40 h-40 flex items-center justify-center text-6xl" style="font-family: Georgia, 'Times New Roman', serif;">5</div>
+  </div>
+
+  <!-- ANSAGE-FENSTER: für ALLE Spieler sichtbar, sobald jemand sich zum Lösen ansagt -->
+  <div id="announce-modal" class="hidden fixed inset-0 bg-black/85 z-[90] flex flex-col items-center justify-center p-4">
+    <div class="story-card rounded-3xl p-6 max-w-sm w-full text-center space-y-4 border-2 border-yellow-500/60">
+      <div id="announce-modal-name" class="font-story text-2xl md:text-3xl font-black text-yellow-300 glow-amber">
+        Jemand will lösen...
+      </div>
+      <img id="announce-modal-gif" src="" class="w-full rounded-2xl border border-amber-800/40" />
+    </div>
+  </div>
+
+  <!-- HOST-FENSTER: öffnet sich automatisch, sobald der angesagte Spieler dran ist -->
+  <div id="announce-resolve-modal" class="hidden fixed inset-0 bg-black/85 z-[95] flex flex-col items-center justify-center p-4">
+    <div class="admin-panel-story rounded-3xl p-6 max-w-sm w-full text-center space-y-4 border-2 border-yellow-500/60" style="background: linear-gradient(160deg, #1c150c 0%, #0e0a05 100%);">
+      <div class="text-yellow-300 font-black text-lg">📣 <span id="announce-resolve-name">Spieler</span> ist jetzt dran</div>
+      <div class="text-amber-200/80 text-sm">löst gerade die Story - hat er/sie es geschafft?</div>
+      <div class="grid grid-cols-1 gap-3 pt-2">
+        <button onclick="hostAnnounceResolveSolved()" class="py-4 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base rounded-xl shadow-lg transition active:scale-95">
+          ✅ Gelöst
+        </button>
+        <button onclick="hostAnnounceResolveFailed()" class="py-4 px-4 bg-red-700 hover:bg-red-600 text-white font-black text-base rounded-xl shadow-lg transition active:scale-95">
+          ❌ Nicht gelöst
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PUNKTE-ANIMATION: für alle sichtbar, wenn eine Ansage aufgelöst wird -->
+  <div id="points-fly-layer" class="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center"></div>
+
+
+  <img id="brain-logo" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9455-removebg-preview.png"
+    onclick="clickBrainLogo()" class="fixed bottom-2 left-2 h-8 md:h-10 w-auto z-30 cursor-pointer transition-transform hover:scale-110"
+    onerror="this.style.display='none'" alt="">
+  <div id="winner-gif-modal" class="hidden fixed inset-0 bg-black/80 z-[95] flex flex-col items-center justify-center p-4">
+    <div class="winner-gif-modal-inner text-center space-y-3">
+      <div id="winner-gif-name" class="font-jax text-2xl md:text-3xl font-extrabold text-[#ffd23f]" style="text-shadow:2px 2px 0 #1a1006,-2px -2px 0 #1a1006,2px -2px 0 #1a1006,-2px 2px 0 #1a1006;">Name gewinnt!</div>
+      <img id="winner-gif-img" src="" class="max-w-xs md:max-w-sm rounded-2xl border-4 border-white shadow-2xl">
+    </div>
+  </div>
+
+</body>
+</html>

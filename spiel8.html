@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Spiel 8: Schriftzug-Salat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .font-jax { font-family: 'Baloo 2', sans-serif; }
+    .font-display { font-family: 'Arial Black', 'Helvetica Neue', sans-serif; letter-spacing: -0.02em; }
+
+    .jax-card {
+      background: #ffffff;
+      border: 4px solid #1a1a2e;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(0,0,0,0.85);
+    }
+    .jax-card-print {
+      background: #0d0d0d;
+      border: 4px solid #ffffff;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(239, 68, 68, 0.6);
+      color: #ffffff;
+    }
+    .jax-chip {
+      border: 3px solid #1a1a2e;
+      border-radius: 9999px;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.85);
+    }
+    .jax-btn {
+      font-family: 'Baloo 2', sans-serif;
+      border: 3px solid #1a1a2e;
+      border-radius: 20px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(3px,3px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+    .jax-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    @keyframes shake { 0%,100%{transform:translateX(0);} 20%{transform:translateX(-8px);} 40%{transform:translateX(8px);} 60%{transform:translateX(-6px);} 80%{transform:translateX(6px);} }
+    .shake { animation: shake 0.35s ease-in-out; }
+    @keyframes bounceIn { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+    .jax-pop { animation: bounceIn 0.5s cubic-bezier(.34,1.56,.64,1); }
+      @keyframes brainHop {
+      0% { transform: translateY(0) scale(1); }
+      30% { transform: translateY(-24px) scale(1.12); }
+      55% { transform: translateY(0) scale(0.94); }
+      75% { transform: translateY(-9px) scale(1.04); }
+      100% { transform: translateY(0) scale(1); }
+    }
+    .brain-hop { animation: brainHop 0.4s ease-out; }
+
+    @keyframes brainFlyAway {
+      0% { transform: translate(0,0) scale(1) rotate(0deg); opacity: 1; }
+      100% { transform: translate(50px, -180px) scale(0.15) rotate(35deg); opacity: 0; }
+    }
+    .brain-fly-away { animation: brainFlyAway 0.7s ease-in forwards; }
+
+    @keyframes brainBubblePop {
+      0% { transform: translateY(6px) scale(0.6); opacity: 0; }
+      20% { transform: translateY(0) scale(1.05); opacity: 1; }
+      80% { transform: translateY(-2px) scale(1); opacity: 1; }
+      100% { transform: translateY(-12px) scale(0.9); opacity: 0; }
+    }
+    .brain-bubble {
+      position: fixed; z-index: 40; pointer-events: none;
+      background: white; color: #1a1a2e; border: 2px solid #1a1a2e;
+      border-radius: 10px; padding: 4px 9px; font-size: 11px; font-weight: 800;
+      font-family: 'Baloo 2', sans-serif;
+      animation: brainBubblePop 1.4s ease-out forwards;
+      white-space: nowrap;
+    }
+    .brain-bubble-success {
+      background: #16a34a; color: white; border-color: #14532d; font-size: 14px;
+      padding: 6px 14px;
+    }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, update, onValue, get, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // ==== EIGENES ICON-SET (keine Emojis) ====
+    const ICONS = {
+      type: '<path d="M5 5h14M12 5v14M9 19h6"/>',
+      crown: '<path d="M4 18h16l1-9-5 3-4-6-4 6-5-3z"/>',
+      book: '<path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M6 3v16"/>',
+      arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+      image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5-9 9"/>',
+      check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
+      cross: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+      flag: '<path d="M5 21V4h13l-3 4 3 4H5"/>',
+      trophy: '<path d="M7 4h10v3a5 5 0 0 1-10 0V4z"/><path d="M5 5H3v2a4 4 0 0 0 4 4M19 5h2v2a4 4 0 0 1-4 4"/><path d="M12 12v4"/><path d="M8 20h8"/><path d="M9 20v-2h6v2"/>',
+      shrug: '<circle cx="12" cy="7" r="3"/><path d="M5 20c0-3 3-5 7-5s7 2 7 5"/>',
+      dice: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r="1"/><circle cx="15.5" cy="8.5" r="1"/><circle cx="8.5" cy="15.5" r="1"/><circle cx="15.5" cy="15.5" r="1"/><circle cx="12" cy="12" r="1"/>',
+      fire: '<path d="M12 2c1 4-3 5-3 9a3 3 0 0 0 6 0c1-1 1-3 0-4 2 1 3 3 3 5a6 6 0 0 1-12 0c0-5 3-6 6-10z"/>',
+      refresh: '<path d="M20 11a8 8 0 0 0-14.9-3.5M4 13a8 8 0 0 0 14.9 3.5"/><path d="M5 4v4h4M19 20v-4h-4"/>',
+      exit: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/>'
+    };
+    function icon(name, cls) {
+      return `<svg class="${cls || 'w-5 h-5'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+    }
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const playerId = localStorage.getItem("quiz_player_id");
+    let isHost = false;
+    let allPlayers = {};
+    let latestState = null;
+
+    const BASE_POINTS = 250;
+    const WRONG_PENALTY_STEP = 30; // pro eigenem Fehlversuch dieser Runde, zieht vom Gewinn ab
+    const MIN_POINTS = 80;
+    const BONUS_POINTS = 150; // Sonderpunkte am Ende für die meisten Falscheingaben insgesamt
+
+    // ==== COVER-KATALOG ====
+    // distortedUrl = euer bereits verfremdetes Bild (wird beim Raten gezeigt),
+    // originalUrl = das Original-Cover (wird erst bei der Auflösung gezeigt),
+    // title = die exakte Lösung für den automatischen Abgleich (Groß-/Kleinschreibung egal).
+    const covers = [
+      {
+        id: 1,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Counter%20strike.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/%C2%B4counter%20strike%201.jpg",
+        title: "Counter Strike",
+        points: 150
+      },
+      {
+        id: 2,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/DOOM.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/doom1.jpg",
+        title: "DOOM",
+        points: 150
+      },
+      {
+        id: 3,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Driver.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/driver1.jpg",
+        title: "Driver",
+        points: 150
+      },
+      {
+        id: 4,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/FIFA%2098.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/fifa98.jpg",
+        title: "FIFA 98",
+        points: 150
+      },
+      {
+        id: 5,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Fortnite.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/fortnite1.jpg",
+        title: "Fortnite",
+        points: 150
+      },
+      {
+        id: 6,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/GTA.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Gta1.jpg",
+        title: "GTA",
+        points: 150
+      },
+      {
+        id: 7,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Halo.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Halo1.png",
+        title: "Halo",
+        points: 150
+      },
+      {
+        id: 8,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Hitman.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/hitman1.jpg",
+        title: "Hitman",
+        points: 150
+      },
+      {
+        id: 9,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Ready%20or%20not%20.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/ready%20or%20not1.jpg",
+        title: "Ready or not",
+        points: 150
+      },
+      {
+        id: 10,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/serious%20sam.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/SeriousSam1.jpg",
+        title: "Serious Sam",
+        points: 150
+      },
+      {
+        id: 11,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Skyrim.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/skyrim1.jpg",
+        title: "Skyrim",
+        points: 150
+      },
+      {
+        id: 12,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Super%20Mariokart.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/super%20mariokart1.jpg",
+        title: "Super Mario Kart",
+        points: 150
+      },
+      {
+        id: 13,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Tomb%20raider.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Tomb%20Raider1.png",
+        title: "Tomb Raider",
+        points: 150
+      },
+      {
+        id: 14,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Zelda.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Zelda1.jpg",
+        title: "Zelda",
+        points: 150
+      }
+    ];
+
+    function getActivePlayerIds() {
+      return Object.keys(allPlayers).filter(id => allPlayers[id] && allPlayers[id].name && !allPlayers[id].name.includes("Host"));
+    }
+
+    onValue(ref(db, 'players/'), (snapshot) => {
+      allPlayers = snapshot.val() || {};
+      if (latestState) renderAll(latestState);
+    });
+
+        // ==== RANG-TITEL: witziger Platzierungs-Hinweis statt exaktem Punktestand ====
+    const RANK_TITLES = [
+      "Sockenflicker",
+      "Krümelmonster-Praktikant",
+      "Wackelpudding-Ritter",
+      "Hobby-Rater",
+      "Quiz-Lehrling",
+      "Wissens-Gladiator",
+      "Fragen-Halbgott",
+      "Elite Übermensch Echse"
+    ];
+    function computeRankTitle(myId, allPlayersData) {
+      const activeIds = Object.keys(allPlayersData).filter(id => allPlayersData[id] && allPlayersData[id].name && !allPlayersData[id].name.includes("Host") && !allPlayersData[id].name.includes("Admin"));
+      if (activeIds.length === 0) return RANK_TITLES[4];
+      const sorted = [...activeIds].sort((a, b) => (allPlayersData[b].score || 0) - (allPlayersData[a].score || 0));
+      const rank = sorted.indexOf(myId) + 1;
+      const n = sorted.length;
+      const percentile = n > 1 ? (rank - 1) / (n - 1) : 0.5;
+      const tierIndex = Math.min(7, Math.max(0, Math.round((1 - percentile) * 7)));
+      return RANK_TITLES[tierIndex];
+    }
+    onValue(ref(db, 'players/'), (snapshot) => {
+      const allPlayersData = snapshot.val() || {};
+      const player = allPlayersData[playerId];
+      if (player) {
+        if (player.name && player.name.includes("Host")) {
+          isHost = true;
+          document.getElementById("brain-logo")?.classList.add("hidden"); // Host bekommt das Gehirn-Feature nicht
+          document.getElementById("host-controls").classList.remove("hidden");
+          document.getElementById("host-end-game-btn").classList.remove("hidden");
+          document.getElementById("player-answer-area").classList.add("hidden");
+          document.getElementById("player-info-score").innerHTML = icon('crown', 'w-3.5 h-3.5 inline -mt-0.5') + ' MODERATOR';
+        } else {
+          document.getElementById("player-info-score").innerText = computeRankTitle(playerId, allPlayersData);
+        }
+        document.getElementById("player-info-name").innerText = player.name;
+        if (latestState) renderAll(latestState);
+      }
+    });
+
+    onValue(ref(db, 'game8State'), (snapshot) => {
+      const state = snapshot.val() || { coverIdx: 0, stage: 'waiting' };
+      latestState = state;
+      renderAll(state);
+    });
+
+    onValue(ref(db, 'gameState'), (snapshot) => {
+      const gs = snapshot.val();
+      if (gs && gs.status && gs.status !== 'in_game') {
+        window.location.href = "cockpit.html";
+      }
+    });
+
+    window.hostRestartGame = function() {
+      if (!confirm("Spiel wirklich neu starten? Der Fortschritt dieser Runde geht verloren (Punkte bleiben erhalten).")) return;
+      set(ref(db, 'game8State'), { coverIdx: 0, stage: 'waiting' });
+    };
+
+    function generateRiddleClues(pid, sortedIds, players) {
+      const rank = sortedIds.indexOf(pid) + 1;
+      const n = sortedIds.length;
+      const pool = [];
+      if (rank > 1) pool.push('Du bist nicht Erster.');
+      if (rank < n) pool.push('Du bist nicht Letzter.');
+      if (rank > 1) pool.push('Du liegst hinter ' + players[sortedIds[rank - 2]].name + '.');
+      if (rank < n) pool.push('Du liegst vor ' + players[sortedIds[rank]].name + '.');
+      if (rank > 2) pool.push('Mindestens zwei Personen liegen vor dir.');
+      if (rank < n - 1) pool.push('Mindestens zwei Personen liegen hinter dir.');
+      if (pool.length === 0) pool.push('Die Truhe ist ratlos - du bist ganz allein im Rennen.');
+      const shuffled = pool.map(x => [Math.random(), x]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+      return shuffled.slice(0, Math.min(2, shuffled.length));
+    }
+
+        // ==== ZITATE ÜBER DAS SPIELEN (für den Abspann) ====
+    const GAME_QUOTES = [
+      { text: "Beim Spiel kann man einen Menschen in einer Stunde besser kennenlernen als im Gespräch in einem Jahr.", author: "Platon" },
+      { text: "Spiele, damit du ernst sein kannst. Denn das Spiel ist ein Ausruhen, und die Menschen bedürfen, da sie nicht immer tätig sein können, des Ausruhens.", author: "Aristoteles" },
+      { text: "Atome spalten ist ein Kinderspiel, verglichen mit einem Kinderspiel.", author: "Albert Einstein" },
+      { text: "Nur Arbeit und kein Spiel macht dumm.", author: "Karl Marx" },
+      { text: "Spielen ist eine Tätigkeit, die man gar nicht ernst genug nehmen kann.", author: "Jacques-Yves Cousteau" }
+    ];
+    function gameQuoteHtml() {
+      const q = GAME_QUOTES[Math.floor(Math.random() * GAME_QUOTES.length)];
+      return `<div class="italic">"${q.text}"</div><div class="mt-2 not-italic font-bold opacity-80">— ${q.author}</div>`;
+    }
+
+    // ==== RÜCKKEHR-ZWISCHENSZENE: schwarzer Bildschirm mit altertümlichem Countdown ====
+    let lastSeenReturnCountdownAt = null;
+    onValue(ref(db, 'gameState/returnCountdownAt'), (snapshot) => {
+      const startedAt = snapshot.val();
+      if (startedAt && startedAt !== lastSeenReturnCountdownAt) {
+        lastSeenReturnCountdownAt = startedAt;
+        runReturnCountdown(startedAt);
+      }
+    });
+
+    function runReturnCountdown(startedAt) {
+      const overlay = document.getElementById('return-countdown-overlay');
+      const numberEl = document.getElementById('return-countdown-number');
+      if (!overlay || !numberEl) return;
+      overlay.classList.remove('hidden');
+      const DURATION = 5;
+      let doneTriggered = false;
+      function tick() {
+        const elapsed = (Date.now() - startedAt) / 1000;
+        const remaining = Math.max(0, DURATION - elapsed);
+        numberEl.innerText = remaining > 0.05 ? Math.ceil(remaining) : '✓';
+        if (remaining > 0.05) {
+          requestAnimationFrame(tick);
+        } else if (!doneTriggered) {
+          doneTriggered = true;
+          if (isHost) window.hostBackToCockpit();
+        }
+      }
+      tick();
+    }
+
+    window.triggerReturnCountdown = function() {
+      if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
+      update(ref(db, 'gameState'), { returnCountdownAt: Date.now() });
+    };
+
+    window.hostBackToCockpit = function() {
+
+      get(ref(db, 'gameState/startScores')).then((startSnap) => {
+        const startScores = startSnap.val() || {};
+        get(ref(db, 'players/')).then((snapshot) => {
+          const players = snapshot.val() || {};
+          const activeIds = Object.keys(players).filter(id => players[id] && players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin"));
+          const rankedIds = [...activeIds].sort((a, b) => (players[b].score || 0) - (players[a].score || 0));
+          const updates = {};
+          for (let id in players) {
+            if (players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin")) {
+              updates['players/' + id + '/isReady'] = false;
+            }
+          }
+          activeIds.forEach(id => {
+            updates['players/' + id + '/riddleClues'] = generateRiddleClues(id, rankedIds, players);
+          });
+          update(ref(db), updates).then(() => {
+            activeIds.forEach(id => {
+              const delta = (players[id].score || 0) - (startScores[id] || 0);
+              if (delta !== 0) {
+                push(ref(db, 'gameLog'), {
+                  text: (delta > 0 ? '📈 ' : '📉 ') + players[id].name + ': ' + (delta > 0 ? '+' : '') + delta + ' Punkte in Spiel 8',
+                  at: Date.now()
+                });
+              }
+            });
+            set(ref(db, 'gameState'), { status: 'cockpit', chestPending: true, chestPendingAt: Date.now() });
+          });
+        });
+      });
+    };
+
+    // ================= TEXT-ABGLEICH =================
+
+    function normalize(str) {
+      return (str || "").toLowerCase()
+        .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
+    }
+
+    function levenshtein(a, b) {
+      const m = a.length, n = b.length;
+      const dp = [];
+      for (let i = 0; i <= m; i++) { dp.push([i]); }
+      for (let j = 1; j <= n; j++) { dp[0][j] = j; }
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+      return dp[m][n];
+    }
+
+    function evaluateGuess(guessRaw, answerRaw) {
+      const guess = normalize(guessRaw);
+      const answer = normalize(answerRaw);
+      if (!guess) return 'empty';
+      if (guess === answer) return 'correct';
+      const dist = levenshtein(guess, answer);
+      const threshold = Math.max(2, Math.floor(answer.length * 0.25));
+      if (dist <= threshold) return 'close';
+      return 'wrong';
+    }
+
+    // ================= SPIELER AKTIONEN =================
+
+    window.submitGuess = function() {
+      const input = document.getElementById('guess-input');
+      const text = (input.value || '').trim();
+      if (!text) return;
+      input.value = '';
+
+      get(ref(db, 'game8State')).then((snap0) => {
+        const s = snap0.val() || {};
+        if (s.solvedBy) return; // schon gelöst, zu spät
+        const cover = covers[s.coverIdx || 0];
+        const verdict = evaluateGuess(text, cover.title);
+
+        // eigene Versuchsliste ergänzen (für "schon probiert"-Anzeige)
+        get(ref(db, 'game8State/guessLog/' + playerId)).then((logSnap) => {
+          const log = logSnap.val() || [];
+          log.push({ text, verdict });
+          update(ref(db, 'game8State/guessLog'), { [playerId]: log });
+        });
+
+        if (verdict === 'correct') {
+          runTransaction(ref(db, 'game8State/solvedBy'), (current) => {
+            if (current) return; // wurde bereits vergeben -> abbrechen
+            return playerId;
+          }).then((result) => {
+            if (result.committed && result.snapshot.val() === playerId) {
+              const wrongThisRound = ((s.wrongAttemptsThisRound || {})[playerId]) || 0;
+              const points = Math.max(MIN_POINTS, (cover.points || BASE_POINTS) - wrongThisRound * WRONG_PENALTY_STEP);
+              get(ref(db, 'players/' + playerId + '/score')).then((scoreSnap) => {
+                const cur = scoreSnap.val() || 0;
+                update(ref(db, 'players/' + playerId), { score: cur + points });
+                update(ref(db, 'game8State'), { stage: 'result', lastResult: 'solved', lastSolverId: playerId, lastPoints: points });
+              });
+            }
+          });
+        } else {
+          const curRoundWrong = ((s.wrongAttemptsThisRound || {})[playerId]) || 0;
+          const curTotalWrong = ((s.wrongCounts || {})[playerId]) || 0;
+          const updates = {};
+          updates['wrongAttemptsThisRound/' + playerId] = curRoundWrong + 1;
+          updates['wrongCounts/' + playerId] = curTotalWrong + 1;
+          updates['guessFeedback/' + playerId] = { text, verdict, at: Date.now() };
+          update(ref(db, 'game8State'), updates);
+        }
+      });
+    };
+
+    // ================= HOST AKTIONEN =================
+
+    window.hostRevealCover = () => {
+      update(ref(db, 'game8State'), {
+        stage: 'guessing',
+        solvedBy: null, wrongAttemptsThisRound: null, guessFeedback: null, guessLog: null,
+        lastResult: null, lastSolverId: null, lastPoints: null
+      });
+    };
+
+    window.hostSkipCover = () => {
+      update(ref(db, 'game8State'), { stage: 'result', lastResult: 'skipped' });
+    };
+
+    window.hostNextCover = () => {
+      get(ref(db, 'game8State')).then((snap) => {
+        const s = snap.val() || {};
+        const idx = s.coverIdx || 0;
+        const nextIdx = idx + 1;
+        if (nextIdx >= covers.length) {
+          const wrongCounts = s.wrongCounts || {};
+          let maxWrong = 0;
+          Object.keys(wrongCounts).forEach(id => { if (wrongCounts[id] > maxWrong) maxWrong = wrongCounts[id]; });
+          const bonusWinners = maxWrong > 0 ? Object.keys(wrongCounts).filter(id => wrongCounts[id] === maxWrong) : [];
+
+          const promises = bonusWinners.map(id =>
+            get(ref(db, 'players/' + id + '/score')).then((scoreSnap) => {
+              const cur = scoreSnap.val() || 0;
+              return update(ref(db, 'players/' + id), { score: cur + BONUS_POINTS });
+            })
+          );
+          Promise.all(promises).then(() => {
+            update(ref(db, 'game8State'), { stage: 'evaluation', bonusWinners, bonusPoints: BONUS_POINTS });
+          });
+        } else {
+          update(ref(db, 'game8State'), {
+            coverIdx: nextIdx, stage: 'waiting',
+            solvedBy: null, wrongAttemptsThisRound: null, guessFeedback: null, guessLog: null,
+            lastResult: null, lastSolverId: null, lastPoints: null
+          });
+        }
+      });
+    };
+
+    // ================= RENDERING =================
+
+    function renderAll(state) {
+      const cover = covers[state.coverIdx || 0];
+      renderHostPreview(cover, state);
+      renderHostControls(state);
+      renderPlayerView(state, cover);
+    }
+
+    function renderHostPreview(cover, state) {
+      if (!isHost) return;
+      const box = document.getElementById("host-preview-box");
+      if (!box) return;
+      if (!cover) { box.innerHTML = `<div class="text-red-600 font-bold">Kein weiteres Cover vorhanden.</div>`; return; }
+      box.innerHTML = `
+        <div class="text-red-600 font-jax font-bold mb-2 flex items-center justify-center gap-1">${icon('book','w-4 h-4')} Vorschau - Cover ${(state.coverIdx || 0) + 1} von ${covers.length}:</div>
+        <img src="${cover.originalUrl}" class="w-28 rounded-xl border-2 border-[#1a1a2e] mb-3 mx-auto" />
+        <div class="text-red-600 font-bold text-xs uppercase tracking-wide mb-1">Lösung</div>
+        <div class="font-jax font-extrabold text-[#1a1a2e] text-xl">${cover.title}</div>
+        <div class="text-[#1a1a2e]/50 text-xs mt-2">Punkte: ${cover.points || BASE_POINTS} (weniger bei eigenen Fehlversuchen) · Bonus am Ende: +${BONUS_POINTS}</div>
+      `;
+    }
+
+    function show(id) { document.getElementById(id)?.classList.remove("hidden"); }
+    function hide(id) { document.getElementById(id)?.classList.add("hidden"); }
+
+    function renderHostControls(state) {
+      if (!isHost) return;
+      const stage = state.stage || 'waiting';
+      ["hc-waiting", "hc-guessing", "hc-result", "hc-evaluation"].forEach(hide);
+      show("hc-" + stage);
+
+      if (stage === 'guessing') {
+        const wrongCounts = state.wrongAttemptsThisRound || {};
+        const total = Object.values(wrongCounts).reduce((a, b) => a + b, 0);
+        document.getElementById("hc-wrong-total").innerText = total + " Falschversuche in dieser Runde bisher";
+      }
+      if (stage === 'result') {
+        const btn = document.getElementById("hc-next-cover-btn");
+        const isLast = (state.coverIdx || 0) + 1 >= covers.length;
+        if (btn) btn.innerHTML = isLast ? (icon('flag','w-4 h-4 inline -mt-1') + ' Spiel beenden & Auswertung zeigen') : (icon('arrowRight','w-4 h-4 inline -mt-1') + ' Nächstes Cover');
+      }
+    }
+
+    function renderPlayerView(state, cover) {
+      const stage = state.stage || 'waiting';
+      const statusBadge = document.getElementById("status-badge");
+      const progressEl = document.getElementById("cover-progress");
+      progressEl.innerText = "Cover " + Math.min((state.coverIdx || 0) + 1, covers.length) + " von " + covers.length;
+
+      ["waiting-area", "guessing-area", "result-area", "evaluation-area"].forEach(hide);
+
+      if (stage === 'waiting') {
+        statusBadge.innerText = "WARTET AUF NÄCHSTES COVER";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-white text-[#1a1a2e]";
+        document.getElementById("waiting-area").innerHTML = `<div class="text-white/60">Der Moderator bereitet das nächste Cover vor...</div>`;
+        show("waiting-area");
+      } else if (stage === 'guessing') {
+        statusBadge.innerText = "RATEN - NUR DIE SCHRIFTART IST ECHT!";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-red-500 text-white animate-pulse";
+        renderGuessingArea(state, cover);
+        show("guessing-area");
+      } else if (stage === 'result') {
+        statusBadge.innerText = "AUFLÖSUNG";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#7017c9] text-white";
+        renderResultArea(state, cover);
+        show("result-area");
+      } else if (stage === 'evaluation') {
+        statusBadge.innerText = "SPIEL BEENDET";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#7017c9] text-white";
+        renderEvaluationArea(state);
+        show("evaluation-area");
+      }
+    }
+
+    function renderGuessingArea(state, cover) {
+      const wrap = document.getElementById("guessing-area");
+      const myLog = (state.guessLog || {})[playerId] || [];
+      const myFeedback = (state.guessFeedback || {})[playerId];
+      const showFlash = myFeedback && (Date.now() - (myFeedback.at || 0)) < 4000;
+
+      wrap.innerHTML = `
+        <div class="jax-card-print p-6 text-center">
+          <img src="${cover.distortedUrl}" class="mx-auto rounded-xl border-2 border-white/30" style="max-width: 260px; width: 100%; height: auto;" />
+          <div class="mt-5 space-y-3">
+            <input id="guess-input" type="text" placeholder="Titel eingeben..." autocomplete="off"
+              class="w-full max-w-sm mx-auto block px-4 py-4 rounded-xl bg-white border-2 border-[#1a1a2e] text-[#1a1a2e] text-center font-jax font-bold text-lg focus:outline-none"
+              onkeydown="if(event.key==='Enter'){submitGuess();}" />
+            <button onclick="submitGuess()" class="px-8 py-4 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold text-lg">
+              ${icon('check','w-5 h-5 inline -mt-1')} Absenden
+            </button>
+            ${showFlash ? `<div class="font-jax font-extrabold text-lg ${myFeedback.verdict === 'close' ? 'text-[#ffd23f]' : 'text-red-500'}">
+              ${myFeedback.verdict === 'close' ? icon('fire','w-5 h-5 inline -mt-1') + ' Nah dran, aber nicht ganz!' : icon('cross','w-5 h-5 inline -mt-1') + ' Leider falsch'}
+            </div>` : ''}
+            ${myLog.length ? `<div class="text-white/40 text-xs">Schon probiert: ${myLog.map(g => g.text).join(', ')}</div>` : ''}
+          </div>
+        </div>
+      `;
+
+      if (showFlash) {
+        const panel = wrap.querySelector('.jax-card-print');
+        panel.classList.add('shake');
+        setTimeout(() => panel.classList.remove('shake'), 400);
+      }
+    }
+
+    function renderResultArea(state, cover) {
+      const wrap = document.getElementById("result-area");
+      let headline = "";
+      if (state.lastResult === 'solved') {
+        const name = (allPlayers[state.lastSolverId] || {}).name || "Jemand";
+        const isMe = state.lastSolverId === playerId;
+        headline = `<div class="font-jax text-3xl font-extrabold ${isMe ? 'text-[#7ed957]' : 'text-[#1a1a2e]'} mb-2 flex items-center justify-center gap-2">${isMe ? icon('trophy','w-8 h-8') + ' Du hattest es!' : icon('check','w-8 h-8') + ' ' + name + ' hatte es!'}</div><div class="text-[#7017c9] font-bold mb-4">+${state.lastPoints} Punkte</div>`;
+      } else {
+        headline = `<div class="font-jax text-3xl font-extrabold text-[#1a1a2e]/50 mb-4 flex items-center justify-center gap-2">${icon('shrug','w-8 h-8')} Niemand hat es erraten...</div>`;
+      }
+      wrap.innerHTML = `
+        <div class="jax-card p-8 text-center">
+          ${headline}
+          <img src="${cover.originalUrl}" class="mx-auto rounded-xl border-2 border-[#1a1a2e] mb-3" style="max-width: 200px;" />
+          <div class="font-jax text-2xl font-extrabold text-[#1a1a2e]">${cover.title}</div>
+        </div>
+      `;
+    }
+
+    function renderEvaluationArea(state) {
+      const wrap = document.getElementById("evaluation-area");
+      const wrongCounts = state.wrongCounts || {};
+      const bonusWinners = state.bonusWinners || [];
+      const bonusNames = bonusWinners.map(id => (allPlayers[id] || {}).name || "Spieler");
+      const ids = getActivePlayerIds();
+      const rows = ids.map(id => ({
+        id, name: (allPlayers[id] || {}).name || "Spieler",
+        wrong: wrongCounts[id] || 0,
+        score: (allPlayers[id] || {}).score || 0,
+        bonus: bonusWinners.includes(id)
+      })).sort((a, b) => b.wrong - a.wrong);
+
+      wrap.innerHTML = `
+        <div class="jax-card p-6 text-[#1a1a2e]">
+          <div class="text-center mb-4">
+            <div class="text-red-600 flex justify-center mb-2">${icon('flag','w-12 h-12')}</div>
+            <div class="font-jax text-2xl font-extrabold">ERLEDIGT</div>
+            <div class="text-[#1a1a2e]/50 text-xs mt-1">Wer hat sich am meisten verraten?</div>
+          </div>
+          ${bonusNames.length ? `
+          <div class="jax-chip bg-[#ffd23f] p-3 text-center mb-4">
+            <div class="font-jax font-bold text-sm flex items-center justify-center gap-1">${icon('dice','w-4 h-4')} Vielrater-Bonus (+${state.bonusPoints || BONUS_POINTS} Punkte)</div>
+            <div class="text-xs mt-1">für die meisten Falscheingaben insgesamt: ${bonusNames.join(', ')}</div>
+          </div>` : ''}
+          <div class="space-y-2 max-w-xl mx-auto">
+            ${rows.map(r => `
+              <div class="jax-chip bg-[#f4f1ff] p-3 flex items-center justify-between ${r.bonus ? 'ring-2 ring-[#ffd23f]' : ''}">
+                <div class="font-jax font-bold flex items-center gap-1.5">${r.bonus ? icon('dice','w-4 h-4') : ''} ${r.name}</div>
+                <div class="flex items-center gap-3 text-sm">
+                  <span class="text-red-600 font-jax font-bold">${icon('cross','w-3.5 h-3.5 inline')} ${r.wrong}</span>
+                  <span class="text-[#1a1a2e]/30">·</span>
+                  <span class="text-[#7017c9] font-jax font-bold">${r.score} Pkt.</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="text-xs mt-6 max-w-md mx-auto opacity-70 text-center">${gameQuoteHtml()}</div>
+        </div>
+      `;
+    }
+  
+    // ==== VERSTECKTES GEHIRN: gibt es in jedem Spiel + im Cockpit einmal zu finden.
+    // Jeder Klick lässt es hüpfen + eine kurze Sprechblase mit Klick-Fortschritt zeigen.
+    // Je mehr Gehirne man insgesamt schon aktiviert hat, desto öfter muss man das NÄCHSTE
+    // anklicken (1. Gehirn = 1 Klick, 2. Gehirn = 2 Klicks, usw.). Bei Aktivierung fliegt es
+    // weg. Der Host sieht/bekommt diese Funktion gar nicht erst (spielt nicht um Punkte).
+    const BRAIN_POINTS = 20;
+    let brainClicksSoFar_spiel8 = 0;
+    let brainNeededClicks_spiel8 = null;
+
+    function showBrainBubble_spiel8(text, isSuccess) {
+      const logoEl = document.getElementById("brain-logo");
+      if (!logoEl) return;
+      const rect = logoEl.getBoundingClientRect();
+      const bubble = document.createElement("div");
+      bubble.className = "brain-bubble" + (isSuccess ? " brain-bubble-success" : "");
+      bubble.style.left = (rect.left + rect.width / 2 - 30) + "px";
+      bubble.style.top = (rect.top - 24) + "px";
+      bubble.innerText = text;
+      document.body.appendChild(bubble);
+      setTimeout(() => bubble.remove(), 1400);
+    }
+
+    window.clickBrainLogo = function() {
+      if (isHost) return; // Host spielt nicht um Punkte - für ihn passiert hier nichts
+      const claimedField = "brainFound_spiel8";
+      const logoEl = document.getElementById("brain-logo");
+
+      if (logoEl) {
+        logoEl.classList.remove("brain-hop");
+        void logoEl.offsetWidth;
+        logoEl.classList.add("brain-hop");
+      }
+
+      function tryActivate() {
+        brainClicksSoFar_spiel8++;
+        // Bewusst KEINE Sprechblase bei Zwischen-Klicks - erst beim finalen, erfolgreichen Klick
+        if (brainClicksSoFar_spiel8 < brainNeededClicks_spiel8) return;
+
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data[claimedField]) return; // inzwischen (z.B. anderes Gerät) schon aktiviert
+          const foundCount = data.brainsFoundCount || 0;
+          const newScore = (data.score || 0) + BRAIN_POINTS;
+          update(ref(db, 'players/' + playerId), {
+            score: newScore,
+            [claimedField]: true,
+            brainsFoundCount: foundCount + 1
+          });
+          push(ref(db, 'gameLog'), {
+            text: '🧠 ' + (data.name || 'Jemand') + ' hat ein Gehirn aktiviert: +' + BRAIN_POINTS + ' Punkte',
+            at: Date.now()
+          });
+          showBrainBubble_spiel8("+" + BRAIN_POINTS + " Punkte", true);
+          if (logoEl) logoEl.classList.add("brain-fly-away");
+        });
+      }
+
+      if (brainNeededClicks_spiel8 === null) {
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data["brainFound_spiel8"]) { brainNeededClicks_spiel8 = 0; if (logoEl) logoEl.classList.add("hidden"); return; }
+          brainNeededClicks_spiel8 = (data.brainsFoundCount || 0) + 1;
+          tryActivate();
+        });
+      } else {
+        tryActivate();
+      }
+    };
+</script>
+</head>
+<body class="bg-black text-white min-h-screen flex flex-col justify-between p-4 md:p-8 select-none relative overflow-x-hidden">
+
+  <!-- TOP HUD BAR -->
+  <header class="relative z-10 flex justify-between items-center jax-card-print p-4">
+    <div class="flex items-center space-x-3">      <span class="text-red-500"><svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14M12 5v14M9 19h6"/></svg></span>
+      <div>
+        <h1 class="font-display text-lg text-white">SPIEL 8: SCHRIFTZUG-SALAT</h1>
+        <div class="flex items-center gap-2 mt-1">
+          <div id="status-badge" class="jax-chip px-3 py-1 text-xs font-jax font-bold bg-white text-[#1a1a2e] inline-block">
+            INITIALISIERUNG
+          </div>
+          <div id="cover-progress" class="text-[11px] text-red-400/80 font-bold">Cover - von -</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-4 jax-chip bg-white px-4 py-2">
+      <div class="text-right">
+        <div id="player-info-name" class="text-sm font-jax font-bold text-[#1a1a2e]">Lade...</div>
+        <div id="player-info-score" class="text-xs font-black text-red-600">0 Pkt.</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- HOST PANEL -->
+  <div id="host-controls" class="hidden relative z-20 my-4 jax-card-print p-4">
+    <div class="text-xs font-jax font-bold text-red-400 tracking-wider uppercase mb-3 flex items-center space-x-2">
+      <span><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h16l1-9-5 3-4-6-4 6-5-3z"/></svg></span><span>MODERATOR-PULT</span>
+    </div>
+    <div id="host-preview-box" class="bg-white text-[#1a1a2e] rounded-xl p-6 text-center mb-3">
+      Lade Vorschau...
+    </div>
+
+    <div id="hc-waiting">
+      <button onclick="hostRevealCover()" class="w-full py-6 jax-btn bg-red-600 text-white font-jax font-bold text-lg flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5-9 9"/></svg> Nächstes Cover zeigen
+      </button>
+    </div>
+
+    <div id="hc-guessing" class="hidden space-y-2">
+      <div id="hc-wrong-total" class="text-center text-white/70 text-xs font-bold py-1">0 Falschversuche</div>
+      <button onclick="hostSkipCover()" class="w-full py-5 jax-btn bg-white text-[#1a1a2e] font-jax font-bold text-base flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Cover überspringen (niemand hat's)
+      </button>
+    </div>
+
+    <div id="hc-result" class="hidden">
+      <button id="hc-next-cover-btn" onclick="hostNextCover()" class="w-full py-6 jax-btn bg-red-600 text-white font-jax font-bold text-lg flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Nächstes Cover
+      </button>
+    </div>
+
+    <div id="hc-evaluation" class="hidden text-center text-white text-xs font-bold py-2">
+      <svg class="w-4 h-4 inline -mt-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h13l-3 4 3 4H5"/></svg> Erledigt! Nutze den Button unten, um zurück ins Cockpit zu gehen.
+    </div>
+
+    <button onclick="hostRestartGame()" class="w-full mt-3 py-3 px-4 jax-btn bg-[#ffd23f] text-[#1a1a2e] font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.9-3.5M4 13a8 8 0 0 0 14.9 3.5"/><path d="M5 4v4h4M19 20v-4h-4"/></svg> Spiel neu starten
+    </button>
+  </div>
+
+  <!-- ZURÜCK-INS-COCKPIT: bewusst unten rechts fixiert, damit er nicht aus Versehen getroffen wird -->
+  <button id="host-end-game-btn" onclick="triggerReturnCountdown()" class="hidden fixed bottom-4 right-4 z-30 py-3 px-4 jax-btn bg-[#ff2e93] text-white font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/></svg> Spiel beenden & zurück ins Cockpit
+  </button>
+
+  <!-- HAUPTBEREICH -->
+  <main class="relative z-10 my-auto max-w-2xl w-full mx-auto text-center space-y-6 py-6">
+
+    <div id="player-answer-area" class="space-y-6">
+      <div id="waiting-area" class="hidden jax-card-print p-10"></div>
+      <div id="guessing-area" class="hidden"></div>
+      <div id="result-area" class="hidden"></div>
+      <div id="evaluation-area" class="hidden"></div>
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="relative z-10 text-center text-xs text-white/20 pt-4">
+    <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9486-removebg-preview.png" class="inline-block h-4 w-4 align-middle mr-1 -mt-0.5" onerror="this.style.display='none'">Hirnschmalz-Arena • Schriftzug-Modus
+  </footer>
+
+  <!-- RÜCKKEHR-ZWISCHENSZENE -->
+  <div id="return-countdown-overlay" class="hidden fixed inset-0 bg-black z-[80] flex flex-col items-center justify-center">
+    <div class="text-amber-200/70 text-xs tracking-[0.3em] uppercase mb-4" style="font-family: Georgia, 'Times New Roman', serif;">Rückkehr ins Cockpit in</div>
+    <div id="return-countdown-number" class="text-amber-100 border-4 border-amber-200/40 rounded-full w-40 h-40 flex items-center justify-center text-6xl" style="font-family: Georgia, 'Times New Roman', serif;">5</div>
+  </div>
+
+
+  <img id="brain-logo" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9455-removebg-preview.png"
+    onclick="clickBrainLogo()" class="fixed bottom-2 left-2 h-8 md:h-10 w-auto z-30 cursor-pointer transition-transform hover:scale-110"
+    onerror="this.style.display='none'" alt="">
+</body>
+</html>

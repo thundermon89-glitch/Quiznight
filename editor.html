@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Fragen-Editor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .font-jax { font-family: 'Baloo 2', sans-serif; }
+
+    .jax-bg {
+      background: linear-gradient(120deg, #2b0f54, #7017c9, #ff2e93, #ff8a3d);
+      background-size: 300% 300%;
+      animation: gradientShift 20s ease infinite;
+    }
+    @keyframes gradientShift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+    .jax-card {
+      background: #ffffff;
+      border: 4px solid #1a1a2e;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(0,0,0,0.85);
+    }
+    .jax-card-dark {
+      background: #1a1a2e;
+      border: 4px solid #ffffff;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(0,0,0,0.5);
+      color: #ffffff;
+    }
+    .jax-chip {
+      border: 3px solid #1a1a2e;
+      border-radius: 9999px;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.85);
+    }
+    .jax-btn {
+      font-family: 'Baloo 2', sans-serif;
+      border: 3px solid #1a1a2e;
+      border-radius: 16px;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.85);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+    .jax-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .jax-input {
+      border: 3px solid #1a1a2e;
+      border-radius: 14px;
+      background: #ffffff;
+      color: #1a1a2e;
+      padding: 0.6rem 0.9rem;
+      font-weight: 600;
+    }
+    .jax-input:focus { outline: none; box-shadow: 0 0 0 3px #ffd23f; }
+
+    @keyframes bounceIn { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+    .jax-pop { animation: bounceIn 0.4s cubic-bezier(.34,1.56,.64,1); }
+
+    .game-tab {
+      border: 3px solid #1a1a2e;
+      border-radius: 16px;
+      box-shadow: 3px 3px 0 rgba(0,0,0,0.7);
+      transition: transform .1s ease;
+    }
+    .game-tab.active { background: #ffd23f; color: #1a1a2e; }
+    .game-tab.inactive { background: #ffffff; color: #1a1a2e; opacity: 0.5; cursor: not-allowed; }
+    .game-tab.selectable:hover { transform: translate(-1px,-1px); }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // ==== EIGENES ICON-SET (keine Emojis) ====
+    const ICONS = {
+      book: '<path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M6 3v16"/>',
+      plus: '<path d="M12 5v14M5 12h14"/>',
+      trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/>',
+      up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+      down: '<path d="M12 5v14M5 12l7 7 7-7"/>',
+      save: '<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h8V4"/><path d="M8 14h8v6H8z"/>',
+      bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+      folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+      exit: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/>',
+      check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
+      lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'
+    };
+    function icon(name, cls) {
+      return `<svg class="${cls || 'w-5 h-5'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+    }
+
+    // ==== SPIEL-KATALOG: welche Spiele haben einen (reinen Text-)Editor? ====
+    // Weitere Spiele lassen sich hier einfach ergänzen, sobald ihr Format nur aus Text besteht.
+    const GAMES = {
+      spiel1: {
+        label: "Spiel 1: Kreuzverhör",
+        formType: "quiz4",
+        correctLabel: "Richtige Antwort",
+        multiCorrect: true,
+        contentPath: "content/spiel1/questions",
+        templatesPath: "content/spiel1/templates",
+        blank: () => ({ question: "", options: ["", "", "", ""], correct: [0], points: 100 })
+      },
+      spiel7: {
+        label: "Spiel 7: Mythos-Check",
+        formType: "quiz4",
+        correctLabel: "Die Lüge",
+        multiCorrect: false,
+        contentPath: "content/spiel7/questions",
+        templatesPath: "content/spiel7/templates",
+        blank: () => ({ question: "", options: ["", "", "", ""], correct: 0, points: 150 })
+      },
+      spiel3: {
+        label: "Spiel 3: Schaf oder Wolf?",
+        formType: "quiz4",
+        correctLabel: "Richtige Antwort",
+        multiCorrect: false,
+        contentPath: "content/spiel3/questions",
+        templatesPath: "content/spiel3/templates",
+        blank: () => ({ question: "", options: ["", "", "", ""], correct: [0], points: 150 })
+      },
+      spiel5: {
+        label: "Spiel 5: Verpixelt!",
+        formType: "imageQa",
+        contentPath: "content/spiel5/questions",
+        templatesPath: "content/spiel5/templates",
+        blank: () => ({ imageUrl: "", answer: "" })
+      }
+    };
+    const COMING_SOON = [
+      "Spiel 2: Rätselfeuer", "Spiel 4: Pi mal Daumen",
+      "Spiel 6: Ohrwurm-Alarm", "Spiel 8: Schriftzug-Salat"
+    ];
+
+    let currentGameKey = "spiel1";
+    let items = [];       // aktuell im Editor bearbeitete Liste
+    let isDirty = false;
+
+    function markDirty() {
+      isDirty = true;
+      document.getElementById("save-status").innerHTML =
+        `<span class="text-[#ff2e93] font-jax font-bold">${icon('lock', 'w-4 h-4 inline -mt-1')} Ungespeicherte Änderungen</span>`;
+    }
+    function markSaved() {
+      isDirty = false;
+      document.getElementById("save-status").innerHTML =
+        `<span class="text-[#7ed957] font-jax font-bold">${icon('check', 'w-4 h-4 inline -mt-1')} Gespeichert</span>`;
+    }
+
+    window.addEventListener('beforeunload', (e) => {
+      if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    // ==== LADEN ====
+    function loadActiveContent() {
+      const game = GAMES[currentGameKey];
+      get(ref(db, game.contentPath)).then((snap) => {
+        const data = snap.val();
+        items = (Array.isArray(data) && data.length > 0) ? data : [game.blank()];
+        renderEditor();
+        markSaved();
+      });
+    }
+
+    function loadTemplateList() {
+      const game = GAMES[currentGameKey];
+      const select = document.getElementById("template-select");
+      get(ref(db, game.templatesPath)).then((snap) => {
+        const data = snap.val() || {};
+        const names = Object.keys(data);
+        select.innerHTML = '<option value="">Vorlage wählen...</option>' +
+          names.map(n => `<option value="${n}">${n}</option>`).join('');
+      });
+    }
+
+    window.loadTemplate = function() {
+      const select = document.getElementById("template-select");
+      const name = select.value;
+      if (!name) return;
+      if (isDirty && !confirm("Du hast ungespeicherte Änderungen - trotzdem die Vorlage laden und diese verwerfen?")) {
+        select.value = "";
+        return;
+      }
+      const game = GAMES[currentGameKey];
+      get(ref(db, game.templatesPath + '/' + name)).then((snap) => {
+        const data = snap.val();
+        if (Array.isArray(data) && data.length > 0) {
+          items = data;
+          renderEditor();
+          markDirty();
+        }
+      });
+    };
+
+    window.saveAsTemplate = function() {
+      document.getElementById("saveas-input").value = "";
+      document.getElementById("saveas-modal").classList.remove("hidden");
+      setTimeout(() => document.getElementById("saveas-input").focus(), 50);
+    };
+
+    window.closeSaveAsModal = () => document.getElementById("saveas-modal").classList.add("hidden");
+
+    window.confirmSaveAsTemplate = function() {
+      const name = document.getElementById("saveas-input").value.trim();
+      if (!name) return;
+      const game = GAMES[currentGameKey];
+      set(ref(db, game.templatesPath + '/' + name), items).then(() => {
+        loadTemplateList();
+        closeSaveAsModal();
+      });
+    };
+
+    // ==== SPEICHERN (macht die Fragen im Spiel aktiv) ====
+    window.saveActive = function() {
+      const game = GAMES[currentGameKey];
+      const cleaned = game.formType === 'imageQa'
+        ? items.filter(it => (it.imageUrl || "").trim().length > 0)
+        : items.filter(it => (it.question || "").trim().length > 0);
+      if (cleaned.length === 0) {
+        alert(game.formType === 'imageQa'
+          ? "Mindestens ein Bild wird benötigt, bevor gespeichert werden kann."
+          : "Mindestens eine Frage mit Text wird benötigt, bevor gespeichert werden kann.");
+        return;
+      }
+      set(ref(db, game.contentPath), cleaned).then(() => {
+        items = cleaned;
+        renderEditor();
+        markSaved();
+      });
+    };
+
+    // ==== BEARBEITEN ====
+    window.addQuestion = function() {
+      items.push(GAMES[currentGameKey].blank());
+      renderEditor();
+      markDirty();
+      setTimeout(() => {
+        const list = document.getElementById("question-list");
+        list.scrollTop = list.scrollHeight;
+      }, 50);
+    };
+
+    window.deleteQuestion = function(idx) {
+      if (!confirm("Diese Frage wirklich löschen?")) return;
+      items.splice(idx, 1);
+      renderEditor();
+      markDirty();
+    };
+
+    window.moveQuestion = function(idx, dir) {
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= items.length) return;
+      [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+      renderEditor();
+      markDirty();
+    };
+
+    window.updateField = function(idx, field, value) {
+      items[idx][field] = value;
+      markDirty();
+    };
+
+    window.updateOption = function(idx, optIdx, value) {
+      items[idx].options[optIdx] = value;
+      markDirty();
+    };
+
+    window.updateCorrect = function(idx, optIdx) {
+      const game = GAMES[currentGameKey];
+      if (game.multiCorrect) {
+        // Mehrfachauswahl: Klick schaltet diese Antwort im Array um (rein/raus)
+        let current = Array.isArray(items[idx].correct) ? items[idx].correct.slice() : [items[idx].correct];
+        const pos = current.indexOf(optIdx);
+        if (pos === -1) {
+          current.push(optIdx);
+        } else if (current.length > 1) {
+          current.splice(pos, 1); // mindestens eine richtige Antwort muss bestehen bleiben
+        }
+        items[idx].correct = current;
+      } else {
+        items[idx].correct = optIdx;
+      }
+      renderEditor();
+      markDirty();
+    };
+
+    window.updatePoints = function(idx, value) {
+      items[idx].points = parseInt(value, 10) || 0;
+      markDirty();
+    };
+
+    window.updatePenalty = function(idx, value) {
+      items[idx].penalty = parseInt(value, 10) || 0;
+      markDirty();
+    };
+
+    // ==== BILD-UPLOAD ====
+    // Bilder werden NICHT zu GitHub hochgeladen (dafür bräuchte es Zugangsdaten, die nicht ins
+    // Frontend gehören), sondern direkt als Bilddaten in Firebase gespeichert - das funktioniert
+    // aus Sicht des Spiels genauso wie eine normale Bild-URL. Damit die Datenbank nicht zu groß
+    // wird, werden Bilder vorher automatisch verkleinert.
+    const MAX_UPLOAD_DIMENSION = 900;
+    const UPLOAD_JPEG_QUALITY = 0.82;
+
+    window.handleImageUpload = function(idx, inputEl) {
+      const file = inputEl.files && inputEl.files[0];
+      if (!file) return;
+      const statusEl = document.getElementById("upload-status-" + idx);
+      if (statusEl) statusEl.innerText = "Bild wird verkleinert und hochgeladen...";
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > height && width > MAX_UPLOAD_DIMENSION) {
+            height = Math.round(height * (MAX_UPLOAD_DIMENSION / width));
+            width = MAX_UPLOAD_DIMENSION;
+          } else if (height > MAX_UPLOAD_DIMENSION) {
+            width = Math.round(width * (MAX_UPLOAD_DIMENSION / height));
+            height = MAX_UPLOAD_DIMENSION;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width; canvas.height = height;
+          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", UPLOAD_JPEG_QUALITY);
+
+          items[idx].imageUrl = dataUrl;
+          markDirty();
+          renderEditor();
+        };
+        img.onerror = () => { if (statusEl) statusEl.innerText = "Bild konnte nicht gelesen werden."; };
+        img.src = e.target.result;
+      };
+      reader.onerror = () => { if (statusEl) statusEl.innerText = "Datei konnte nicht gelesen werden."; };
+      reader.readAsDataURL(file);
+    };
+
+    // ==== RENDERN ====
+    function renderEditor() {
+      const game = GAMES[currentGameKey];
+      const list = document.getElementById("question-list");
+      if (game.formType === 'qa') list.innerHTML = renderQaList(game);
+      else if (game.formType === 'imageQa') list.innerHTML = renderImageQaList(game);
+      else list.innerHTML = renderQuiz4List(game);
+    }
+
+    function renderImageQaList(game) {
+      return items.map((q, idx) => `
+        <div class="jax-card p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="jax-chip bg-[#7017c9] text-white px-3 py-1 text-xs font-jax font-bold">Bild ${idx + 1}</div>
+            <div class="flex gap-1.5">
+              <button onclick="moveQuestion(${idx}, -1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === 0 ? 'disabled' : ''}>${icon('up', 'w-4 h-4')}</button>
+              <button onclick="moveQuestion(${idx}, 1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === items.length - 1 ? 'disabled' : ''}>${icon('down', 'w-4 h-4')}</button>
+              <button onclick="deleteQuestion(${idx})" class="w-8 h-8 jax-btn bg-[#ff2e93] text-white flex items-center justify-center">${icon('trash', 'w-4 h-4')}</button>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-4">
+            <div class="w-24 h-24 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
+              ${q.imageUrl
+                ? `<img src="${escapeAttr(q.imageUrl)}" class="w-full h-full object-cover" />`
+                : `<span class="text-[10px] text-[#1a1a2e]/40 text-center px-1">Kein Bild</span>`
+              }
+            </div>
+            <div class="flex-1 space-y-1">
+              <label class="jax-btn bg-white text-[#1a1a2e] px-3 py-2 text-xs font-jax font-bold inline-block cursor-pointer">
+                Bild hochladen
+                <input type="file" accept="image/*" class="hidden" onchange="handleImageUpload(${idx}, this)" />
+              </label>
+              <div id="upload-status-${idx}" class="text-[10px] text-[#1a1a2e]/50"></div>
+            </div>
+          </div>
+
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Lösung (nur der Host sieht das zur Kontrolle)</label>
+            <input type="text" value="${escapeAttr(q.answer || '')}" placeholder="z.B. Spieltitel eingeben..."
+              oninput="updateField(${idx}, 'answer', this.value)"
+              class="jax-input w-full mt-1 text-base" style="border-color:#7ed957;" />
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderQuiz4List(game) {
+      const optColors = ['#ff2e93', '#3ecbff', '#ffd23f', '#7ed957'];
+      return items.map((q, idx) => `
+        <div class="jax-card p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="jax-chip bg-[#7017c9] text-white px-3 py-1 text-xs font-jax font-bold">Frage ${idx + 1}</div>
+            <div class="flex gap-1.5">
+              <button onclick="moveQuestion(${idx}, -1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === 0 ? 'disabled' : ''}>${icon('up', 'w-4 h-4')}</button>
+              <button onclick="moveQuestion(${idx}, 1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === items.length - 1 ? 'disabled' : ''}>${icon('down', 'w-4 h-4')}</button>
+              <button onclick="deleteQuestion(${idx})" class="w-8 h-8 jax-btn bg-[#ff2e93] text-white flex items-center justify-center">${icon('trash', 'w-4 h-4')}</button>
+            </div>
+          </div>
+
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Frage</label>
+            <input type="text" value="${escapeAttr(q.question)}" placeholder="Fragetext eingeben..."
+              oninput="updateField(${idx}, 'question', this.value)"
+              class="jax-input w-full mt-1 text-base" />
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            ${[0,1,2,3].map(optIdx => {
+              const correctSet = Array.isArray(q.correct) ? q.correct : [q.correct];
+              const isCorrect = correctSet.includes(optIdx);
+              return `
+              <div class="flex items-center gap-2">
+                <button onclick="updateCorrect(${idx}, ${optIdx})"
+                  class="w-9 h-9 flex-shrink-0 jax-btn font-jax font-extrabold text-sm flex items-center justify-center"
+                  style="background:${isCorrect ? '#7ed957' : '#ffffff'}; color:#1a1a2e;"
+                  title="${game.correctLabel || 'Richtige Antwort'} ${game.multiCorrect ? 'umschalten' : 'markieren'}">
+                  ${isCorrect ? icon('check', 'w-4 h-4') : String.fromCharCode(65 + optIdx)}
+                </button>
+                <input type="text" value="${escapeAttr(q.options[optIdx] || '')}" placeholder="Antwort ${String.fromCharCode(65 + optIdx)}"
+                  oninput="updateOption(${idx}, ${optIdx}, this.value)"
+                  class="jax-input flex-1 text-sm" style="border-color: ${optColors[optIdx]};" />
+              </div>
+            `;}).join('')}
+          </div>
+          <div class="text-[11px] text-[#1a1a2e]/50">Grüner Haken = aktuell "${game.correctLabel || 'richtige Antwort'}". Klick auf einen Buchstaben, um sie ${game.multiCorrect ? 'ein- oder auszuschalten (auch mehrere gleichzeitig möglich)' : 'umzustellen'}.</div>
+
+          <div class="flex items-center gap-2">
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
+            <input type="number" value="${q.points ?? 100}" oninput="updatePoints(${idx}, this.value)"
+              class="jax-input w-24 text-sm" />
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderQaList(game) {
+      return items.map((q, idx) => `
+        <div class="jax-card p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="jax-chip bg-[#7017c9] text-white px-3 py-1 text-xs font-jax font-bold">Frage ${idx + 1}</div>
+            <div class="flex gap-1.5">
+              <button onclick="moveQuestion(${idx}, -1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === 0 ? 'disabled' : ''}>${icon('up', 'w-4 h-4')}</button>
+              <button onclick="moveQuestion(${idx}, 1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === items.length - 1 ? 'disabled' : ''}>${icon('down', 'w-4 h-4')}</button>
+              <button onclick="deleteQuestion(${idx})" class="w-8 h-8 jax-btn bg-[#ff2e93] text-white flex items-center justify-center">${icon('trash', 'w-4 h-4')}</button>
+            </div>
+          </div>
+
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Frage</label>
+            <input type="text" value="${escapeAttr(q.question)}" placeholder="Fragetext eingeben..."
+              oninput="updateField(${idx}, 'question', this.value)"
+              class="jax-input w-full mt-1 text-base" />
+          </div>
+
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Antwort (nur der Host sieht das zur Kontrolle)</label>
+            <input type="text" value="${escapeAttr(q.answer || '')}" placeholder="Richtige Antwort eingeben..."
+              oninput="updateField(${idx}, 'answer', this.value)"
+              class="jax-input w-full mt-1 text-base" style="border-color:#7ed957;" />
+          </div>
+
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+              <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte (richtig)</label>
+              <input type="number" value="${q.points ?? 100}" oninput="updatePoints(${idx}, this.value)"
+                class="jax-input w-24 text-sm" />
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Abzug (falsch)</label>
+              <input type="number" value="${q.penalty ?? 50}" oninput="updatePenalty(${idx}, this.value)"
+                class="jax-input w-24 text-sm" />
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function escapeAttr(str) {
+      return (str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    window.switchGame = function(key) {
+      if (key === currentGameKey) return;
+      if (isDirty && !confirm("Du hast ungespeicherte Änderungen bei diesem Spiel - trotzdem wechseln und sie verwerfen?")) return;
+      currentGameKey = key;
+      renderGameTabs();
+      loadActiveContent();
+      loadTemplateList();
+    };
+
+    function renderGameTabs() {
+      const wrap = document.getElementById("game-tabs");
+      const activeTabs = Object.keys(GAMES).map(key => {
+        const isActive = key === currentGameKey;
+        return `<button onclick="switchGame('${key}')" class="game-tab selectable ${isActive ? 'active' : ''} px-4 py-2 text-xs font-jax font-bold" style="${isActive ? '' : 'background:#ffffff;'}">${GAMES[key].label}</button>`;
+      }).join('');
+      const inactiveTabs = COMING_SOON.map(name => `<div class="game-tab inactive px-4 py-2 text-xs font-jax font-bold">${name} (bald)</div>`).join('');
+      wrap.innerHTML = activeTabs + inactiveTabs;
+    }
+
+    window.onload = () => {
+      renderGameTabs();
+      loadActiveContent();
+      loadTemplateList();
+    };
+  </script>
+</head>
+<body class="jax-bg text-white min-h-screen p-4 md:p-8">
+
+  <div class="max-w-3xl mx-auto space-y-6">
+
+    <!-- HEADER -->
+    <header class="jax-card p-5 flex items-center justify-between text-[#1a1a2e]">
+      <div class="flex items-center gap-3">        <span class="text-[#7017c9]"><svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M6 3v16"/></svg></span>
+        <div>
+          <h1 class="font-jax text-xl font-extrabold">FRAGEN-EDITOR</h1>
+          <div id="save-status" class="text-xs mt-0.5"></div>
+        </div>
+      </div>
+      <a href="admin-cockpit.html" class="jax-btn bg-white text-[#1a1a2e] px-4 py-2 text-xs font-jax font-bold flex items-center gap-1.5">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/></svg>
+        Zurück zum Cockpit
+      </a>
+    </header>
+
+    <!-- SPIEL-AUSWAHL -->
+    <div id="game-tabs" class="flex flex-wrap gap-2"></div>
+
+    <!-- VORLAGEN-LEISTE -->
+    <div class="jax-card-dark p-4 flex flex-wrap items-center gap-3">
+      <span class="text-xs font-jax font-bold text-[#ffd23f] flex items-center gap-1">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+        Vorlagen
+      </span>
+      <select id="template-select" onchange="loadTemplate()" class="jax-input text-sm py-2"></select>
+      <button onclick="saveAsTemplate()" class="jax-btn bg-[#ffd23f] text-[#1a1a2e] px-3 py-2 text-xs font-jax font-bold">
+        Aktuelle Liste als Vorlage speichern
+      </button>
+    </div>
+
+    <!-- FRAGEN-LISTE -->
+    <div id="question-list" class="space-y-4"></div>
+
+    <!-- AKTIONEN -->
+    <div class="flex flex-wrap gap-3 pb-8">
+      <button onclick="addQuestion()" class="jax-btn bg-white text-[#1a1a2e] px-5 py-3 text-sm font-jax font-bold flex items-center gap-1.5">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        Frage hinzufügen
+      </button>
+      <button onclick="saveActive()" class="jax-btn bg-[#7ed957] text-[#1a1a2e] px-5 py-3 text-sm font-jax font-bold flex items-center gap-1.5 ml-auto">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h8V4"/><path d="M8 14h8v6H8z"/></svg>
+        Speichern & im Spiel aktivieren
+      </button>
+    </div>
+
+  </div>
+
+  <!-- SPEICHERN UNTER -->
+  <div id="saveas-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="jax-card jax-pop p-6 w-full max-w-sm text-[#1a1a2e] space-y-4">
+      <div class="font-jax text-lg font-extrabold flex items-center gap-2">
+        <svg class="w-6 h-6 text-[#7017c9]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+        Speichern unter...
+      </div>
+      <div>
+        <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Name der Vorlage</label>
+        <input id="saveas-input" type="text" placeholder="z.B. 'Filmquiz', 'Runde 2'"
+          onkeydown="if(event.key==='Enter'){confirmSaveAsTemplate();}"
+          class="jax-input w-full mt-1 text-base" />
+      </div>
+      <div class="flex gap-2">
+        <button onclick="closeSaveAsModal()" class="flex-1 jax-btn bg-white text-[#1a1a2e] py-2.5 text-sm font-jax font-bold">Abbrechen</button>
+        <button onclick="confirmSaveAsTemplate()" class="flex-1 jax-btn bg-[#7ed957] text-[#1a1a2e] py-2.5 text-sm font-jax font-bold">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+
+  <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9455-removebg-preview.png" class="fixed bottom-2 left-2 h-16 md:h-20 w-auto z-30 pointer-events-none opacity-90" onerror="this.style.display='none'" alt="">
+</body>
+</html>

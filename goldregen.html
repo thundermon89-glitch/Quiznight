@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Goldregen</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Baloo 2', sans-serif; cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="11" fill="none" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="18" y1="1" x2="18" y2="9" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="18" y1="27" x2="18" y2="35" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="1" y1="18" x2="9" y2="18" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="27" y1="18" x2="35" y2="18" stroke="%23ff1a1a" stroke-width="2.5"/></svg>') 18 18, crosshair; }
+    .sky-bg {
+      background: radial-gradient(ellipse at top, #2b2050 0%, #0a0518 70%);
+    }
+    .jax-card {
+      background: #ffffff; border: 4px solid #1a1a2e; border-radius: 22px;
+      box-shadow: 7px 7px 0 rgba(0,0,0,0.85);
+    }
+    .jax-btn {
+      font-family: 'Baloo 2', sans-serif; border: 3px solid #1a1a2e; border-radius: 18px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85); transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+
+    @keyframes coinFallDown {
+      from { transform: translateY(-60px) rotate(0deg); }
+      to   { transform: translateY(110vh) rotate(720deg); }
+    }
+    .falling-coin {
+      position: fixed; top: 0; width: 54px; height: 54px;
+      z-index: 30; animation: coinFallDown linear forwards;
+      pointer-events: none; /* nur die Klickfläche unten soll klickbar sein, nicht das Bild */
+    }
+    .falling-coin img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+    .coin-hitbox {
+      position: absolute; top: -18px; left: -18px; right: -18px; bottom: -18px;
+      cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="11" fill="none" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="18" y1="1" x2="18" y2="9" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="18" y1="27" x2="18" y2="35" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="1" y1="18" x2="9" y2="18" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="27" y1="18" x2="35" y2="18" stroke="%23ff1a1a" stroke-width="2.5"/></svg>') 18 18, crosshair;
+      pointer-events: auto; z-index: 31;
+      border-radius: 50%;
+      /* unsichtbar, aber deutlich größer als die Münze selbst - leichter zu treffen,
+         auch wenn mehrere gleichzeitig danach klicken */
+    }
+
+    @keyframes coinPointsPop {
+      0%   { transform: translateY(0) scale(0.6); opacity: 0; }
+      20%  { transform: translateY(-10px) scale(1.2); opacity: 1; }
+      100% { transform: translateY(-50px) scale(1); opacity: 0; }
+    }
+    .coin-points-pop {
+      position: fixed; z-index: 40; pointer-events: none;
+      font-weight: 800; font-size: 22px; color: #ffd23f;
+      text-shadow: 2px 2px 0 #1a1006, -2px -2px 0 #1a1006, 2px -2px 0 #1a1006, -2px 2px 0 #1a1006;
+      animation: coinPointsPop 0.9s ease-out forwards;
+    }
+
+    @keyframes titlePop {
+      0% { transform: scale(0.3); opacity: 0; }
+      60% { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .title-pop { animation: titlePop 0.6s cubic-bezier(.34,1.56,.64,1); }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, get, set, update, push, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const COIN_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/mario-coins.gif";
+    const COIN_POINTS = 2;
+    const RAIN_DURATION_MS = 30000;
+    const COIN_FALL_MS = 4200;
+    const SPAWN_INTERVAL_MS = 380;
+
+    let playerId = localStorage.getItem("quiz_player_id");
+    let isHost = false;
+    let allPlayers = {};
+    let renderedCoinIds = new Set();
+    let spawnIntervalHandle = null;
+    let endTimeoutHandle = null;
+
+    onValue(ref(db, 'players/'), (snap) => { allPlayers = snap.val() || {}; });
+
+    // NAVIGATION: sobald der Host alle zurückholt, folgen alle automatisch
+    onValue(ref(db, 'gameState'), (snap) => {
+      const gs = snap.val();
+      if (gs && gs.status && gs.status !== 'in_game') {
+        window.location.href = gs.status === 'waiting' ? "index.html" : "cockpit.html";
+      }
+    });
+
+    function renderCoin(coinId, coinData) {
+      if (renderedCoinIds.has(coinId)) return;
+      renderedCoinIds.add(coinId);
+      const layer = document.getElementById("coin-layer");
+      if (!layer) return;
+
+      const elapsed = Date.now() - coinData.spawnedAt;
+      if (elapsed >= COIN_FALL_MS || coinData.caughtBy) return; // schon vorbei, keiner hat sie gefangen
+
+      const el = document.createElement("div");
+      el.className = "falling-coin";
+      el.style.left = coinData.x + "%";
+      el.style.animationDuration = (COIN_FALL_MS - elapsed) + "ms";
+      el.innerHTML = `<img src="${COIN_URL}"><div class="coin-hitbox"></div>`;
+      el.querySelector(".coin-hitbox").onclick = (e) => catchCoin(coinId, e);
+      layer.appendChild(el);
+      setTimeout(() => { if (el.parentNode) el.remove(); }, COIN_FALL_MS - elapsed + 100);
+    }
+
+    window.catchCoin = function(coinId, evt) {
+      runTransaction(ref(db, 'goldregenState/coins/' + coinId), (current) => {
+        if (!current || current.caughtBy) return current;
+        current.caughtBy = playerId;
+        return current;
+      }).then((result) => {
+        const val = result && result.snapshot && result.snapshot.val();
+        if (result.committed && val && val.caughtBy === playerId) {
+          if (evt && evt.target) {
+            const rect = evt.target.getBoundingClientRect();
+            const pop = document.createElement("div");
+            pop.className = "coin-points-pop";
+            pop.style.left = (rect.left + rect.width / 2 - 20) + "px";
+            pop.style.top = (rect.top) + "px";
+            pop.innerText = "+" + COIN_POINTS;
+            document.body.appendChild(pop);
+            setTimeout(() => pop.remove(), 900);
+            if (evt.target.parentElement) evt.target.parentElement.remove();
+          }
+          // Echte Transaktionen statt "lesen, dann schreiben" - sonst gehen Punkte verloren,
+          // wenn kurz hintereinander mehrere Münzen gefangen werden (klassisches Wettlauf-
+          // Problem: zwei Vorgänge lesen denselben alten Stand und überschreiben sich gegenseitig).
+          runTransaction(ref(db, 'players/' + playerId + '/score'), (currentScore) => {
+            return (currentScore || 0) + COIN_POINTS;
+          });
+          runTransaction(ref(db, 'goldregenState/tally/' + playerId), (currentTally) => {
+            return (currentTally || 0) + 1;
+          });
+          get(ref(db, 'players/' + playerId + '/name')).then((nameSnap) => {
+            push(ref(db, 'gameLog'), {
+              text: '🪙 ' + (nameSnap.val() || 'Jemand') + ' hat eine Goldregen-Münze gefangen: +' + COIN_POINTS + ' Punkte',
+              at: Date.now()
+            });
+          });
+        }
+      });
+    };
+
+    function renderResults() {
+      get(ref(db, 'goldregenState/tally')).then((snap) => {
+        const tally = snap.val() || {};
+        const ids = Object.keys(allPlayers).filter(id => {
+          const n = allPlayers[id] && allPlayers[id].name;
+          return n && !n.includes("Host") && !n.includes("Admin");
+        });
+        const sorted = ids.sort((a, b) => (tally[b] || 0) - (tally[a] || 0));
+        document.getElementById("results-list").innerHTML = sorted.map(id => `
+          <div class="flex items-center justify-between jax-card px-5 py-3">
+            <span class="font-extrabold text-[#1a1a2e]">${allPlayers[id].name}</span>
+            <span class="text-[#7017c9] font-extrabold">${tally[id] || 0} Münzen · +${(tally[id] || 0) * COIN_POINTS} Pkt.</span>
+          </div>
+        `).join('') || `<div class="text-white/50">Niemand hat eine Münze erwischt...</div>`;
+      });
+    }
+
+    onValue(ref(db, 'goldregenState'), (snap) => {
+      const state = snap.val() || {};
+      const rainArea = document.getElementById("rain-area");
+      const resultArea = document.getElementById("result-area");
+
+      if (state.status === 'finished') {
+        rainArea.classList.add("hidden");
+        resultArea.classList.remove("hidden");
+        renderResults();
+        if (isHost) document.getElementById("host-end-btn").classList.remove("hidden");
+        return;
+      }
+
+      rainArea.classList.remove("hidden");
+      resultArea.classList.add("hidden");
+
+      const coins = state.coins || {};
+      Object.keys(coins).forEach(coinId => renderCoin(coinId, coins[coinId]));
+    });
+
+    window.hostEndGoldregen = function() {
+      set(ref(db, 'goldregenState'), null);
+      update(ref(db, 'gameState'), { status: 'cockpit' });
+    };
+
+    window.onload = () => {
+      if (!playerId) { window.location.href = "index.html"; return; }
+      get(ref(db, 'players/' + playerId)).then((snap) => {
+        const data = snap.val();
+        if (data && data.name && (data.name.includes("Host") || data.name.includes("Admin"))) {
+          isHost = true;
+          document.getElementById("host-end-btn")?.classList.remove("hidden");
+          // Nur der Host treibt das Spawnen der Münzen an - aber nur, wenn er es nicht schon
+          // selbst tut (z.B. bei Seiten-Neuladen mitten im Regen), daher Prüfung auf Startzeit.
+          get(ref(db, 'goldregenState/startedAt')).then((s) => {
+            const startedAt = s.val();
+            if (startedAt) {
+              const remaining = RAIN_DURATION_MS - (Date.now() - startedAt);
+              if (remaining > 0) {
+                spawnIntervalHandle = setInterval(() => {
+                  const x = 5 + Math.random() * 88;
+                  push(ref(db, 'goldregenState/coins'), { x, spawnedAt: Date.now(), caughtBy: null });
+                }, SPAWN_INTERVAL_MS);
+                endTimeoutHandle = setTimeout(() => {
+                  clearInterval(spawnIntervalHandle);
+                  update(ref(db, 'goldregenState'), { status: 'finished' });
+                }, remaining);
+              } else {
+                update(ref(db, 'goldregenState'), { status: 'finished' });
+              }
+            }
+          });
+        }
+      });
+    };
+  </script>
+</head>
+<body class="sky-bg text-white min-h-screen flex flex-col items-center justify-center p-4 overflow-hidden relative select-none">
+
+  <div id="coin-layer" class="fixed inset-0 pointer-events-none z-20"></div>
+
+  <div id="rain-area" class="relative z-10 text-center">
+    <h1 class="font-jax text-3xl md:text-5xl font-extrabold text-[#ffd23f] title-pop" style="text-shadow: 3px 3px 0 #1a1006, -3px -3px 0 #1a1006, 3px -3px 0 #1a1006, -3px 3px 0 #1a1006;">
+      🪙 GOLDREGEN! 🪙
+    </h1>
+    <p class="text-white/70 text-sm mt-2">Schnapp so viele Münzen wie du kannst - jede gibt +2 Punkte!</p>
+  </div>
+
+  <div id="result-area" class="hidden relative z-10 text-center w-full max-w-md space-y-4">
+    <h1 class="font-jax text-2xl md:text-4xl font-extrabold text-[#ffd23f] title-pop" style="text-shadow: 3px 3px 0 #1a1006, -3px -3px 0 #1a1006, 3px -3px 0 #1a1006, -3px 3px 0 #1a1006;">
+      🏁 Goldregen vorbei!
+    </h1>
+    <div id="results-list" class="space-y-2"></div>
+    <button id="host-end-btn" onclick="hostEndGoldregen()" class="hidden jax-btn bg-[#ff2e93] text-white font-jax font-bold px-6 py-3 mt-4">
+      Alle zurück ins Cockpit
+    </button>
+  </div>
+
+</body>
+</html>

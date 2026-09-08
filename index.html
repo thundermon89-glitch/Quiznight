@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Lobby</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .win95-box {
+      background-color: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-right: 2px solid #000000;
+      border-bottom: 2px solid #000000;
+      box-shadow: inset 1px 1px 0px #dfdfdf, inset -1px -1px 0px #808080;
+    }
+    .win95-inbox {
+      background-color: #ffffff;
+      border-top: 2px solid #808080;
+      border-left: 2px solid #808080;
+      border-right: 2px solid #ffffff;
+      border-bottom: 2px solid #ffffff;
+    }
+    .win95-btn {
+      background-color: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-right: 2px solid #000000;
+      border-bottom: 2px solid #000000;
+      font-family: "MS Sans Serif", Tahoma, sans-serif;
+    }
+    .win95-btn:active {
+      border-top: 2px solid #000000;
+      border-left: 2px solid #000000;
+      border-right: 2px solid #ffffff;
+      border-bottom: 2px solid #ffffff;
+      padding-top: 2px;
+      padding-left: 2px;
+    }
+    .player-select-item {
+      cursor: pointer;
+      user-select: none;
+    }
+    .player-select-item:hover {
+      background-color: #000080;
+      color: #ffffff;
+    }
+    @keyframes stefanZoomJudder {
+      from { transform: scale(0.12); }
+      to { transform: scale(3.2); }
+    }
+    #stefan-image { animation-timing-function: steps(6, end); }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, update, remove, onValue, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Persönliches Avatar-Bild pro Spieler (linkes, großes Bild im Cockpit)
+    const customAvatarUrls = {
+      "cCc": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/ccc.png",
+      "breekibree": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/breeki.png",
+      "Holzkohle": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/Holzkohle.png",
+      "skywalker161": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/sky.png",
+      "Santax": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/santa.png",
+      "Sörn1989": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/s%C3%B6rn.png",
+      "Stefan": "https://api.dicebear.com/7.x/bottts/svg?seed=Stefan"
+    };
+
+    // Namen-/Clan-Tag pro Spieler (mittiges, klickbares Abzeichen im Cockpit mit Bonus-Funktion)
+    const clanTagUrls = {
+      "cCc": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/CCC.png",
+      "breekibree": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/Breeki.png",
+      "Holzkohle": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/Tank.png",
+      "skywalker161": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/Sky.png",
+      "Santax": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/santa.png",
+      "Sörn1989": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/S%C3%B6rn.png"
+    };
+
+    // Kopf-Bild pro Spieler (freigestellt) - wird NUR bei der Siegerehrung verwendet
+    // (Rakete/Podest am Ende des Abends), nicht im normalen Cockpit.
+    const headImageUrls = {
+      "Sörn1989": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9456-removebg-preview.png",
+      "Santax": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9457-removebg-preview.png",
+      "cCc": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9458-removebg-preview.png",
+      "Holzkohle": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9459-removebg-preview.png",
+      "skywalker161": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9460-removebg-preview.png",
+      "breekibree": "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9461-removebg-preview.png"
+    };
+
+    let playerId = localStorage.getItem("quiz_player_id");
+    if (!playerId) {
+      playerId = "player_" + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem("quiz_player_id", playerId);
+    }
+
+    let isHost = false;
+
+    function hideAllScreens() {
+      document.getElementById("login-screen").classList.add("hidden");
+      document.getElementById("lobby-screen").classList.add("hidden");
+      document.getElementById("countdown-screen").classList.add("hidden");
+      document.getElementById("bsod-screen").classList.add("hidden");
+    }
+
+    function showLobbyUI() {
+      hideAllScreens();
+      document.getElementById("lobby-screen").classList.remove("hidden");
+      document.getElementById("host-btn-trigger").classList.remove("hidden");
+      if (isHost) {
+        document.getElementById("host-menu-wrapper").classList.remove("hidden");
+      } else {
+        document.getElementById("host-menu-wrapper").classList.add("hidden");
+      }
+      setTimeout(resizeCanvases, 50);
+    }
+
+    function showLoginUI() {
+      hideAllScreens();
+      document.getElementById("login-screen").classList.remove("hidden");
+      document.getElementById("host-btn-trigger").classList.remove("hidden");
+      document.getElementById("host-menu-wrapper").classList.add("hidden");
+      document.getElementById("host-dropdown").classList.add("hidden");
+      isHost = false;
+    }
+
+    window.joinLobby = function() {
+      const nameInput = document.getElementById("username").value.trim();
+      if (!nameInput) return alert("Bitte gib einen Namen ein!");
+      const avatarUrl = customAvatarUrls[nameInput] || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(nameInput)}`;
+      savePlayerToFirebase(nameInput, avatarUrl, clanTagUrls[nameInput] || null, headImageUrls[nameInput] || null);
+    };
+
+    window.selectPresetPlayer = function(name) {
+      if (confirm(`Bist du sicher, dass du ${name} bist?`)) {
+        if (name === "Stefan") {
+          // Stefan ist NUR ein Spaß-Easteregg - wird NICHT als echter Spieler angemeldet
+          playStefanEasterEgg(() => {});
+          return;
+        }
+        const avatarUrl = customAvatarUrls[name] || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`;
+        savePlayerToFirebase(name, avatarUrl, clanTagUrls[name] || null, headImageUrls[name] || null);
+      }
+    };
+
+    // Stefan-Easteregg: Bild ruckelt in 6 groben Schritten (steps(6,end) = keine sanfte
+    // Überblendung, sondern harte Sprünge) bis es den Bildschirm ausfüllt, dann verschwindet
+    // es wieder. Der NÄCHSTE Spieler, der sich danach anmeldet, bekommt +20 Punkte geschenkt.
+    function playStefanEasterEgg(callback) {
+      const overlay = document.getElementById("stefan-overlay");
+      const img = document.getElementById("stefan-image");
+      if (!overlay || !img) { callback(); return; }
+      overlay.classList.remove("hidden");
+      img.style.animation = "none";
+      void img.offsetWidth;
+      img.style.animation = "stefanZoomJudder 1.8s steps(6, end) forwards";
+      setTimeout(() => {
+        overlay.classList.add("hidden");
+        set(ref(db, 'gameState/stefanEasterEggPending'), true);
+        callback();
+      }, 2100);
+    }
+
+    function savePlayerToFirebase(name, avatarUrl, clanTagUrl, headUrl) {
+      set(ref(db, 'players/' + playerId), {
+        name: name,
+        avatar: avatarUrl,
+        clanTag: clanTagUrl,
+        head: headUrl,
+        score: 0,
+        isReady: false
+      }).then(() => {
+        // Falls direkt vorher Stefan gewählt wurde: dieser Spieler bekommt jetzt den Bonus
+        if (name !== "Stefan") {
+          get(ref(db, 'gameState/stefanEasterEggPending')).then((snap) => {
+            if (snap.val()) {
+              set(ref(db, 'gameState/stefanEasterEggPending'), null);
+              update(ref(db, 'players/' + playerId), { score: 20 });
+            }
+          });
+        }
+        showLobbyUI();
+      }).catch((err) => {
+        alert("Fehler beim Speichern: " + err.message);
+      });
+    }
+
+    window.leaveLobby = function() {
+      if (confirm("Möchtest du die Lobby verlassen?")) {
+        remove(ref(db, 'players/' + playerId)).then(() => {
+          showLoginUI();
+        });
+      }
+    };
+
+    window.openClanwarsFolder = () => document.getElementById("clanwars-window").classList.remove("hidden");
+    window.closeClanwarsFolder = () => document.getElementById("clanwars-window").classList.add("hidden");
+
+    window.openHostAuth = () => {
+      document.getElementById("host-auth-window").classList.remove("hidden");
+      document.getElementById("host-pin").value = "";
+    };
+    window.closeHostAuth = () => document.getElementById("host-auth-window").classList.add("hidden");
+
+    window.loginHost = function() {
+      const pin = document.getElementById("host-pin").value.trim();
+      if (pin === "2123") {
+        isHost = true;
+        closeHostAuth();
+        const hostAvatar = "https://api.dicebear.com/7.x/bottts/svg?seed=CrownHostAdmin";
+        savePlayerToFirebase("👑 Host (Admin)", hostAvatar, null, null);
+      } else {
+        alert("Falsches Passwort!");
+      }
+    };
+
+    window.clearLobby = function() {
+      if (confirm("Möchtest du wirklich alle Spieler kicken und die Lobby leeren?")) {
+        set(ref(db, 'gameState'), { status: 'waiting' });
+        remove(ref(db, 'players/'));
+      }
+    };
+
+    // Host startet das Spiel für ALLE (wechselt zu Countdown -> BSOD -> Cockpit)
+    window.startGameSequence = function() {
+      set(ref(db, 'gameState'), {
+        status: 'starting',
+        startTime: Date.now()
+      });
+    };
+
+    let countdownInterval = null;
+    function runMatrixCountdown(startTime) {
+      hideAllScreens();
+      document.getElementById("countdown-screen").classList.remove("hidden");
+
+      const timerEl = document.getElementById("matrix-timer");
+      const textEl = document.getElementById("matrix-subtext");
+      const texts = [
+        "Schnittstellenmetik auf 12,5 stellen",
+        "Ladebalken wird geladen...",
+        "Hamachi verbindet sich mit Direkt-Tunnel...",
+        "Passwort Eingabe: BoosterX"
+      ];
+
+      if (countdownInterval) clearInterval(countdownInterval);
+
+      countdownInterval = setInterval(() => {
+        const now = Date.now();
+        const elapsed = now - startTime;
+        const remaining = Math.max(0, 6000 - elapsed);
+
+        const seconds = Math.floor(remaining / 1000);
+        const millis = Math.floor(remaining % 1000).toString().padStart(3, '0');
+        timerEl.innerText = `${seconds}.${millis}s`;
+
+        const textIndex = Math.min(3, Math.floor(elapsed / 1500));
+        textEl.innerText = texts[textIndex] || texts[3];
+
+        if (remaining <= 0) {
+          clearInterval(countdownInterval);
+          triggerBlueScreen();
+        }
+      }, 30);
+    }
+
+    function triggerBlueScreen() {
+      hideAllScreens();
+      document.getElementById("bsod-screen").classList.remove("hidden");
+
+      // gameState zurücksetzen, damit 'starting' nicht ewig hängen bleibt
+      // (sonst würde jeder künftige Seitenaufruf sofort wieder in die Sequenz springen)
+      update(ref(db, 'gameState'), { status: 'cockpit' }).catch(() => {});
+
+      // Nach dem Bluescreen direkt weiterleiten ins Cockpit!
+      setTimeout(() => {
+        window.location.href = "cockpit.html";
+      }, 2000);
+    }
+
+    let balls = {};
+    const radius = 30;
+    const gamingWords = ["Gank", "Nerf", "Buff", "RNG", "Aggro", "Hitbox", "Framedata", "Speedrun", "Min-Maxing", "Theorycrafting", "POG", "Sweat", "Tryhard", "Salt", "Tilt", "Kiting", "Zoning", "DPS", "AOE", "DoT", "Smurf", "AFK", "Meta", "Git Gud", "Wallbang", "Quickscope", "Bunnyhop", "Strafe", "Respawn", "Lag", "Ping", "FPS", "Elo", "MMR", "Clutch", "Ace", "Noob"];
+    let matrixColumns = [];
+    const colWidth = 55;
+    const fontSize = 32;
+
+    function resizeCanvases() {
+      const matrixCanvas = document.getElementById("screensaver");
+      const ballCanvas = document.getElementById("ball-canvas");
+      const activeArea = document.getElementById("ball-area");
+
+      if (matrixCanvas) {
+        matrixCanvas.width = window.innerWidth;
+        matrixCanvas.height = window.innerHeight;
+        const columns = Math.floor(matrixCanvas.width / colWidth);
+        matrixColumns = [];
+        for (let i = 0; i < columns; i++) {
+          matrixColumns.push({
+            x: i * colWidth + 20,
+            y: Math.random() * -600,
+            speed: Math.random() * 2 + 1.5,
+            word: gamingWords[Math.floor(Math.random() * gamingWords.length)]
+          });
+        }
+      }
+
+      if (ballCanvas && activeArea) {
+        ballCanvas.width = activeArea.clientWidth;
+        ballCanvas.height = activeArea.clientHeight;
+      }
+    }
+
+    function startCanvasLogic() {
+      const matrixCanvas = document.getElementById("screensaver");
+      const matrixCtx = matrixCanvas.getContext("2d");
+      const ballCanvas = document.getElementById("ball-canvas");
+      const ballCtx = ballCanvas.getContext("2d");
+
+      resizeCanvases();
+      window.addEventListener("resize", resizeCanvases);
+
+      function animate() {
+        matrixCtx.fillStyle = "rgba(0, 0, 0, 0.2)";
+        matrixCtx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
+        matrixCtx.font = `900 ${fontSize}px sans-serif`;
+        
+        for (let i = 0; i < matrixColumns.length; i++) {
+          const col = matrixColumns[i];
+          matrixCtx.save();
+          matrixCtx.translate(col.x, col.y);
+          matrixCtx.rotate(Math.PI / 2);
+          matrixCtx.fillStyle = "#22c55e";
+          matrixCtx.shadowColor = "#22c55e";
+          matrixCtx.shadowBlur = 8;
+          matrixCtx.fillText(col.word, 0, 0);
+          matrixCtx.restore();
+
+          col.y += col.speed * 2;
+          if (col.y > matrixCanvas.height + 250) {
+            col.y = Math.random() * -300 - 100;
+            col.speed = Math.random() * 2 + 1.5;
+            col.word = gamingWords[Math.floor(Math.random() * gamingWords.length)];
+          }
+        }
+
+        if (ballCanvas && ballCanvas.width > 0 && ballCanvas.height > 0) {
+          ballCtx.clearRect(0, 0, ballCanvas.width, ballCanvas.height);
+
+          for (let id in balls) {
+            let b = balls[id];
+            b.x += b.vx; b.y += b.vy;
+            if (b.x - radius < 0) { b.x = radius; b.vx *= -1; }
+            if (b.x + radius > ballCanvas.width) { b.x = ballCanvas.width - radius; b.vx *= -1; }
+            if (b.y - radius < 0) { b.y = radius; b.vy *= -1; }
+            if (b.y + radius > ballCanvas.height) { b.y = ballCanvas.height - radius; b.vy *= -1; }
+            b.angle += b.spin;
+
+            ballCtx.save();
+            ballCtx.translate(b.x, b.y);
+            ballCtx.rotate(b.angle);
+            ballCtx.beginPath();
+            ballCtx.arc(0, 0, radius, 0, Math.PI * 2);
+            ballCtx.fillStyle = "#ffffff";
+            ballCtx.fill();
+            ballCtx.lineWidth = 3;
+            ballCtx.strokeStyle = "#000080";
+            ballCtx.stroke();
+            ballCtx.clip();
+
+            if (b.img && b.img.complete) {
+              ballCtx.drawImage(b.img, -radius, -radius, radius * 2, radius * 2);
+            }
+            ballCtx.restore();
+
+            ballCtx.fillStyle = "#000000";
+            ballCtx.font = "bold 11px Tahoma, sans-serif";
+            ballCtx.textAlign = "center";
+            ballCtx.fillText(b.name, b.x, b.y + radius + 13);
+          }
+        }
+        requestAnimationFrame(animate);
+      }
+      animate();
+    }
+
+    window.onload = () => {
+      startCanvasLogic();
+      get(ref(db, 'players/' + playerId)).then((snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          if (data.name.includes("Host")) isHost = true;
+          showLobbyUI();
+        } else {
+          showLoginUI();
+        }
+      });
+    };
+
+    onValue(ref(db, 'gameState'), (snapshot) => {
+      const state = snapshot.val();
+      // Nur reagieren, wenn die Start-Sequenz WIRKLICH gerade läuft (max. 8s alt).
+      // Verhindert, dass ein alter/hängengebliebener 'starting'-Zustand jeden künftigen
+      // Seitenaufruf sofort in den Countdown/BSOD/Cockpit-Sprung katapultiert.
+      if (state && state.status === 'starting' && (Date.now() - (state.startTime || 0)) < 8000) {
+        runMatrixCountdown(state.startTime);
+      }
+    });
+
+    onValue(ref(db, 'players/'), (snapshot) => {
+      const players = snapshot.val() || {};
+      const ballArea = document.getElementById("ball-area");
+      const w = (ballArea && ballArea.clientWidth > 0) ? ballArea.clientWidth : 500;
+      const h = (ballArea && ballArea.clientHeight > 0) ? ballArea.clientHeight : 300;
+
+      for (let id in players) {
+        if (!balls[id]) {
+          const img = new Image();
+          img.src = players[id].avatar;
+          let vx = (Math.random() - 0.5) * 4;
+          let vy = (Math.random() - 0.5) * 4;
+          if (Math.abs(vx) < 1) vx = 2;
+          if (Math.abs(vy) < 1) vy = -2;
+
+          balls[id] = {
+            name: players[id].name,
+            img: img,
+            x: Math.random() * (w - 100) + 50,
+            y: Math.random() * (h - 100) + 50,
+            vx: vx, vy: vy,
+            angle: 0, spin: (Math.random() - 0.5) * 0.03
+          };
+        } else {
+          balls[id].name = players[id].name;
+        }
+      }
+
+      for (let id in balls) {
+        if (!players[id]) delete balls[id];
+      }
+    });
+  </script>
+</head>
+<body class="bg-black text-black min-h-screen flex items-center justify-center p-4 overflow-hidden relative select-none">
+  <canvas id="screensaver" class="fixed inset-0 w-full h-full pointer-events-none z-0"></canvas>
+
+  <div id="host-btn-trigger" onclick="openHostAuth()" class="fixed top-4 left-4 z-30 flex items-center space-x-2 cursor-pointer bg-black/60 p-2 rounded-lg border border-yellow-500 hover:bg-black/80 transition">
+    <span class="text-3xl">👑</span>
+    <span class="text-yellow-400 font-bold text-sm">Host Login</span>
+  </div>
+
+  <div id="host-menu-wrapper" class="hidden fixed top-16 left-4 z-30">
+    <div class="win95-box p-1 w-64 shadow-2xl">
+      <div class="bg-[#000080] text-white px-2 py-1 flex justify-between items-center font-bold text-xs">
+        <span>👑 Host Admin Panel</span>
+        <button onclick="document.getElementById('host-menu-wrapper').classList.add('hidden')" class="win95-btn text-black px-1 py-0.5 font-bold leading-none">X</button>
+      </div>
+      <div class="p-2 space-y-2 bg-[#c0c0c0]">
+        <button onclick="startGameSequence()" class="w-full win95-btn bg-green-200 hover:bg-green-300 text-black py-1.5 px-2 text-xs font-bold text-left flex items-center space-x-1">
+          <span>🚀</span><span>Spiel starten (Ins Cockpit)</span>
+        </button>
+        <button onclick="clearLobby()" class="w-full win95-btn bg-red-200 hover:bg-red-300 text-black py-1.5 px-2 text-xs font-bold text-left flex items-center space-x-1">
+          <span>🗑️</span><span>Lobby leeren / Alle kicken</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="login-screen" class="z-10 win95-box p-1 w-full max-w-md">
+    <div class="bg-[#000080] text-white px-2 py-1 flex justify-between items-center font-bold text-sm">
+      <div class="flex items-center space-x-2"><span>🎯</span><span>Quiz_Anmeldung.exe</span></div>
+    </div>
+    <div class="p-4 space-y-4">
+      <div onclick="openClanwarsFolder()" class="flex items-center space-x-3 win95-inbox p-2 cursor-pointer hover:bg-gray-200">
+        <span class="text-3xl">📁</span>
+        <div>
+          <div class="text-xs font-bold text-black">SEK clanwars</div>
+          <div class="text-[10px] text-gray-600">Ordner klicken zum Öffnen...</div>
+        </div>
+      </div>
+      <hr class="border-gray-400">
+      <div>
+        <label class="block text-xs font-bold text-black mb-1">Schnellauswahl:</label>
+        <div class="win95-inbox p-1 text-xs space-y-0.5">
+          <div ondblclick="selectPresetPlayer('cCc')" class="player-select-item p-1">cCc</div>
+          <div ondblclick="selectPresetPlayer('breekibree')" class="player-select-item p-1">breekibree</div>
+          <div ondblclick="selectPresetPlayer('Holzkohle')" class="player-select-item p-1">Holzkohle</div>
+          <div ondblclick="selectPresetPlayer('skywalker161')" class="player-select-item p-1">skywalker161</div>
+          <div ondblclick="selectPresetPlayer('Santax')" class="player-select-item p-1">Santax</div>
+          <div ondblclick="selectPresetPlayer('Sörn1989')" class="player-select-item p-1">Sörn1989</div>
+          <div ondblclick="selectPresetPlayer('Stefan')" class="player-select-item p-1">Stefan</div>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-black mb-1">Oder Eigener Spielername:</label>
+        <input id="username" type="text" placeholder="Name eingeben..." class="win95-inbox w-full p-1.5 text-sm text-black outline-none">
+      </div>
+      <div class="flex justify-end pt-1">
+        <button onclick="joinLobby()" class="win95-btn px-4 py-1 text-xs font-bold text-black">OK (Beitreten)</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="host-auth-window" class="hidden z-40 fixed win95-box p-1 w-80">
+    <div class="bg-[#000080] text-white px-2 py-1 flex justify-between items-center font-bold text-sm">
+      <span>👑 Host Authentifizierung</span>
+      <button onclick="closeHostAuth()" class="win95-btn text-black px-1.5 py-0.5 text-xs font-bold leading-none">X</button>
+    </div>
+    <div class="p-4 space-y-3">
+      <input id="host-pin" type="password" placeholder="Passwort..." class="win95-inbox w-full p-1.5 text-sm text-black outline-none">
+      <div class="flex justify-end space-x-2 pt-2">
+        <button onclick="loginHost()" class="win95-btn px-4 py-1 text-xs font-bold text-black">Login</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="clanwars-window" class="hidden z-20 fixed win95-box p-1 w-full max-w-md top-1/4">
+    <div class="bg-[#000080] text-white px-2 py-1 flex justify-between items-center font-bold text-sm">
+      <span>📁 C:\SEK_Clanwars</span>
+      <button onclick="closeClanwarsFolder()" class="win95-btn text-black px-1.5 py-0.5 text-xs font-bold leading-none">X</button>
+    </div>
+    <div class="p-4 space-y-3">
+      <div class="win95-inbox p-3 h-32 text-xs space-y-2 overflow-y-auto">
+        <p>🏆 <strong>Match_2026_01.demo</strong></p>
+        <p>📋 <strong>Taktik_Dust2.txt</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="lobby-screen" class="hidden z-10 win95-box p-1 w-full max-w-5xl h-[650px] flex flex-col">
+    <div class="bg-[#000080] text-white px-2 py-1 flex justify-between items-center font-bold text-sm">
+      <span>🌐 Quiz_Lobby_Server_v1.0.exe</span>
+      <button onclick="leaveLobby()" class="win95-btn text-black px-1.5 py-0.5 text-xs font-bold leading-none">X</button>
+    </div>
+    <div class="p-4 flex-1 flex flex-col space-y-3">
+      <h2 class="text-sm font-bold text-black border-b border-gray-400 pb-1">Status: In der Lobby (Warte darauf, dass der Host das Spiel startet)...</h2>
+      <div id="ball-area" class="win95-inbox flex-1 relative overflow-hidden">
+        <canvas id="ball-canvas" class="absolute inset-0 w-full h-full"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div id="countdown-screen" class="hidden fixed inset-0 bg-black z-50 flex flex-col items-center justify-center font-mono">
+    <div class="text-center space-y-6">
+      <div class="text-green-500 text-sm tracking-widest uppercase">=== INITIALISIERE COCKPIT SEQUENZ ===</div>
+      <div id="matrix-timer" class="text-6xl md:text-8xl font-black text-green-400">6.000s</div>
+      <div id="matrix-subtext" class="text-green-300 text-lg md:text-2xl font-bold animate-pulse">Lade...</div>
+    </div>
+  </div>
+
+  <div id="bsod-screen" class="hidden fixed inset-0 bg-[#0000aa] text-white z-50 font-mono p-16 flex flex-col justify-between">
+    <div class="space-y-6 max-w-4xl mx-auto">
+      <div class="bg-white text-[#0000aa] inline-block px-2 py-1 font-bold">Windows</div>
+      <p>A fatal exception 0E has occurred at 016F:BFF9B3D4. System wird in Cockpit-Modus neu gestartet...</p>
+    </div>
+  </div>
+  <div id="stefan-overlay" class="hidden fixed inset-0 z-[300] bg-black flex items-center justify-center overflow-hidden">
+    <img id="stefan-image" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9480-removebg-preview~2.jpg" style="width: 220px;" alt="">
+  </div>
+
+</body>
+</html>

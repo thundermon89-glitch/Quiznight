@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Spiel 5: Verpixelt!</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .font-jax { font-family: 'Baloo 2', sans-serif; }
+
+    .term-bg { background: radial-gradient(circle at 30% 20%, #0a2e12, #020502 60%); }
+    .crt-scanlines {
+      background: repeating-linear-gradient(0deg, rgba(74, 222, 128, 0.05) 0px, rgba(74, 222, 128, 0.05) 1px, transparent 1px, transparent 3px);
+    }
+    .jax-card {
+      background: #ffffff;
+      border: 4px solid #1a1a2e;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(0,0,0,0.85);
+    }
+    .jax-card-term {
+      background: #061007;
+      border: 4px solid #4ade80;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(0,0,0,0.6);
+      color: #ffffff;
+    }
+    .jax-chip {
+      border: 3px solid #1a1a2e;
+      border-radius: 9999px;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.85);
+    }
+    .jax-btn {
+      font-family: 'Baloo 2', sans-serif;
+      border: 3px solid #1a1a2e;
+      border-radius: 20px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(3px,3px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+    .jax-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .pixel-canvas { image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; }
+    .buzzer-btn {
+      border: 5px solid #1a1a2e;
+      box-shadow: 0 9px 0 #14532d, 0 14px 24px rgba(0,0,0,0.5);
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    .buzzer-btn:active:not(:disabled) { transform: translateY(7px); box-shadow: 0 2px 0 #14532d, 0 4px 10px rgba(0,0,0,0.5); }
+    @keyframes bounceIn { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+    .jax-pop { animation: bounceIn 0.5s cubic-bezier(.34,1.56,.64,1); }
+      @keyframes brainHop {
+      0% { transform: translateY(0) scale(1); }
+      30% { transform: translateY(-24px) scale(1.12); }
+      55% { transform: translateY(0) scale(0.94); }
+      75% { transform: translateY(-9px) scale(1.04); }
+      100% { transform: translateY(0) scale(1); }
+    }
+    .brain-hop { animation: brainHop 0.4s ease-out; }
+
+    @keyframes brainFlyAway {
+      0% { transform: translate(0,0) scale(1) rotate(0deg); opacity: 1; }
+      100% { transform: translate(50px, -180px) scale(0.15) rotate(35deg); opacity: 0; }
+    }
+    .brain-fly-away { animation: brainFlyAway 0.7s ease-in forwards; }
+
+    @keyframes brainBubblePop {
+      0% { transform: translateY(6px) scale(0.6); opacity: 0; }
+      20% { transform: translateY(0) scale(1.05); opacity: 1; }
+      80% { transform: translateY(-2px) scale(1); opacity: 1; }
+      100% { transform: translateY(-12px) scale(0.9); opacity: 0; }
+    }
+    .brain-bubble {
+      position: fixed; z-index: 40; pointer-events: none;
+      background: white; color: #1a1a2e; border: 2px solid #1a1a2e;
+      border-radius: 10px; padding: 4px 9px; font-size: 11px; font-weight: 800;
+      font-family: 'Baloo 2', sans-serif;
+      animation: brainBubblePop 1.4s ease-out forwards;
+      white-space: nowrap;
+    }
+    .brain-bubble-success {
+      background: #16a34a; color: white; border-color: #14532d; font-size: 14px;
+      padding: 6px 14px;
+    }
+      @keyframes timeTickingPop {
+      0% { transform: translateY(10px) scale(0.5) rotate(-8deg); opacity: 0; }
+      20% { transform: translateY(-4px) scale(1.15) rotate(4deg); opacity: 1; }
+      35% { transform: translateY(0) scale(1) rotate(-2deg); }
+      100% { transform: translateY(-6px) scale(1.05) rotate(0deg); opacity: 1; }
+    }
+    /* WICHTIG: animation darf hier NICHT "transform" anfassen - das JS steuert die
+       Größe live per style.transform, eine CSS-Animation mit "forwards" auf transform
+       würde das sonst permanent überschreiben/einfrieren. */
+    @keyframes timeTickingFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .time-ticking-popup {
+      position: fixed; z-index: 55; pointer-events: none;
+      animation: timeTickingFadeIn 0.3s ease-out;
+      transition: transform 0.15s ease-out;
+    }
+      @keyframes winnerGifPop {
+      0% { transform: scale(0.5); opacity: 0; }
+      60% { transform: scale(1.08); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .winner-gif-modal-inner { animation: winnerGifPop 0.4s cubic-bezier(.34,1.56,.64,1); }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, update, onValue, get, push, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // ==== EIGENES ICON-SET (keine Emojis) ====
+    const ICONS = {
+      image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5-9 9"/>',
+      crown: '<path d="M4 18h16l1-9-5 3-4-6-4 6-5-3z"/>',
+      book: '<path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M6 3v16"/>',
+      arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+      target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+      check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
+      cross: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+      flag: '<path d="M5 21V4h13l-3 4 3 4H5"/>',
+      refresh: '<path d="M20 11a8 8 0 0 0-14.9-3.5M4 13a8 8 0 0 0 14.9 3.5"/><path d="M5 4v4h4M19 20v-4h-4"/>',
+      exit: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/>',
+      bell: '<path d="M12 3a5 5 0 0 0-5 5v3.5c0 .8-.3 1.6-.9 2.2L4 16h16l-2.1-2.3a3 3 0 0 1-.9-2.2V8a5 5 0 0 0-5-5z"/><path d="M9.5 19a2.5 2.5 0 0 0 5 0"/>',
+      pistol: '<path d="M4 13h8l2-3h4v3h2v3h-6l-2 3H8v-3H4z"/>'
+    };
+    function icon(name, cls) {
+      return `<svg class="${cls || 'w-5 h-5'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+    }
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const playerId = localStorage.getItem("quiz_player_id");
+    let isHost = false;
+    let allPlayers = {};
+
+    const WINNER_GIFS = [
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/a-man-with-a-beard-and-long-blonde-hair-is-sitting-in-the-woods-holding-a-sword-h5ucdvwr8fi723k7.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/bh187-austin-powers.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/cartoon-clippy-confused-mathematic-9gftw2cvivr1ngi8.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/cartoon-man-gaming-on-couch-with-8-hour-chips-ham4lovwzdb3jorf.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/claynosaurz-is-the-name-of-the-dinosaur-in-this-cartoon-x423n06ilmm451v2.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/hand-inserting-super-nintendo-cartridge-into-video-game-console-21wnh6albyo5yia3.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/hulk-hogan-mic-drop-meme-cnc2ps6ain3yz0eg.gif",
+      "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/i-am-a-mastermind-samuel-l-jackson.gif"
+    ];
+
+    let lastSeenWinnerGifId = null;
+    function maybeShowWinnerGif(state) {
+      const ev = state.winnerGifEvent;
+      if (!ev || !ev.id || ev.id === lastSeenWinnerGifId) return;
+      if (Date.now() - ev.id > 12000) { lastSeenWinnerGifId = ev.id; return; }
+      lastSeenWinnerGifId = ev.id;
+      const modal = document.getElementById("winner-gif-modal");
+      const nameEl = document.getElementById("winner-gif-name");
+      const imgEl = document.getElementById("winner-gif-img");
+      if (!modal || !nameEl || !imgEl) return;
+      nameEl.innerText = "+" + (ev.points || 0) + " Punkte für " + (ev.name || "Jemand") + "!";
+      imgEl.src = ev.gifUrl;
+      modal.classList.remove("hidden");
+      setTimeout(() => modal.classList.add("hidden"), 8200);
+    }
+
+    let latestState = null;
+
+    const ANSWER_DURATION_MS = 10000; // 10 Sekunden Antwortzeit nach Aufruf
+    const PIXEL_BLOCK_SIZES = [48, 36, 26, 18, 12, 8, 5, 1]; // 0 = stark verpixelt, letzter Wert = quasi scharf
+    // Wartezeit VOR jedem Aufdeckungsschritt - die ersten beiden bleiben zügig, danach wird
+    // spürbar mehr Zeit zum Überlegen gelassen, je klarer das Bild schon ist.
+    const REVEAL_STEP_DELAYS = [2000, 2000, 3000, 3500, 4000, 4500, 5000];
+    const BASE_POINTS = 300;
+    const STEP_PENALTY = 30;   // Punktabzug pro bereits gezeigtem Aufdeckungsschritt beim Buzzern
+    const MIN_POINTS = 60;
+    const WRONG_PENALTY = 50;
+
+    // ==== BILDER-KATALOG ====
+    // Format: imageUrl = das ORIGINAL-Bild (Verpixelung übernimmt der Code automatisch per Canvas,
+    // du musst keine vorverpixelten Versionen liefern), answer = nur der Host sieht das zur Kontrolle.
+    let images = [
+      {
+        id: 1,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_10_2026-08-31_20-07-54.jpg",
+        answer: "Tetris"
+      },
+      {
+        id: 2,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_11_2026-08-31_20-07-54.jpg",
+        answer: "Super Mario World"
+      },
+      {
+        id: 3,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_12_2026-08-31_20-07-54.jpg",
+        answer: "Lemmings"
+      },
+      {
+        id: 4,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_13_2026-08-31_20-07-54.jpg",
+        answer: "No One Lives Forever"
+      },
+      {
+        id: 5,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_15_2026-08-31_20-07-54.jpg",
+        answer: "Fussball Manager 2004"
+      },
+      {
+        id: 6,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_16_2026-08-31_20-07-54.jpg",
+        answer: "Diablo 2"
+      },
+      {
+        id: 7,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_7_2026-08-31_20-07-53.jpg",
+        answer: "Minecraft"
+      },
+      {
+        id: 8,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_8_2026-08-31_20-07-53.jpg",
+        answer: "Terraria"
+      },
+      {
+        id: 9,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_9_2026-08-31_20-07-53.jpg",
+        answer: "Half Life"
+      },
+      {
+        id: 10,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_6_2026-08-31_20-07-53.jpg",
+        answer: "Zomboid"
+      },
+      {
+        id: 11,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_20_2026-08-31_20-07-54.jpg",
+        answer: "The Forest"
+      },
+      {
+        id: 12,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_19_2026-08-31_20-07-54.jpg",
+        answer: "Alan Wake"
+      },
+      {
+        id: 13,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_18_2026-08-31_20-07-54.jpg",
+        answer: "Gothic"
+      },
+      {
+        id: 14,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_17_2026-08-31_20-07-54.jpg",
+        answer: "Tony Hawk's Pro Skater 2"
+      },
+      {
+        id: 15,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_14_2026-08-31_20-07-54.jpg",
+        answer: "Gran Turismo"
+      }
+    ];
+
+    function getActivePlayerIds() {
+      return Object.keys(allPlayers).filter(id => allPlayers[id] && allPlayers[id].name && !allPlayers[id].name.includes("Host"));
+    }
+
+    onValue(ref(db, 'players/'), (snapshot) => {
+      allPlayers = snapshot.val() || {};
+      if (latestState) renderAll(latestState);
+    });
+
+        // ==== RANG-TITEL: witziger Platzierungs-Hinweis statt exaktem Punktestand ====
+    const RANK_TITLES = [
+      "Sockenflicker",
+      "Krümelmonster-Praktikant",
+      "Wackelpudding-Ritter",
+      "Hobby-Rater",
+      "Quiz-Lehrling",
+      "Wissens-Gladiator",
+      "Fragen-Halbgott",
+      "Elite Übermensch Echse"
+    ];
+    function computeRankTitle(myId, allPlayersData) {
+      const activeIds = Object.keys(allPlayersData).filter(id => allPlayersData[id] && allPlayersData[id].name && !allPlayersData[id].name.includes("Host") && !allPlayersData[id].name.includes("Admin"));
+      if (activeIds.length === 0) return RANK_TITLES[4];
+      const sorted = [...activeIds].sort((a, b) => (allPlayersData[b].score || 0) - (allPlayersData[a].score || 0));
+      const rank = sorted.indexOf(myId) + 1;
+      const n = sorted.length;
+      const percentile = n > 1 ? (rank - 1) / (n - 1) : 0.5;
+      const tierIndex = Math.min(7, Math.max(0, Math.round((1 - percentile) * 7)));
+      return RANK_TITLES[tierIndex];
+    }
+    onValue(ref(db, 'players/'), (snapshot) => {
+      const allPlayersData = snapshot.val() || {};
+      const player = allPlayersData[playerId];
+      if (player) {
+        if (player.name && player.name.includes("Host")) {
+          isHost = true;
+          document.getElementById("brain-logo")?.classList.add("hidden"); // Host bekommt das Gehirn-Feature nicht
+          document.getElementById("host-controls").classList.remove("hidden");
+          document.getElementById("host-end-game-btn").classList.remove("hidden");
+          document.getElementById("player-answer-area").classList.add("hidden");
+          document.getElementById("player-info-score").innerHTML = icon('crown', 'w-3.5 h-3.5 inline -mt-0.5') + ' MODERATOR';
+        } else {
+          document.getElementById("player-info-score").innerText = computeRankTitle(playerId, allPlayersData);
+        }
+        document.getElementById("player-info-name").innerText = player.name;
+        if (latestState) renderAll(latestState);
+      }
+    });
+
+    // BILDER-QUELLE laden: Host kann im Cockpit vor dem Start wählen, welcher Pool gilt
+    // (eigene / vorgefertigte / feste Vorlage / Mix aus allem). Erst danach den Spielzustand
+    // beobachten, damit nie mit dem falschen Katalog gestartet wird.
+    get(ref(db, 'content/spiel5/activeSource')).then((sourceSnap) => {
+      const source = sourceSnap.val() || 'custom';
+      const defaultImages = images;
+
+      function withResolvedImages(resolved) {
+        if (Array.isArray(resolved) && resolved.length > 0) {
+          images = resolved;
+        }
+        startListeningWithImages();
+      }
+
+      if (source === 'default') {
+        withResolvedImages(defaultImages);
+      } else if (source.indexOf('template:') === 0) {
+        const templateName = source.slice('template:'.length);
+        get(ref(db, 'content/spiel5/templates/' + templateName)).then((snap) => withResolvedImages(snap.val()));
+      } else if (source === 'mix') {
+        Promise.all([
+          get(ref(db, 'content/spiel5/questions')),
+          get(ref(db, 'content/spiel5/templates'))
+        ]).then(([customSnap, templatesSnap]) => {
+          let pool = [...defaultImages];
+          const custom = customSnap.val();
+          if (Array.isArray(custom)) pool = pool.concat(custom);
+          const templates = templatesSnap.val() || {};
+          Object.values(templates).forEach(t => { if (Array.isArray(t)) pool = pool.concat(t); });
+          for (let i = pool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+          }
+          withResolvedImages(pool);
+        });
+      } else {
+        get(ref(db, 'content/spiel5/questions')).then((snap) => withResolvedImages(snap.val()));
+      }
+    });
+
+    function startListeningWithImages() {
+      onValue(ref(db, 'game5State'), (snapshot) => {
+        const state = snapshot.val() || { imageIdx: 0, stage: 'waiting' };
+        latestState = state;
+        renderAll(state);
+        maybeShowWinnerGif(state);
+
+        if (isHost && state.stage === 'revealing' && !state.activeResponderId) {
+          hostAutoPromoteNextBuzzer(state);
+        }
+
+        // Selbstheilung: Falls die automatische Aufdeckung aus irgendeinem Grund nicht (mehr)
+        // läuft (z.B. weil die Host-Seite zwischendurch neu geladen wurde), hier zuverlässig
+        // wieder anschieben - so bleibt das Spiel nie stecken, auch nicht nach einer falschen
+        // Antwort ohne weiteren Buzzerer.
+        if (isHost && state.stage === 'revealing' && !revealActive) {
+          startRevealInterval();
+        }
+      });
+    }
+
+    onValue(ref(db, 'gameState'), (snapshot) => {
+      const gs = snapshot.val();
+      if (gs && gs.status && gs.status !== 'in_game') {
+        window.location.href = "cockpit.html";
+      }
+    });
+
+    window.hostRestartGame = function() {
+      if (!confirm("Spiel wirklich neu starten? Der Fortschritt dieser Runde geht verloren (Punkte bleiben erhalten).")) return;
+      set(ref(db, 'game5State'), { imageIdx: 0, stage: 'waiting' });
+    };
+
+    function generateRiddleClues(pid, sortedIds, players) {
+      const rank = sortedIds.indexOf(pid) + 1;
+      const n = sortedIds.length;
+      const pool = [];
+      if (rank > 1) pool.push('Du bist nicht Erster.');
+      if (rank < n) pool.push('Du bist nicht Letzter.');
+      if (rank > 1) pool.push('Du liegst hinter ' + players[sortedIds[rank - 2]].name + '.');
+      if (rank < n) pool.push('Du liegst vor ' + players[sortedIds[rank]].name + '.');
+      if (rank > 2) pool.push('Mindestens zwei Personen liegen vor dir.');
+      if (rank < n - 1) pool.push('Mindestens zwei Personen liegen hinter dir.');
+      if (pool.length === 0) pool.push('Die Truhe ist ratlos - du bist ganz allein im Rennen.');
+      const shuffled = pool.map(x => [Math.random(), x]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+      return shuffled.slice(0, Math.min(2, shuffled.length));
+    }
+
+        // ==== ZITATE ÜBER DAS SPIELEN (für den Abspann) ====
+    const GAME_QUOTES = [
+      { text: "Beim Spiel kann man einen Menschen in einer Stunde besser kennenlernen als im Gespräch in einem Jahr.", author: "Platon" },
+      { text: "Spiele, damit du ernst sein kannst. Denn das Spiel ist ein Ausruhen, und die Menschen bedürfen, da sie nicht immer tätig sein können, des Ausruhens.", author: "Aristoteles" },
+      { text: "Atome spalten ist ein Kinderspiel, verglichen mit einem Kinderspiel.", author: "Albert Einstein" },
+      { text: "Nur Arbeit und kein Spiel macht dumm.", author: "Karl Marx" },
+      { text: "Spielen ist eine Tätigkeit, die man gar nicht ernst genug nehmen kann.", author: "Jacques-Yves Cousteau" }
+    ];
+    function gameQuoteHtml() {
+      const q = GAME_QUOTES[Math.floor(Math.random() * GAME_QUOTES.length)];
+      return `<div class="italic">"${q.text}"</div><div class="mt-2 not-italic font-bold opacity-80">— ${q.author}</div>`;
+    }
+
+    // ==== RÜCKKEHR-ZWISCHENSZENE: schwarzer Bildschirm mit altertümlichem Countdown ====
+    let lastSeenReturnCountdownAt = null;
+    onValue(ref(db, 'gameState/returnCountdownAt'), (snapshot) => {
+      const startedAt = snapshot.val();
+      if (startedAt && startedAt !== lastSeenReturnCountdownAt) {
+        lastSeenReturnCountdownAt = startedAt;
+        runReturnCountdown(startedAt);
+      }
+    });
+
+    function runReturnCountdown(startedAt) {
+      const overlay = document.getElementById('return-countdown-overlay');
+      const numberEl = document.getElementById('return-countdown-number');
+      if (!overlay || !numberEl) return;
+      overlay.classList.remove('hidden');
+      const DURATION = 5;
+      let doneTriggered = false;
+      function tick() {
+        const elapsed = (Date.now() - startedAt) / 1000;
+        const remaining = Math.max(0, DURATION - elapsed);
+        numberEl.innerText = remaining > 0.05 ? Math.ceil(remaining) : '✓';
+        if (remaining > 0.05) {
+          requestAnimationFrame(tick);
+        } else if (!doneTriggered) {
+          doneTriggered = true;
+          if (isHost) window.hostBackToCockpit();
+        }
+      }
+      tick();
+    }
+
+    window.triggerReturnCountdown = function() {
+      if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
+      update(ref(db, 'gameState'), { returnCountdownAt: Date.now() });
+    };
+
+    window.hostBackToCockpit = function() {
+
+      get(ref(db, 'gameState/startScores')).then((startSnap) => {
+        const startScores = startSnap.val() || {};
+        get(ref(db, 'players/')).then((snapshot) => {
+          const players = snapshot.val() || {};
+          const activeIds = Object.keys(players).filter(id => players[id] && players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin"));
+          const rankedIds = [...activeIds].sort((a, b) => (players[b].score || 0) - (players[a].score || 0));
+          const updates = {};
+          for (let id in players) {
+            if (players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin")) {
+              updates['players/' + id + '/isReady'] = false;
+            }
+          }
+          activeIds.forEach(id => {
+            updates['players/' + id + '/riddleClues'] = generateRiddleClues(id, rankedIds, players);
+          });
+          update(ref(db), updates).then(() => {
+            activeIds.forEach(id => {
+              const delta = (players[id].score || 0) - (startScores[id] || 0);
+              if (delta !== 0) {
+                push(ref(db, 'gameLog'), {
+                  text: (delta > 0 ? '📈 ' : '📉 ') + players[id].name + ': ' + (delta > 0 ? '+' : '') + delta + ' Punkte in Spiel 5',
+                  at: Date.now()
+                });
+              }
+            });
+            set(ref(db, 'gameState'), { status: 'cockpit', chestPending: true, chestPendingAt: Date.now() });
+          });
+        });
+      });
+    };
+
+    // ================= SPIELER AKTIONEN =================
+
+    window.armBuzzer = function() {
+      update(ref(db, 'game5State/armed'), { [playerId]: true });
+    };
+
+    window.pressBuzzer = function() {
+      get(ref(db, 'game5State')).then((snap) => {
+        const s = snap.val() || {};
+        if (s.buzzes && s.buzzes[playerId]) return; // schon gebuzzert
+        const step = s.stepIndex || 0;
+        update(ref(db, 'game5State/buzzes'), { [playerId]: { t: serverTimestamp(), step } });
+      });
+    };
+
+    // ================= HOST AKTIONEN =================
+
+    window.hostRevealImage = () => {
+      stopRevealInterval();
+      update(ref(db, 'game5State'), {
+        stage: 'revealing',
+        stepIndex: 0,
+        armed: null,
+        buzzes: null,
+        respondedWrong: null,
+        activeResponderId: null,
+        answerStartedAt: null,
+        lastResult: null
+      }).then(() => {
+        startRevealInterval();
+      });
+    };
+
+    function hostAutoPromoteNextBuzzer(state) {
+      const buzzes = state.buzzes || {};
+      const respondedWrong = state.respondedWrong || [];
+      const candidates = Object.keys(buzzes).filter(id => buzzes[id] && typeof buzzes[id].t === 'number' && !respondedWrong.includes(id));
+      if (candidates.length === 0) return;
+      candidates.sort((a, b) => buzzes[a].t - buzzes[b].t);
+      update(ref(db, 'game5State'), { activeResponderId: candidates[0], answerStartedAt: Date.now() });
+    }
+
+    window.hostMarkCorrect = () => {
+      get(ref(db, 'game5State')).then((snap) => {
+        const s = snap.val() || {};
+        const activeId = s.activeResponderId;
+        if (!activeId) return;
+        const buzzStep = (s.buzzes && s.buzzes[activeId]) ? (s.buzzes[activeId].step || 0) : 0;
+        const points = Math.max(MIN_POINTS, BASE_POINTS - buzzStep * STEP_PENALTY);
+        get(ref(db, 'players/' + activeId + '/score')).then((scoreSnap) => {
+          const cur = scoreSnap.val() || 0;
+          update(ref(db, 'players/' + activeId), { score: cur + points });
+          update(ref(db, 'game5State/winnerGifEvent'), {
+            id: Date.now(),
+            name: (allPlayers[activeId] || {}).name || 'Jemand',
+            points: points,
+            gifUrl: WINNER_GIFS[Math.floor(Math.random() * WINNER_GIFS.length)]
+          });
+          advanceToNextImageOrFinish(s.imageIdx || 0, { lastResult: 'correct', lastResponderId: activeId, lastPoints: points });
+        });
+      });
+    };
+
+    window.hostMarkWrong = () => {
+      get(ref(db, 'game5State')).then((snap) => {
+        const s = snap.val() || {};
+        const activeId = s.activeResponderId;
+        if (!activeId) return;
+        get(ref(db, 'players/' + activeId + '/score')).then((scoreSnap) => {
+          const cur = scoreSnap.val() || 0;
+          update(ref(db, 'players/' + activeId), { score: cur - WRONG_PENALTY });
+          const respondedWrong = [...(s.respondedWrong || []), activeId];
+          update(ref(db, 'game5State'), {
+            respondedWrong,
+            activeResponderId: null,
+            answerStartedAt: null,
+            lastResult: 'wrong',
+            lastResponderId: activeId,
+            lastResultAt: Date.now()
+          });
+          // Aufdeckung läuft (falls noch nicht am letzten Schritt) automatisch weiter,
+          // die reaktive Prüfung ruft ggf. sofort den/die nächste(n) Buzzerer auf.
+        });
+      });
+    };
+
+    window.hostSkipImage = () => {
+      stopRevealInterval();
+      get(ref(db, 'game5State/imageIdx')).then((snap) => {
+        advanceToNextImageOrFinish(snap.val() || 0, { lastResult: 'skipped' });
+      });
+    };
+
+    // ================= LEMMING-EASTEREGG: läuft bis zu 4x im Spiel in einem eigenen
+    // schwarzen Balken über dem Text durchs Bild. Wer ihn zuerst anklickt, bekommt +20
+    // Punkte, das Fang-GIF spielt exakt an der Stelle, wo er angeklickt wurde. =================
+    const LEMMING_GIF_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/WAltx1l.gif";
+    const LEMMING_CATCH_GIF_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/giphy.gif";
+    const LEMMING_RUN_DURATION_MS = 5500;
+    const LEMMING_POINTS = 20;
+    let lastRenderedLemmingRunId = null;
+    let lastSeenLemmingCaughtId = null;
+
+    function maybeHandleLemming(state) {
+      const track = document.getElementById("lemming-track");
+      if (!track) return;
+      const run = state.lemmingRun;
+      if (!run || !run.id) { track.innerHTML = ""; return; }
+
+      if (run.caughtBy) {
+        // Jemand hat ihn gefangen - einmalig für alle die Feier-Animation an der Fangstelle zeigen
+        if (lastSeenLemmingCaughtId === run.id) return;
+        lastSeenLemmingCaughtId = run.id;
+        lastRenderedLemmingRunId = run.id;
+        const catcherName = (allPlayers[run.caughtBy] || {}).name || "Jemand";
+        const leftPercent = typeof run.caughtAtPercent === 'number' ? run.caughtAtPercent : 40;
+        track.innerHTML = `
+          <img src="${LEMMING_CATCH_GIF_URL}" class="absolute top-1/2 w-14 h-14 object-contain" style="left: ${leftPercent}%; transform: translateY(-50%);" />
+          <div class="absolute bottom-0.5 inset-x-0 text-center text-[9px] font-jax font-bold text-[#ffd23f] bg-black/70 py-0.5">${catcherName} hat ihn erwischt! +${LEMMING_POINTS} Punkte</div>
+        `;
+        setTimeout(() => { if (track) track.innerHTML = ""; }, 2600);
+        return;
+      }
+
+      // Noch nicht gefangen - läuft der Lemming schon für dieses Gerät?
+      if (lastRenderedLemmingRunId === run.id) return;
+      const elapsed = Date.now() - run.startedAt;
+      if (elapsed >= LEMMING_RUN_DURATION_MS) return; // schon vorbei, keiner hat ihn gefangen
+      lastRenderedLemmingRunId = run.id;
+
+      const ltr = run.direction !== 'rtl';
+      const img = document.createElement("img");
+      img.src = LEMMING_GIF_URL;
+      img.className = "absolute top-1/2 w-12 h-12 object-contain cursor-pointer pointer-events-auto";
+      img.style.transform = ltr ? "translateY(-50%)" : "translateY(-50%) scaleX(-1)";
+      img.style.left = ltr ? "-56px" : "calc(100% + 20px)";
+      img.style.transition = `left ${(LEMMING_RUN_DURATION_MS - elapsed) / 1000}s linear`;
+      img.onclick = () => {
+        const trackRect = track.getBoundingClientRect();
+        const imgRect = img.getBoundingClientRect();
+        const leftPercent = Math.max(0, Math.min(100, ((imgRect.left - trackRect.left) / trackRect.width) * 100));
+        catchLemming(run.id, leftPercent);
+      };
+      track.innerHTML = "";
+      track.appendChild(img);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { img.style.left = ltr ? "calc(100% + 20px)" : "-56px"; });
+      });
+      setTimeout(() => { if (img && img.parentNode) img.remove(); }, LEMMING_RUN_DURATION_MS - elapsed + 200);
+    }
+
+    function catchLemming(runId, leftPercent) {
+      runTransaction(ref(db, 'game5State/lemmingRun'), (current) => {
+        if (!current || current.id !== runId || current.caughtBy) {
+          return current; // schon vorbei oder von jemand anderem gefangen
+        }
+        current.caughtBy = playerId;
+        current.caughtAt = Date.now();
+        current.caughtAtPercent = leftPercent;
+        return current;
+      }).then((result) => {
+        const val = result && result.snapshot && result.snapshot.val();
+        if (result.committed && val && val.caughtBy === playerId) {
+          get(ref(db, 'players/' + playerId)).then((snap) => {
+            const data = snap.val() || {};
+            const newScore = (data.score || 0) + LEMMING_POINTS;
+            update(ref(db, 'players/' + playerId), { score: newScore });
+            push(ref(db, 'gameLog'), {
+              text: '🐹 ' + (data.name || 'Jemand') + ' hat den Lemming gefangen: +' + LEMMING_POINTS + ' Punkte',
+              at: Date.now()
+            });
+          });
+        }
+      });
+    }
+
+    function advanceToNextImageOrFinish(currentIdx, extra) {
+      stopRevealInterval();
+      const nextIdx = currentIdx + 1;
+      if (nextIdx >= images.length) {
+        set(ref(db, 'game5State'), { imageIdx: currentIdx, stage: 'finished', ...extra });
+      } else {
+        get(ref(db, 'game5State/waitingPhaseCount')).then((snap) => {
+          const phaseCount = (snap.val() || 0) + 1;
+          const updates = { imageIdx: nextIdx, stage: 'waiting', waitingPhaseCount: phaseCount, ...extra };
+          // Bei jeder zweiten Bild-Vorbereitung läuft der Lemming durchs Bild (deterministisch,
+          // kein Zufall mehr) - abwechselnd von links nach rechts und von rechts nach links.
+          if (phaseCount % 2 === 0) {
+            updates.lemmingRun = { id: Date.now(), startedAt: Date.now(), caughtBy: null, direction: (phaseCount / 2) % 2 === 1 ? 'ltr' : 'rtl' };
+          }
+          set(ref(db, 'game5State'), updates);
+        });
+      }
+    }
+
+    // ================= AUTOMATISCHE AUFDECKUNG (nur Host-Client treibt sie an) =================
+    // Nutzt eine Kette von setTimeout statt einem festen setInterval, damit jeder Schritt
+    // seine eigene (steigende) Wartezeit aus REVEAL_STEP_DELAYS bekommen kann.
+    let revealTimeoutId = null;
+    let revealActive = false;
+
+    function startRevealInterval() {
+      stopRevealInterval();
+      revealActive = true;
+      scheduleNextRevealStep();
+    }
+
+    function scheduleNextRevealStep() {
+      if (!revealActive) return;
+      get(ref(db, 'game5State')).then((snap) => {
+        if (!revealActive) return;
+        const s = snap.val() || {};
+        const maxStep = PIXEL_BLOCK_SIZES.length - 1;
+        const curStep = s.stepIndex || 0;
+
+        if (s.stage !== 'revealing') return; // Bild schon gewechselt, nichts mehr planen
+        if (s.activeResponderId) {
+          // Pausiert, während jemand antwortet - kurz später erneut prüfen
+          revealTimeoutId = setTimeout(scheduleNextRevealStep, 1000);
+          return;
+        }
+        if (curStep >= maxStep) return; // schon voll aufgedeckt, wartet auf Antwort/Buzzer
+
+        const delay = REVEAL_STEP_DELAYS[Math.min(curStep, REVEAL_STEP_DELAYS.length - 1)];
+        revealTimeoutId = setTimeout(() => {
+          if (!revealActive) return;
+          get(ref(db, 'game5State')).then((snap2) => {
+            if (!revealActive) return;
+            const s2 = snap2.val() || {};
+            if (s2.stage !== 'revealing' || s2.activeResponderId) {
+              scheduleNextRevealStep();
+              return;
+            }
+            const idx = s2.imageIdx || 0;
+            const curStep2 = s2.stepIndex || 0;
+            if (curStep2 >= maxStep) {
+              // Bild komplett aufgedeckt, niemand (mehr) buzzert -> ohne Punkte weiter
+              advanceToNextImageOrFinish(idx, { lastResult: 'skipped' });
+              return;
+            }
+            update(ref(db, 'game5State'), { stepIndex: curStep2 + 1 }).then(scheduleNextRevealStep);
+          });
+        }, delay);
+      });
+    }
+
+    function stopRevealInterval() {
+      revealActive = false;
+      if (revealTimeoutId) { clearTimeout(revealTimeoutId); revealTimeoutId = null; }
+    }
+
+    // ================= TIMER (10s Antwortzeit) =================
+    let answerTimerInterval = null;
+    let lastAnswerStartedAt = null;
+
+    function startAnswerTimer(startTimestamp) {
+      stopAnswerTimer();
+      answerTimerInterval = setInterval(() => {
+        const elapsed = Date.now() - startTimestamp;
+        const remaining = Math.max(0, ANSWER_DURATION_MS - elapsed);
+        updateAnswerTimerUI(remaining, ANSWER_DURATION_MS);
+        if (remaining <= 0) {
+          clearInterval(answerTimerInterval);
+          answerTimerInterval = null;
+          if (isHost) window.hostMarkWrong();
+        }
+      }, 100);
+    }
+
+    function stopAnswerTimer() {
+      if (timeTickingEl_updateAnswerTimerUI) { timeTickingEl_updateAnswerTimerUI.remove(); timeTickingEl_updateAnswerTimerUI = null; }
+      timeTickingStep_updateAnswerTimerUI = -1;
+      if (answerTimerInterval) { clearInterval(answerTimerInterval); answerTimerInterval = null; }
+    }
+
+    // "Time is ticking"-Anzeige: erscheint ab 25 Sekunden Restzeit, bleibt DAUERHAFT stehen
+    // (kein kurzer Popup mehr) und wird alle 5 Sekunden ruckartig (kein sanftes Wachsen)
+    // größer. Verschwindet erst exakt bei 0.
+    const TIME_TICKING_START_MS_updateAnswerTimerUI = 25000;
+    let timeTickingEl_updateAnswerTimerUI = null;
+    let timeTickingStep_updateAnswerTimerUI = -1;
+    function maybeShowTimeTicking_updateAnswerTimerUI(remaining) {
+      if (remaining > TIME_TICKING_START_MS_updateAnswerTimerUI || remaining <= 0) {
+        if (timeTickingEl_updateAnswerTimerUI) { timeTickingEl_updateAnswerTimerUI.remove(); timeTickingEl_updateAnswerTimerUI = null; }
+        timeTickingStep_updateAnswerTimerUI = -1;
+        return;
+      }
+      const anchor = document.getElementById("answer-timer-seconds");
+      if (!anchor) return;
+
+      if (!timeTickingEl_updateAnswerTimerUI) {
+        const rect = anchor.getBoundingClientRect();
+        const img = document.createElement("img");
+        img.src = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/timeistickingGames.png";
+        img.className = "time-ticking-popup";
+        img.style.position = "fixed";
+        img.style.left = (rect.left + rect.width / 2 - 45) + "px";
+        img.style.top = (rect.top - 75) + "px";
+        img.style.width = "90px";
+        img.style.zIndex = "55";
+        img.style.pointerEvents = "none";
+        img.style.transition = "transform 0.15s ease-out";
+        document.body.appendChild(img);
+        timeTickingEl_updateAnswerTimerUI = img;
+      }
+
+      // Alle 5 Sek. ein ruckartiger Wachstumsschritt (25-21s = Stufe 0, 20-16s = Stufe 1, ...)
+      const step = Math.min(4, Math.floor((TIME_TICKING_START_MS_updateAnswerTimerUI - remaining) / 5000));
+      if (step !== timeTickingStep_updateAnswerTimerUI) {
+        timeTickingStep_updateAnswerTimerUI = step;
+        timeTickingEl_updateAnswerTimerUI.style.transform = "scale(" + (1 + step * 0.35) + ")";
+      }
+    }
+
+    function updateAnswerTimerUI(remaining, duration) {
+      maybeShowTimeTicking_updateAnswerTimerUI(remaining);
+      const barEl = document.getElementById("answer-timer-bar");
+      const numEl = document.getElementById("answer-timer-seconds");
+      if (!barEl || !numEl) return;
+      const secs = Math.ceil(remaining / 1000);
+      numEl.innerText = secs + "s";
+      const pct = Math.max(0, (remaining / duration) * 100);
+      barEl.style.width = pct + "%";
+      if (pct > 50) { barEl.className = "h-full bg-green-500 rounded-full transition-all duration-100"; numEl.className = "text-lg font-black text-green-400 tabular-nums"; }
+      else if (pct > 20) { barEl.className = "h-full bg-yellow-500 rounded-full transition-all duration-100"; numEl.className = "text-lg font-black text-yellow-400 tabular-nums"; }
+      else { barEl.className = "h-full bg-red-600 rounded-full transition-all duration-100 animate-pulse"; numEl.className = "text-lg font-black text-red-500 tabular-nums animate-pulse"; }
+    }
+
+    // ================= BILD-LADEN & PIXELIEREN =================
+    const loadedImages = {}; // idx -> HTMLImageElement (fertig geladen)
+    const pendingImageCallbacks = {}; // idx -> [callback, ...] während des Ladens
+    const imageLoadAttempts = {}; // idx -> Anzahl bisheriger Versuche
+    const MAX_IMAGE_LOAD_ATTEMPTS = 4;
+
+    function ensureImageLoaded(idx, callback) {
+      const cached = loadedImages[idx];
+      if (cached && cached.complete && cached.naturalWidth > 0) { callback(cached); return; }
+
+      if (pendingImageCallbacks[idx]) {
+        // Wird bereits geladen - Callback nur anhängen, KEIN zweites Image-Objekt erzeugen
+        pendingImageCallbacks[idx].push(callback);
+        return;
+      }
+
+      startImageLoad(idx);
+      pendingImageCallbacks[idx] = [callback];
+    }
+
+    function startImageLoad(idx) {
+      const img = new Image();
+      img.onload = () => {
+        loadedImages[idx] = img;
+        imageLoadAttempts[idx] = 0;
+        const cbs = pendingImageCallbacks[idx] || [];
+        delete pendingImageCallbacks[idx];
+        cbs.forEach(cb => cb(img));
+        // Falls die Leinwand zwischenzeitlich einen Lade-Hinweis zeigt, jetzt auffrischen
+        if (latestState) renderAll(latestState);
+      };
+      img.onerror = () => {
+        const attempts = (imageLoadAttempts[idx] || 0) + 1;
+        imageLoadAttempts[idx] = attempts;
+        if (attempts < MAX_IMAGE_LOAD_ATTEMPTS) {
+          // Kurz warten und erneut versuchen (Netzwerk-Hänger, langsame Verbindung o.ä.)
+          setTimeout(() => startImageLoad(idx), 600 * attempts);
+        } else {
+          // Endgültig fehlgeschlagen - Callbacks trotzdem auflösen, damit die Leinwand einen
+          // sichtbaren Hinweis statt für immer "leer" zeigt.
+          const cbs = pendingImageCallbacks[idx] || [];
+          delete pendingImageCallbacks[idx];
+          cbs.forEach(cb => cb(null));
+        }
+      };
+      img.src = images[idx].imageUrl + ((imageLoadAttempts[idx] || 0) > 0 ? (images[idx].imageUrl.includes('?') ? '&' : '?') + '_r=' + Date.now() : '');
+    }
+
+    function pixelateToCanvas(imgEl, canvas, blockSize) {
+      const w = canvas.width, h = canvas.height;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      const smallW = Math.max(1, Math.round(w / blockSize));
+      const smallH = Math.max(1, Math.round(h / blockSize));
+      const off = document.createElement('canvas');
+      off.width = smallW; off.height = smallH;
+      const offCtx = off.getContext('2d');
+      offCtx.imageSmoothingEnabled = true;
+      offCtx.drawImage(imgEl, 0, 0, smallW, smallH);
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(off, 0, 0, smallW, smallH, 0, 0, w, h);
+    }
+
+    // ================= RENDERING =================
+
+    function renderAll(state) {
+      const image = images[state.imageIdx || 0];
+      renderHostPreview(image, state);
+      renderHostControls(state);
+      renderPlayerView(state, image);
+    }
+
+    function renderHostPreview(image, state) {
+      if (!isHost) return;
+      const box = document.getElementById("host-preview-box");
+      if (!box) return;
+      if (!image) { box.innerHTML = `<div class="text-red-600 font-bold">Kein weiteres Bild vorhanden.</div>`; return; }
+      box.innerHTML = `
+        <div class="text-green-600 font-jax font-bold mb-2 flex items-center justify-center gap-1">${icon('book','w-4 h-4')} Vorschau - Bild ${(state.imageIdx || 0) + 1} von ${images.length}:</div>
+        <img src="${image.imageUrl}" class="w-28 rounded-xl border-2 border-[#1a1a2e] mb-3 mx-auto" />
+        <div class="text-green-600 font-bold text-xs uppercase tracking-wide mb-1">Lösung</div>
+        <div class="font-jax font-extrabold text-[#1a1a2e] text-xl">${image.answer}</div>
+        <div class="text-[#1a1a2e]/50 text-xs mt-2">Punkte je nach Aufdeckungsstand: ${BASE_POINTS} bis min. ${MIN_POINTS} · Falsch/keine Antwort: -${WRONG_PENALTY}</div>
+      `;
+    }
+
+    function show(id) { document.getElementById(id)?.classList.remove("hidden"); }
+    function hide(id) { document.getElementById(id)?.classList.add("hidden"); }
+
+    function renderHostControls(state) {
+      if (!isHost) return;
+      const stage = state.stage || 'waiting';
+      ["hc-waiting", "hc-revealing-idle", "hc-revealing-active", "hc-finished"].forEach(hide);
+
+      if (stage === 'waiting') {
+        show("hc-waiting");
+        const resultBox = document.getElementById("hc-last-result");
+        if (state.lastResult) {
+          resultBox.classList.remove("hidden");
+          if (state.lastResult === 'correct') {
+            const name = (allPlayers[state.lastResponderId] || {}).name || "Jemand";
+            resultBox.innerHTML = `${icon('check','w-4 h-4 inline -mt-1')} ${name} hatte recht (+${state.lastPoints} Pkt.)`;
+            resultBox.className = "text-emerald-400 font-bold text-xs mb-2";
+          } else if (state.lastResult === 'skipped') {
+            resultBox.innerHTML = `${icon('arrowRight','w-4 h-4 inline -mt-1')} Ohne Punkte weiter (niemand hat rechtzeitig richtig geraten)`;
+            resultBox.className = "text-slate-400 font-bold text-xs mb-2";
+          } else {
+            resultBox.innerHTML = `Alle Buzzerer falsch`;
+            resultBox.className = "text-red-400 font-bold text-xs mb-2";
+          }
+        } else {
+          resultBox.classList.add("hidden");
+        }
+      } else if (stage === 'revealing') {
+        if (state.activeResponderId) {
+          show("hc-revealing-active");
+          const name = (allPlayers[state.activeResponderId] || {}).name || "Spieler";
+          document.getElementById("hc-active-name").innerHTML = icon('target','w-4 h-4 inline -mt-1') + ' Antwortet gerade: ' + name;
+        } else {
+          show("hc-revealing-idle");
+        }
+      } else if (stage === 'finished') {
+        show("hc-finished");
+      }
+    }
+
+    function renderPlayerView(state, image) {
+      const stage = state.stage || 'waiting';
+      const statusBadge = document.getElementById("status-badge");
+      const progressEl = document.getElementById("image-progress");
+      progressEl.innerText = "Bild " + Math.min((state.imageIdx || 0) + 1, images.length) + " von " + images.length;
+
+      ["waiting-area", "image-area", "finished-area"].forEach(hide);
+      stopAnswerTimer();
+      lastAnswerStartedAt = null;
+
+      if (stage === 'waiting') {
+        statusBadge.innerText = "WARTET AUF NÄCHSTES BILD";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-white text-[#1a1a2e]";
+        renderWaitingArea(state);
+        show("waiting-area");
+      } else if (stage === 'revealing') {
+        statusBadge.innerText = "BUZZER FREI - BILD WIRD KLARER!";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#4ade80] text-[#1a1a2e] animate-pulse";
+        renderImageArea(state, image);
+        show("image-area");
+      } else if (stage === 'finished') {
+        statusBadge.innerText = "SPIEL BEENDET";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#7017c9] text-white";
+        show("finished-area");
+        const fq = document.getElementById("finished-quote"); if (fq && !fq.innerHTML) fq.innerHTML = gameQuoteHtml();
+      }
+    }
+
+    function renderWaitingArea(state) {
+      const resultEl = document.getElementById("waiting-result-text");
+      let resultHtml = "";
+      if (state.lastResult === 'correct') {
+        const name = (allPlayers[state.lastResponderId] || {}).name || "Jemand";
+        resultHtml = `<div class="text-emerald-400 font-bold mb-3">${icon('check','w-4 h-4 inline -mt-1')} ${name} hatte recht! (+${state.lastPoints} Pkt.)</div>`;
+      } else if (state.lastResult === 'wrong') {
+        resultHtml = `<div class="text-red-400 font-bold mb-3">${icon('cross','w-4 h-4 inline -mt-1')} Niemand hatte am Ende recht...</div>`;
+      } else if (state.lastResult === 'skipped') {
+        resultHtml = `<div class="text-slate-300 font-bold mb-3">${icon('arrowRight','w-4 h-4 inline -mt-1')} Ohne Punkte weiter zum nächsten Bild.</div>`;
+      }
+      if (resultEl) resultEl.innerHTML = resultHtml;
+      maybeHandleLemming(state);
+    }
+
+    let lastRenderedImageIdx = null;
+
+    function renderImageArea(state, image) {
+      const wrap = document.getElementById("image-area");
+      const armed = state.armed || {};
+      const buzzes = state.buzzes || {};
+      const respondedWrong = state.respondedWrong || [];
+      const isArmed = !!armed[playerId];
+      const hasBuzzed = !!buzzes[playerId];
+      const isActive = state.activeResponderId === playerId;
+      const wasWrong = respondedWrong.includes(playerId);
+
+      let interactionHtml = "";
+      if (isActive) {
+        interactionHtml = `
+          <div class="text-3xl font-jax font-extrabold text-[#ffd23f] mb-3 flex items-center justify-center gap-2">${icon('target','w-8 h-8')} DU BIST DRAN!</div>
+          <div class="flex items-center gap-3 justify-center mb-2">
+            <span id="answer-timer-seconds" class="text-lg font-black text-green-400 tabular-nums">10s</span>
+            <div class="flex-1 max-w-xs h-3 bg-black/40 rounded-full overflow-hidden border border-green-900/40">
+              <div id="answer-timer-bar" class="h-full bg-green-500 rounded-full transition-all duration-100" style="width: 100%"></div>
+            </div>
+          </div>
+          <div class="text-white/60 text-xs">Antworte jetzt laut - der Moderator wertet.</div>
+        `;
+      } else if (hasBuzzed && wasWrong) {
+        interactionHtml = `<div class="text-red-400 font-bold">${icon('cross','w-4 h-4 inline -mt-1')} Leider falsch - du bist für dieses Bild raus.</div>`;
+      } else if (hasBuzzed) {
+        const queuePos = Object.keys(buzzes)
+          .filter(id => buzzes[id] && !respondedWrong.includes(id))
+          .sort((a, b) => (buzzes[a].t || 0) - (buzzes[b].t || 0))
+          .indexOf(playerId) + 1;
+        interactionHtml = `<div class="text-amber-300 font-bold">${icon('check','w-4 h-4 inline -mt-1')} Gebuzzert! Warteposition: #${queuePos > 0 ? queuePos : '?'}</div>`;
+      } else if (isArmed) {
+        interactionHtml = `
+          <button onclick="pressBuzzer()" class="buzzer-btn w-48 h-48 mx-auto rounded-full bg-green-600 text-white font-jax font-extrabold text-2xl flex flex-col items-center justify-center jax-pop">
+            ${icon('bell','w-10 h-10 mx-auto mb-1')}<br>BUZZERN!
+          </button>
+        `;
+      } else {
+        interactionHtml = `
+          <button onclick="armBuzzer()" class="px-8 py-5 jax-btn bg-[#ffd23f] text-[#1a1a2e] font-jax font-bold text-lg">
+            ${icon('pistol','w-5 h-5 inline -mt-1')} Buzzer scharf stellen
+          </button>
+        `;
+      }
+
+      // Die Leinwand NUR neu aufbauen, wenn tatsächlich ein neues Bild dran ist - nicht bei
+      // jeder Kleinigkeit (z.B. wenn jemand anderes buzzert). Das verhindert, dass die laufende
+      // Verpixelung durch häufige Zustandsänderungen (viele Mitspieler!) unterbrochen wird.
+      const imageIdx = state.imageIdx || 0;
+      const needsRebuild = imageIdx !== lastRenderedImageIdx || !document.getElementById("pixelate-canvas");
+      if (needsRebuild) {
+        lastRenderedImageIdx = imageIdx;
+        wrap.innerHTML = `
+          <div class="jax-card-term p-6 text-center">
+            <canvas id="pixelate-canvas" class="pixel-canvas mx-auto rounded-xl border-4 border-white" width="360" height="480" style="max-width: 260px; width: 100%; height: auto;"></canvas>
+            <div class="mt-5" id="buzzer-interaction"></div>
+          </div>
+          <div id="buzz-queue-strip" class="mt-4"></div>
+        `;
+      }
+      const interactionBox = document.getElementById("buzzer-interaction");
+      if (interactionBox) interactionBox.innerHTML = interactionHtml;
+
+      ensureImageLoaded(imageIdx, (imgEl) => {
+        // Nur zeichnen, wenn wir währenddessen nicht schon beim nächsten Bild sind, und immer
+        // mit dem AKTUELLSTEN bekannten Aufdeckungsschritt (nicht mit einem veralteten Stand,
+        // falls das Laden etwas gedauert hat) - verhindert das "Zurückspringen" der Animation.
+        if ((latestState.imageIdx || 0) !== imageIdx) return;
+        const canvas = document.getElementById("pixelate-canvas");
+        if (!canvas) return;
+        if (!imgEl) {
+          // Bild konnte auch nach mehreren Versuchen nicht geladen werden - sichtbaren
+          // Hinweis statt einer stumm leeren Leinwand zeigen.
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#061007';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#4ade80';
+          ctx.font = 'bold 20px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('Bild konnte nicht geladen werden', canvas.width / 2, canvas.height / 2 - 12);
+          ctx.font = '14px sans-serif';
+          ctx.fillText('Seite neu laden hilft meistens', canvas.width / 2, canvas.height / 2 + 14);
+          return;
+        }
+        const step = Math.min(latestState.stepIndex || 0, PIXEL_BLOCK_SIZES.length - 1);
+        pixelateToCanvas(imgEl, canvas, PIXEL_BLOCK_SIZES[step]);
+      });
+
+      renderBuzzQueueStrip(state);
+
+      if (isActive && state.answerStartedAt) {
+        if (state.answerStartedAt !== lastAnswerStartedAt) {
+          lastAnswerStartedAt = state.answerStartedAt;
+          startAnswerTimer(state.answerStartedAt);
+        }
+      }
+    }
+
+    function renderBuzzQueueStrip(state) {
+      const wrap = document.getElementById("buzz-queue-strip");
+      if (!wrap) return;
+      const buzzes = state.buzzes || {};
+      const respondedWrong = state.respondedWrong || [];
+      const ids = Object.keys(buzzes).filter(id => buzzes[id] && typeof buzzes[id].t === 'number').sort((a, b) => buzzes[a].t - buzzes[b].t);
+      if (ids.length === 0) { wrap.innerHTML = ""; return; }
+
+      wrap.innerHTML = `
+        <div class="jax-card-term p-3">
+          <div class="text-green-400/80 text-[11px] font-jax font-bold uppercase tracking-wide mb-2 text-center">Buzzer-Reihenfolge</div>
+          <div class="flex flex-wrap justify-center gap-2">
+            ${ids.map((id, i) => {
+              const name = (allPlayers[id] || {}).name || "Spieler";
+              const active = state.activeResponderId === id;
+              const wrong = respondedWrong.includes(id);
+              const cls = active
+                ? "jax-chip bg-[#ffd23f] text-[#1a1a2e] scale-110"
+                : wrong
+                  ? "bg-black/40 text-red-500/50 border-2 border-red-900/40 rounded-full line-through"
+                  : "jax-chip bg-white text-[#1a1a2e]";
+              return `<div class="px-3 py-1.5 text-xs font-jax font-bold ${cls} transition">${i + 1}. ${name}</div>`;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+  
+    // ==== VERSTECKTES GEHIRN: gibt es in jedem Spiel + im Cockpit einmal zu finden.
+    // Jeder Klick lässt es hüpfen + eine kurze Sprechblase mit Klick-Fortschritt zeigen.
+    // Je mehr Gehirne man insgesamt schon aktiviert hat, desto öfter muss man das NÄCHSTE
+    // anklicken (1. Gehirn = 1 Klick, 2. Gehirn = 2 Klicks, usw.). Bei Aktivierung fliegt es
+    // weg. Der Host sieht/bekommt diese Funktion gar nicht erst (spielt nicht um Punkte).
+    const BRAIN_POINTS = 20;
+    let brainClicksSoFar_spiel5 = 0;
+    let brainNeededClicks_spiel5 = null;
+
+    function showBrainBubble_spiel5(text, isSuccess) {
+      const logoEl = document.getElementById("brain-logo");
+      if (!logoEl) return;
+      const rect = logoEl.getBoundingClientRect();
+      const bubble = document.createElement("div");
+      bubble.className = "brain-bubble" + (isSuccess ? " brain-bubble-success" : "");
+      bubble.style.left = (rect.left + rect.width / 2 - 30) + "px";
+      bubble.style.top = (rect.top - 24) + "px";
+      bubble.innerText = text;
+      document.body.appendChild(bubble);
+      setTimeout(() => bubble.remove(), 1400);
+    }
+
+    window.clickBrainLogo = function() {
+      if (isHost) return; // Host spielt nicht um Punkte - für ihn passiert hier nichts
+      const claimedField = "brainFound_spiel5";
+      const logoEl = document.getElementById("brain-logo");
+
+      if (logoEl) {
+        logoEl.classList.remove("brain-hop");
+        void logoEl.offsetWidth;
+        logoEl.classList.add("brain-hop");
+      }
+
+      function tryActivate() {
+        brainClicksSoFar_spiel5++;
+        // Bewusst KEINE Sprechblase bei Zwischen-Klicks - erst beim finalen, erfolgreichen Klick
+        if (brainClicksSoFar_spiel5 < brainNeededClicks_spiel5) return;
+
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data[claimedField]) return; // inzwischen (z.B. anderes Gerät) schon aktiviert
+          const foundCount = data.brainsFoundCount || 0;
+          const newScore = (data.score || 0) + BRAIN_POINTS;
+          update(ref(db, 'players/' + playerId), {
+            score: newScore,
+            [claimedField]: true,
+            brainsFoundCount: foundCount + 1
+          });
+          push(ref(db, 'gameLog'), {
+            text: '🧠 ' + (data.name || 'Jemand') + ' hat ein Gehirn aktiviert: +' + BRAIN_POINTS + ' Punkte',
+            at: Date.now()
+          });
+          showBrainBubble_spiel5("+" + BRAIN_POINTS + " Punkte", true);
+          if (logoEl) logoEl.classList.add("brain-fly-away");
+        });
+      }
+
+      if (brainNeededClicks_spiel5 === null) {
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data["brainFound_spiel5"]) { brainNeededClicks_spiel5 = 0; if (logoEl) logoEl.classList.add("hidden"); return; }
+          brainNeededClicks_spiel5 = (data.brainsFoundCount || 0) + 1;
+          tryActivate();
+        });
+      } else {
+        tryActivate();
+      }
+    };
+</script>
+</head>
+<body class="term-bg text-white min-h-screen flex flex-col justify-between p-4 md:p-8 select-none relative overflow-x-hidden">
+
+  <div class="fixed inset-0 pointer-events-none crt-scanlines"></div>
+
+  <!-- TOP HUD BAR -->
+  <header class="relative z-10 flex justify-between items-center jax-card-term p-4">
+    <div class="flex items-center space-x-3">      <span class="text-green-400"><svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5-9 9"/></svg></span>
+      <div>
+        <h1 class="font-jax text-lg font-extrabold tracking-wide text-green-400">SPIEL 5: VERPIXELT!</h1>
+        <div class="flex items-center gap-2 mt-1">
+          <div id="status-badge" class="jax-chip px-3 py-1 text-xs font-jax font-bold bg-white text-[#1a1a2e] inline-block">
+            INITIALISIERUNG
+          </div>
+          <div id="image-progress" class="text-[11px] text-green-400/80 font-bold">Bild - von -</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-4 jax-chip bg-white px-4 py-2">
+      <div class="text-right">
+        <div id="player-info-name" class="text-sm font-jax font-bold text-[#1a1a2e]">Lade...</div>
+        <div id="player-info-score" class="text-xs font-black text-green-600">0 Pkt.</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- HOST PANEL -->
+  <div id="host-controls" class="hidden relative z-20 my-4 jax-card-term p-4">
+    <div class="text-xs font-jax font-bold text-green-400 tracking-wider uppercase mb-3 flex items-center space-x-2">
+      <span><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h16l1-9-5 3-4-6-4 6-5-3z"/></svg></span><span>MODERATOR-PULT</span>
+    </div>
+    <div id="host-preview-box" class="bg-white text-[#1a1a2e] rounded-xl p-6 text-center mb-3">
+      Lade Vorschau...
+    </div>
+
+    <div id="hc-waiting">
+      <div id="hc-last-result" class="hidden"></div>
+      <button onclick="hostRevealImage()" class="w-full py-6 jax-btn bg-green-600 text-white font-jax font-bold text-lg flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5-9 9"/></svg> Nächstes Bild zeigen
+      </button>
+    </div>
+
+    <div id="hc-revealing-idle" class="hidden space-y-2">
+      <div class="text-center text-white/80 text-xs font-bold py-1">Bild deckt sich automatisch weiter auf...</div>
+      <button onclick="hostSkipImage()" class="w-full py-5 jax-btn bg-white text-[#1a1a2e] font-jax font-bold text-base flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Bild überspringen
+      </button>
+    </div>
+
+    <div id="hc-revealing-active" class="hidden space-y-2">
+      <div id="hc-active-name" class="text-center text-[#ffd23f] text-xs font-bold py-1">Antwortet gerade: ...</div>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="hostMarkCorrect()" class="py-6 px-3 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold text-lg"><svg class="w-5 h-5 inline -mt-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg> Richtig</button>
+        <button onclick="hostMarkWrong()" class="py-6 px-3 jax-btn bg-red-700 text-white font-jax font-bold text-lg"><svg class="w-5 h-5 inline -mt-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg> Falsch</button>
+      </div>
+    </div>
+
+    <div id="hc-finished" class="hidden text-center text-white text-xs font-bold py-2">
+      <svg class="w-4 h-4 inline -mt-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h13l-3 4 3 4H5"/></svg> Alle Bilder gezeigt! Nutze den Button unten, um zurück ins Cockpit zu gehen.
+    </div>
+
+    <button onclick="hostRestartGame()" class="w-full mt-3 py-3 px-4 jax-btn bg-[#ffd23f] text-[#1a1a2e] font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.9-3.5M4 13a8 8 0 0 0 14.9 3.5"/><path d="M5 4v4h4M19 20v-4h-4"/></svg> Spiel neu starten
+    </button>
+  </div>
+
+  <!-- ZURÜCK-INS-COCKPIT: bewusst unten rechts fixiert, damit er nicht aus Versehen getroffen wird -->
+  <button id="host-end-game-btn" onclick="triggerReturnCountdown()" class="hidden fixed bottom-4 right-4 z-30 py-3 px-4 jax-btn bg-[#ff2e93] text-white font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/></svg> Spiel beenden & zurück ins Cockpit
+  </button>
+
+  <!-- HAUPTBEREICH -->
+  <main class="relative z-10 my-auto max-w-2xl w-full mx-auto text-center space-y-6 py-6">
+
+    <div id="player-answer-area" class="space-y-6">
+      <div id="waiting-area" class="hidden jax-card-term p-6 text-center">
+        <div id="lemming-track" class="relative w-full bg-black rounded-xl overflow-hidden mb-4" style="height: 60px;"></div>
+        <div id="waiting-result-text"></div>
+        <div class="text-green-500/70">Der Moderator bereitet das nächste Bild vor...</div>
+      </div>
+      <div id="image-area" class="hidden"></div>
+      <div id="finished-area" class="hidden jax-card-term p-10">
+        <div class="text-green-400 flex justify-center mb-3"><svg class="w-14 h-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h13l-3 4 3 4H5"/></svg></div>
+        <div class="font-jax text-2xl font-extrabold text-green-400">Erledigt...</div>
+        <div class="text-white/50 text-xs mt-2">Der Moderator bringt euch gleich zurück ins Cockpit...</div>
+        <div id="finished-quote" class="text-xs mt-4 max-w-md mx-auto opacity-70"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="relative z-10 text-center text-xs text-green-900/60 pt-4">
+    <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9486-removebg-preview.png" class="inline-block h-4 w-4 align-middle mr-1 -mt-0.5" onerror="this.style.display='none'">Hirnschmalz-Arena • Pixelbild-Modus
+  </footer>
+
+  <!-- RÜCKKEHR-ZWISCHENSZENE -->
+  <div id="return-countdown-overlay" class="hidden fixed inset-0 bg-black z-[80] flex flex-col items-center justify-center">
+    <div class="text-amber-200/70 text-xs tracking-[0.3em] uppercase mb-4" style="font-family: Georgia, 'Times New Roman', serif;">Rückkehr ins Cockpit in</div>
+    <div id="return-countdown-number" class="text-amber-100 border-4 border-amber-200/40 rounded-full w-40 h-40 flex items-center justify-center text-6xl" style="font-family: Georgia, 'Times New Roman', serif;">5</div>
+  </div>
+
+
+  <img id="brain-logo" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9455-removebg-preview.png"
+    onclick="clickBrainLogo()" class="fixed bottom-2 left-2 h-8 md:h-10 w-auto z-30 cursor-pointer transition-transform hover:scale-110"
+    onerror="this.style.display='none'" alt="">
+<div id="winner-gif-modal" class="hidden fixed inset-0 bg-black/80 z-[95] flex flex-col items-center justify-center p-4">
+    <div class="winner-gif-modal-inner text-center space-y-3">
+      <div id="winner-gif-name" class="font-jax text-2xl md:text-3xl font-extrabold text-[#ffd23f]" style="text-shadow:2px 2px 0 #1a1006,-2px -2px 0 #1a1006,2px -2px 0 #1a1006,-2px 2px 0 #1a1006;">Name gewinnt!</div>
+      <img id="winner-gif-img" src="" class="max-w-xs md:max-w-sm rounded-2xl border-4 border-white shadow-2xl">
+    </div>
+  </div>
+
+</body>
+</html>

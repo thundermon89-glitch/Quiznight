@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Spiel 4: Pi mal Daumen</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .font-jax { font-family: 'Baloo 2', sans-serif; }
+
+    .blueprint-bg {
+      background-color: #050e16;
+      background-image:
+        linear-gradient(rgba(56, 189, 248, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, 0.1) 1px, transparent 1px);
+      background-size: 26px 26px;
+    }
+    .jax-card {
+      background: #ffffff;
+      border: 4px solid #1a1a2e;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(0,0,0,0.85);
+    }
+    .jax-card-blueprint {
+      background: #0c1e2e;
+      border: 4px solid #38bdf8;
+      border-radius: 26px;
+      box-shadow: 8px 8px 0 rgba(0,0,0,0.6);
+      color: #ffffff;
+    }
+    .jax-chip {
+      border: 3px solid #1a1a2e;
+      border-radius: 9999px;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.85);
+    }
+    .jax-btn {
+      font-family: 'Baloo 2', sans-serif;
+      border: 3px solid #1a1a2e;
+      border-radius: 20px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(3px,3px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+    .jax-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    @keyframes bounceIn { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+    .jax-pop { animation: bounceIn 0.5s cubic-bezier(.34,1.56,.64,1); }
+
+    input[type=range].bp-slider { -webkit-appearance: none; appearance: none; background: transparent; }
+    input[type=range].bp-slider::-webkit-slider-runnable-track {
+      height: 12px; border-radius: 9999px; background: linear-gradient(90deg, #0e7490, #38bdf8);
+    }
+    input[type=range].bp-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none; width: 32px; height: 32px; border-radius: 50%;
+      background: #ffd23f; border: 4px solid #1a1a2e; margin-top: -10px;
+    }
+    input[type=range].bp-slider::-moz-range-track { height: 12px; border-radius: 9999px; background: linear-gradient(90deg, #0e7490, #38bdf8); }
+    input[type=range].bp-slider::-moz-range-thumb { width: 32px; height: 32px; border-radius: 50%; background: #ffd23f; border: 4px solid #1a1a2e; }
+      @keyframes brainHop {
+      0% { transform: translateY(0) scale(1); }
+      30% { transform: translateY(-24px) scale(1.12); }
+      55% { transform: translateY(0) scale(0.94); }
+      75% { transform: translateY(-9px) scale(1.04); }
+      100% { transform: translateY(0) scale(1); }
+    }
+    .brain-hop { animation: brainHop 0.4s ease-out; }
+
+    @keyframes brainFlyAway {
+      0% { transform: translate(0,0) scale(1) rotate(0deg); opacity: 1; }
+      100% { transform: translate(50px, -180px) scale(0.15) rotate(35deg); opacity: 0; }
+    }
+    .brain-fly-away { animation: brainFlyAway 0.7s ease-in forwards; }
+
+    @keyframes brainBubblePop {
+      0% { transform: translateY(6px) scale(0.6); opacity: 0; }
+      20% { transform: translateY(0) scale(1.05); opacity: 1; }
+      80% { transform: translateY(-2px) scale(1); opacity: 1; }
+      100% { transform: translateY(-12px) scale(0.9); opacity: 0; }
+    }
+    .brain-bubble {
+      position: fixed; z-index: 40; pointer-events: none;
+      background: white; color: #1a1a2e; border: 2px solid #1a1a2e;
+      border-radius: 10px; padding: 4px 9px; font-size: 11px; font-weight: 800;
+      font-family: 'Baloo 2', sans-serif;
+      animation: brainBubblePop 1.4s ease-out forwards;
+      white-space: nowrap;
+    }
+    .brain-bubble-success {
+      background: #16a34a; color: white; border-color: #14532d; font-size: 14px;
+      padding: 6px 14px;
+    }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, update, onValue, get, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // ==== EIGENES ICON-SET (keine Emojis) ====
+    const ICONS = {
+      ruler: '<path d="M3 16l13-13 5 5-13 13z"/><path d="M14 6l2 2M10 10l2 2M6 14l2 2"/>',
+      crown: '<path d="M4 18h16l1-9-5 3-4-6-4 6-5-3z"/>',
+      book: '<path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M6 3v16"/>',
+      target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+      chart: '<path d="M4 20V10M10 20V4M16 20v-7M4 20h16"/>',
+      arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+      flag: '<path d="M5 21V4h13l-3 4 3 4H5"/>',
+      check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
+      refresh: '<path d="M20 11a8 8 0 0 0-14.9-3.5M4 13a8 8 0 0 0 14.9 3.5"/><path d="M5 4v4h4M19 20v-4h-4"/>',
+      exit: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/>',
+      up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+      down: '<path d="M12 5v14M5 12l7 7 7-7"/>'
+    };
+    function icon(name, cls) {
+      return `<svg class="${cls || 'w-5 h-5'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+    }
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const playerId = localStorage.getItem("quiz_player_id");
+    let isHost = false;
+    let allPlayers = {};
+    let latestState = null;
+
+    let localRoundKey = null;
+    let currentSliderValue = null;
+
+    // ==== RUNDEN-KATALOG: 3x Größe in Metern (0-1000) + 3x Gewicht in Kilogramm (0-1000, mit
+    // Gramm-genauer Lösung) + 3x Länge in Zentimetern (0-200, exakt) ====
+    const rounds = [
+      { unit: 'm', id: 1, emoji: "🗼", question: "Wie hoch ist der Eiffelturm (in Metern, inkl. Antenne)?", answer: 330, min: 0, max: 1000, tolerance: 40, points: 200 },
+      { unit: 'm', id: 2, emoji: "🏙️", question: "Wie hoch ist der Burj Khalifa (in Metern)?", answer: 828, min: 0, max: 1000, tolerance: 60, points: 200 },
+      { unit: 'm', id: 3, emoji: "⛪", question: "Wie hoch ist der Kölner Dom (in Metern)?", answer: 157, min: 0, max: 1000, tolerance: 20, points: 200 },
+
+      { unit: 'kg', id: 4, emoji: "🦁", question: "Wie viel wiegt ein ausgewachsener Löwe (männlich, in Kilogramm)?", answer: 190.5, min: 0, max: 1000, tolerance: 30, points: 200 },
+      { unit: 'kg', id: 5, emoji: "🎹", question: "Wie viel wiegt ein durchschnittlicher Konzertflügel (in Kilogramm)?", answer: 350.75, min: 0, max: 1000, tolerance: 50, points: 200 },
+      { unit: 'kg', id: 6, emoji: "🐄", question: "Wie viel wiegt eine ausgewachsene Milchkuh (in Kilogramm)?", answer: 750.2, min: 0, max: 1000, tolerance: 60, points: 200 },
+
+      { unit: 'cm', id: 7, emoji: "🧍", question: "Wie groß ist ein durchschnittlicher erwachsener Mann in Deutschland (in Zentimetern)?", answer: 180, min: 0, max: 200, tolerance: 8, points: 200 },
+      { unit: 'cm', id: 8, emoji: "🎾", question: "Wie lang ist ein Tennisschläger (in Zentimetern)?", answer: 68, min: 0, max: 200, tolerance: 5, points: 200 },
+      { unit: 'cm', id: 9, emoji: "🧊", question: "Wie hoch ist ein handelsüblicher Standard-Kühlschrank (in Zentimetern)?", answer: 180, min: 0, max: 200, tolerance: 10, points: 200 }
+      // Weitere Runden nach dem gleichen Schema ergänzbar (unit: 'm', 'kg' oder 'cm')
+    ];
+
+    // Anzeige-Nachkommastellen je Einheit: Gewicht (kg) wird auf 2 Nachkommastellen angezeigt
+    // kg: 2 Nachkommastellen, Komma als Dezimaltrennzeichen (deutsche Schreibweise).
+    // formatUnitValueHtml liefert die Nachkommastellen zusätzlich kleiner geschrieben.
+    const UNIT_DECIMALS = { m: 0, kg: 2, cm: 0 };
+    function formatUnitValue(value, unit) {
+      const decimals = UNIT_DECIMALS[unit] ?? 0;
+      return Number(value).toFixed(decimals).replace('.', ',');
+    }
+    function formatUnitValueHtml(value, unit) {
+      const decimals = UNIT_DECIMALS[unit] ?? 0;
+      const fixed = Number(value).toFixed(decimals);
+      if (decimals === 0) return fixed;
+      const [whole, frac] = fixed.split('.');
+      return whole + '<span style="font-size:0.62em;">,' + frac + '</span>';
+    }
+
+    function getActivePlayerIds() {
+      return Object.keys(allPlayers).filter(id => allPlayers[id] && allPlayers[id].name && !allPlayers[id].name.includes("Host"));
+    }
+
+    onValue(ref(db, 'players/'), (snapshot) => {
+      allPlayers = snapshot.val() || {};
+      if (latestState) renderAll(latestState);
+    });
+
+        // ==== RANG-TITEL: witziger Platzierungs-Hinweis statt exaktem Punktestand ====
+    const RANK_TITLES = [
+      "Sockenflicker",
+      "Krümelmonster-Praktikant",
+      "Wackelpudding-Ritter",
+      "Hobby-Rater",
+      "Quiz-Lehrling",
+      "Wissens-Gladiator",
+      "Fragen-Halbgott",
+      "Elite Übermensch Echse"
+    ];
+    function computeRankTitle(myId, allPlayersData) {
+      const activeIds = Object.keys(allPlayersData).filter(id => allPlayersData[id] && allPlayersData[id].name && !allPlayersData[id].name.includes("Host") && !allPlayersData[id].name.includes("Admin"));
+      if (activeIds.length === 0) return RANK_TITLES[4];
+      const sorted = [...activeIds].sort((a, b) => (allPlayersData[b].score || 0) - (allPlayersData[a].score || 0));
+      const rank = sorted.indexOf(myId) + 1;
+      const n = sorted.length;
+      const percentile = n > 1 ? (rank - 1) / (n - 1) : 0.5;
+      const tierIndex = Math.min(7, Math.max(0, Math.round((1 - percentile) * 7)));
+      return RANK_TITLES[tierIndex];
+    }
+    onValue(ref(db, 'players/'), (snapshot) => {
+      const allPlayersData = snapshot.val() || {};
+      const player = allPlayersData[playerId];
+      if (player) {
+        if (player.name && player.name.includes("Host")) {
+          isHost = true;
+          document.getElementById("brain-logo")?.classList.add("hidden"); // Host bekommt das Gehirn-Feature nicht
+          document.getElementById("host-controls").classList.remove("hidden");
+          document.getElementById("host-end-game-btn").classList.remove("hidden");
+          document.getElementById("player-answer-area").classList.add("hidden");
+          document.getElementById("player-info-score").innerHTML = icon('crown', 'w-3.5 h-3.5 inline -mt-0.5') + ' MODERATOR';
+        } else {
+          document.getElementById("player-info-score").innerText = computeRankTitle(playerId, allPlayersData);
+        }
+        document.getElementById("player-info-name").innerText = player.name;
+        if (latestState) renderAll(latestState);
+      }
+    });
+
+    onValue(ref(db, 'game4State'), (snapshot) => {
+      const state = snapshot.val() || { roundIdx: 0, stage: 'waiting' };
+      latestState = state;
+      renderAll(state);
+    });
+
+    onValue(ref(db, 'gameState'), (snapshot) => {
+      const gs = snapshot.val();
+      if (gs && gs.status && gs.status !== 'in_game') {
+        window.location.href = "cockpit.html";
+      }
+    });
+
+    window.hostRestartGame = function() {
+      if (!confirm("Spiel wirklich neu starten? Der Fortschritt dieser Runde geht verloren (Punkte bleiben erhalten).")) return;
+      set(ref(db, 'game4State'), { roundIdx: 0, stage: 'waiting' });
+    };
+
+    function generateRiddleClues(pid, sortedIds, players) {
+      const rank = sortedIds.indexOf(pid) + 1;
+      const n = sortedIds.length;
+      const pool = [];
+      if (rank > 1) pool.push('Du bist nicht Erster.');
+      if (rank < n) pool.push('Du bist nicht Letzter.');
+      if (rank > 1) pool.push('Du liegst hinter ' + players[sortedIds[rank - 2]].name + '.');
+      if (rank < n) pool.push('Du liegst vor ' + players[sortedIds[rank]].name + '.');
+      if (rank > 2) pool.push('Mindestens zwei Personen liegen vor dir.');
+      if (rank < n - 1) pool.push('Mindestens zwei Personen liegen hinter dir.');
+      if (pool.length === 0) pool.push('Die Truhe ist ratlos - du bist ganz allein im Rennen.');
+      const shuffled = pool.map(x => [Math.random(), x]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+      return shuffled.slice(0, Math.min(2, shuffled.length));
+    }
+
+        // ==== ZITATE ÜBER DAS SPIELEN (für den Abspann) ====
+    const GAME_QUOTES = [
+      { text: "Beim Spiel kann man einen Menschen in einer Stunde besser kennenlernen als im Gespräch in einem Jahr.", author: "Platon" },
+      { text: "Spiele, damit du ernst sein kannst. Denn das Spiel ist ein Ausruhen, und die Menschen bedürfen, da sie nicht immer tätig sein können, des Ausruhens.", author: "Aristoteles" },
+      { text: "Atome spalten ist ein Kinderspiel, verglichen mit einem Kinderspiel.", author: "Albert Einstein" },
+      { text: "Nur Arbeit und kein Spiel macht dumm.", author: "Karl Marx" },
+      { text: "Spielen ist eine Tätigkeit, die man gar nicht ernst genug nehmen kann.", author: "Jacques-Yves Cousteau" }
+    ];
+    function gameQuoteHtml() {
+      const q = GAME_QUOTES[Math.floor(Math.random() * GAME_QUOTES.length)];
+      return `<div class="italic">"${q.text}"</div><div class="mt-2 not-italic font-bold opacity-80">— ${q.author}</div>`;
+    }
+
+    // ==== RÜCKKEHR-ZWISCHENSZENE: schwarzer Bildschirm mit altertümlichem Countdown ====
+    let lastSeenReturnCountdownAt = null;
+    onValue(ref(db, 'gameState/returnCountdownAt'), (snapshot) => {
+      const startedAt = snapshot.val();
+      if (startedAt && startedAt !== lastSeenReturnCountdownAt) {
+        lastSeenReturnCountdownAt = startedAt;
+        runReturnCountdown(startedAt);
+      }
+    });
+
+    function runReturnCountdown(startedAt) {
+      const overlay = document.getElementById('return-countdown-overlay');
+      const numberEl = document.getElementById('return-countdown-number');
+      if (!overlay || !numberEl) return;
+      overlay.classList.remove('hidden');
+      const DURATION = 5;
+      let doneTriggered = false;
+      function tick() {
+        const elapsed = (Date.now() - startedAt) / 1000;
+        const remaining = Math.max(0, DURATION - elapsed);
+        numberEl.innerText = remaining > 0.05 ? Math.ceil(remaining) : '✓';
+        if (remaining > 0.05) {
+          requestAnimationFrame(tick);
+        } else if (!doneTriggered) {
+          doneTriggered = true;
+          if (isHost) window.hostBackToCockpit();
+        }
+      }
+      tick();
+    }
+
+    window.triggerReturnCountdown = function() {
+      if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
+      update(ref(db, 'gameState'), { returnCountdownAt: Date.now() });
+    };
+
+    window.hostBackToCockpit = function() {
+
+      get(ref(db, 'gameState/startScores')).then((startSnap) => {
+        const startScores = startSnap.val() || {};
+        get(ref(db, 'players/')).then((snapshot) => {
+          const players = snapshot.val() || {};
+          const activeIds = Object.keys(players).filter(id => players[id] && players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin"));
+          const rankedIds = [...activeIds].sort((a, b) => (players[b].score || 0) - (players[a].score || 0));
+          const updates = {};
+          for (let id in players) {
+            if (players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin")) {
+              updates['players/' + id + '/isReady'] = false;
+            }
+          }
+          activeIds.forEach(id => {
+            updates['players/' + id + '/riddleClues'] = generateRiddleClues(id, rankedIds, players);
+          });
+          update(ref(db), updates).then(() => {
+            activeIds.forEach(id => {
+              const delta = (players[id].score || 0) - (startScores[id] || 0);
+              if (delta !== 0) {
+                push(ref(db, 'gameLog'), {
+                  text: (delta > 0 ? '📈 ' : '📉 ') + players[id].name + ': ' + (delta > 0 ? '+' : '') + delta + ' Punkte in Spiel 4',
+                  at: Date.now()
+                });
+              }
+            });
+            set(ref(db, 'gameState'), { status: 'cockpit', chestPending: true, chestPendingAt: Date.now() });
+          });
+        });
+      });
+    };
+
+    // ================= HOST AKTIONEN =================
+
+    window.hostStartRound = () => {
+      update(ref(db, 'game4State'), { stage: 'input', submissions: null, awardedPoints: null });
+    };
+
+    window.hostResolveRound = () => {
+      get(ref(db, 'game4State')).then((snap) => {
+        const s = snap.val() || {};
+        const idx = s.roundIdx || 0;
+        const round = rounds[idx];
+        const submissions = s.submissions || {};
+        const ids = Object.keys(submissions);
+        if (ids.length === 0) {
+          update(ref(db, 'game4State'), { stage: 'result', awardedPoints: {} });
+          return;
+        }
+        const promises = ids.map((pid) => {
+          const guess = submissions[pid];
+          const diff = Math.abs(guess - round.answer);
+          const pts = Math.round(round.points * Math.max(0, 1 - diff / round.tolerance));
+          return get(ref(db, 'players/' + pid + '/score')).then((scoreSnap) => {
+            const cur = scoreSnap.val() || 0;
+            return update(ref(db, 'players/' + pid), { score: cur + pts }).then(() => ({ pid, pts }));
+          });
+        });
+        Promise.all(promises).then((results) => {
+          const awardedPoints = {};
+          results.forEach(r => { awardedPoints[r.pid] = r.pts; });
+          update(ref(db, 'game4State'), { stage: 'result', awardedPoints });
+        });
+      });
+    };
+
+    window.hostNextRound = () => {
+      get(ref(db, 'game4State/roundIdx')).then((snap) => {
+        const idx = snap.val() || 0;
+        const nextIdx = idx + 1;
+        if (nextIdx >= rounds.length) {
+          set(ref(db, 'game4State'), { roundIdx: idx, stage: 'finished' });
+        } else {
+          set(ref(db, 'game4State'), { roundIdx: nextIdx, stage: 'waiting' });
+        }
+      });
+    };
+
+    // ================= SPIELER AKTIONEN =================
+
+    window.onSliderInput = function(val) {
+      const idx = (latestState && latestState.roundIdx) || 0;
+      const round = rounds[idx];
+      currentSliderValue = round.unit === 'kg' ? parseFloat(val) : parseInt(val, 10);
+      const disp = document.getElementById("slider-value-display");
+      if (disp) disp.innerHTML = formatUnitValueHtml(currentSliderValue, round.unit) + " " + round.unit;
+    };
+
+    window.submitEstimate = function() {
+      update(ref(db, 'game4State/submissions'), { [playerId]: currentSliderValue });
+    };
+
+    // ================= RENDERING =================
+
+    function renderAll(state) {
+      const round = rounds[state.roundIdx || 0];
+      renderHostPreview(round, state);
+      renderHostControls(state, round);
+      renderPlayerView(state, round);
+    }
+
+    function renderHostPreview(round, state) {
+      if (!isHost) return;
+      const box = document.getElementById("host-preview-box");
+      if (!box) return;
+      if (!round) { box.innerHTML = `<div class="text-red-600 font-bold">Keine weitere Runde vorhanden.</div>`; return; }
+      const solutionHtml = `<div class="text-[#7017c9] font-jax font-extrabold text-2xl">${formatUnitValueHtml(round.answer, round.unit)} ${round.unit}</div><div class="text-[#1a1a2e]/50 text-xs mt-1">Toleranz für volle Punktzahl-Abstufung: ${round.tolerance} ${round.unit} · max. ${round.points} Pkt.</div>`;
+      box.innerHTML = `
+        <div class="text-cyan-600 font-jax font-bold mb-2 flex items-center justify-center gap-1">${icon('book','w-4 h-4')} Vorschau - Runde ${(state.roundIdx || 0) + 1} von ${rounds.length}:</div>
+        <div class="font-jax font-extrabold text-[#1a1a2e] text-xl md:text-2xl mb-3">${round.emoji ? round.emoji + ' ' : ''}${round.question}</div>
+        <div class="text-cyan-600 font-bold text-xs uppercase tracking-wide mb-1">Lösung</div>
+        ${solutionHtml}
+      `;
+    }
+
+    function show(id) { document.getElementById(id)?.classList.remove("hidden"); }
+    function hide(id) { document.getElementById(id)?.classList.add("hidden"); }
+
+    function renderHostControls(state, round) {
+      if (!isHost) return;
+      const stage = state.stage || 'waiting';
+      ["hc-waiting", "hc-input", "hc-result", "hc-finished"].forEach(hide);
+      show("hc-" + stage);
+
+      if (stage === 'input') {
+        const submissions = state.submissions || {};
+        const ids = getActivePlayerIds();
+        const submittedCount = ids.filter(id => submissions[id] !== undefined).length;
+        document.getElementById("hc-submitted-count").innerText = submittedCount + " von " + ids.length + " abgegeben";
+      }
+      if (stage === 'result') {
+        const btn = document.getElementById("hc-next-round-btn");
+        const isLast = (state.roundIdx || 0) + 1 >= rounds.length;
+        if (btn) btn.innerHTML = isLast ? (icon('flag','w-4 h-4 inline -mt-1') + ' Spiel beenden') : (icon('arrowRight','w-4 h-4 inline -mt-1') + ' Nächste Runde');
+      }
+    }
+
+    function renderPlayerView(state, round) {
+      const stage = state.stage || 'waiting';
+      const statusBadge = document.getElementById("status-badge");
+      const progressEl = document.getElementById("round-progress");
+      progressEl.innerText = "Runde " + Math.min((state.roundIdx || 0) + 1, rounds.length) + " von " + rounds.length;
+
+      ["waiting-area", "input-area", "result-area", "finished-area"].forEach(hide);
+
+      if (stage === 'waiting') {
+        statusBadge.innerText = "WARTET AUF NÄCHSTE RUNDE";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-white text-[#1a1a2e]";
+        document.getElementById("waiting-area").innerHTML = `<div class="text-white/70">Der Moderator bereitet die nächste Runde vor...</div>`;
+        show("waiting-area");
+        localRoundKey = null;
+      } else if (stage === 'input') {
+        statusBadge.innerText = "SCHÄTZEN";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#3ecbff] text-[#1a1a2e] animate-pulse";
+        renderInputArea(state, round);
+        show("input-area");
+      } else if (stage === 'result') {
+        statusBadge.innerText = "AUFLÖSUNG";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#7017c9] text-white";
+        renderResultArea(state, round);
+        show("result-area");
+        localRoundKey = null;
+      } else if (stage === 'finished') {
+        statusBadge.innerText = "SPIEL BEENDET";
+        statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#7017c9] text-white";
+        show("finished-area");
+        const fq = document.getElementById("finished-quote"); if (fq && !fq.innerHTML) fq.innerHTML = gameQuoteHtml();
+      }
+    }
+
+    function renderInputArea(state, round) {
+      const wrap = document.getElementById("input-area");
+      const submissions = state.submissions || {};
+      const mySubmission = submissions[playerId];
+      const ids = getActivePlayerIds();
+      const submittedCount = ids.filter(id => submissions[id] !== undefined).length;
+      const key = (state.roundIdx || 0) + ':' + state.stage;
+
+      if (key !== localRoundKey) {
+        localRoundKey = key;
+        currentSliderValue = Math.round((round.min + round.max) / 2);
+      }
+
+      const sliderStep = round.unit === 'kg' ? 0.01 : 1;
+
+      let widgetHtml = '';
+      if (mySubmission !== undefined) {
+        widgetHtml = `<div class="text-[#7ed957] font-jax font-bold text-xl">${icon('check','w-5 h-5 inline -mt-1')} Abgegeben: ${formatUnitValueHtml(mySubmission, round.unit)} ${round.unit}</div><div class="text-white/50 text-xs mt-1">Warte auf Auflösung...</div>`;
+      } else {
+        widgetHtml = `
+          <div class="space-y-5">
+            <div id="slider-value-display" class="text-5xl font-jax font-extrabold text-[#7017c9] tabular-nums">${formatUnitValueHtml(currentSliderValue, round.unit)} ${round.unit}</div>
+            <input type="range" class="bp-slider w-full" min="${round.min}" max="${round.max}" step="${sliderStep}" value="${currentSliderValue}" oninput="onSliderInput(this.value)">
+            <div class="flex justify-between text-xs text-[#1a1a2e]/50 font-bold">
+              <span>${round.min} ${round.unit}</span><span>${round.max} ${round.unit}</span>
+            </div>
+            ${round.unit === 'kg' ? '<div class="text-[10px] text-[#1a1a2e]/40">Tipp: Nach dem Klick auf den Regler kannst du mit den Pfeiltasten in 10-Gramm-Schritten nachjustieren.</div>' : ''}
+            <button onclick="submitEstimate()" class="px-8 py-4 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold text-lg">
+              ${icon('check','w-5 h-5 inline -mt-1')} Schätzung abgeben
+            </button>
+          </div>
+        `;
+      }
+
+      wrap.innerHTML = `
+        <div class="jax-card p-8 text-center">
+          <p class="font-jax text-2xl md:text-3xl font-extrabold text-[#1a1a2e] mb-6">${round.emoji ? `<span class="text-4xl">${round.emoji}</span><br>` : ''}${round.question}</p>
+          <div id="input-widget">${widgetHtml}</div>
+          <div class="text-[#1a1a2e]/40 text-xs mt-4">${submittedCount} von ${ids.length} abgegeben</div>
+        </div>
+      `;
+    }
+
+    function renderResultArea(state, round) {
+      const wrap = document.getElementById("result-area");
+      const submissions = state.submissions || {};
+      const awarded = state.awardedPoints || {};
+      const ids = getActivePlayerIds();
+
+      const bodyHtml = `
+        <div class="text-center mb-4">
+          <div class="text-cyan-600 text-xs uppercase tracking-wide font-bold">Richtige Antwort</div>
+          <div class="font-jax text-4xl font-extrabold text-[#1a1a2e]">${formatUnitValueHtml(round.answer, round.unit)} ${round.unit}</div>
+        </div>
+        <div class="space-y-2 max-w-md mx-auto">
+          ${ids.map(id => {
+            const guess = submissions[id];
+            const pts = awarded[id] || 0;
+            const name = (allPlayers[id] || {}).name || "Spieler";
+            return `<div class="flex items-center justify-between jax-chip bg-[#f4f1ff] p-2.5 text-sm">
+              <span class="text-[#1a1a2e] font-semibold">${name}</span>
+              <span class="text-[#7017c9] font-bold">${guess !== undefined ? formatUnitValueHtml(guess, round.unit) + ' ' + round.unit : 'keine Angabe'}</span>
+              <span class="text-[#7ed957] font-jax font-bold">+${pts}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      `;
+      wrap.innerHTML = bodyHtml;
+    }
+  
+    // ==== VERSTECKTES GEHIRN: gibt es in jedem Spiel + im Cockpit einmal zu finden.
+    // Jeder Klick lässt es hüpfen + eine kurze Sprechblase mit Klick-Fortschritt zeigen.
+    // Je mehr Gehirne man insgesamt schon aktiviert hat, desto öfter muss man das NÄCHSTE
+    // anklicken (1. Gehirn = 1 Klick, 2. Gehirn = 2 Klicks, usw.). Bei Aktivierung fliegt es
+    // weg. Der Host sieht/bekommt diese Funktion gar nicht erst (spielt nicht um Punkte).
+    const BRAIN_POINTS = 20;
+    let brainClicksSoFar_spiel4 = 0;
+    let brainNeededClicks_spiel4 = null;
+
+    function showBrainBubble_spiel4(text, isSuccess) {
+      const logoEl = document.getElementById("brain-logo");
+      if (!logoEl) return;
+      const rect = logoEl.getBoundingClientRect();
+      const bubble = document.createElement("div");
+      bubble.className = "brain-bubble" + (isSuccess ? " brain-bubble-success" : "");
+      bubble.style.left = (rect.left + rect.width / 2 - 30) + "px";
+      bubble.style.top = (rect.top - 24) + "px";
+      bubble.innerText = text;
+      document.body.appendChild(bubble);
+      setTimeout(() => bubble.remove(), 1400);
+    }
+
+    window.clickBrainLogo = function() {
+      if (isHost) return; // Host spielt nicht um Punkte - für ihn passiert hier nichts
+      const claimedField = "brainFound_spiel4";
+      const logoEl = document.getElementById("brain-logo");
+
+      if (logoEl) {
+        logoEl.classList.remove("brain-hop");
+        void logoEl.offsetWidth;
+        logoEl.classList.add("brain-hop");
+      }
+
+      function tryActivate() {
+        brainClicksSoFar_spiel4++;
+        // Bewusst KEINE Sprechblase bei Zwischen-Klicks - erst beim finalen, erfolgreichen Klick
+        if (brainClicksSoFar_spiel4 < brainNeededClicks_spiel4) return;
+
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data[claimedField]) return; // inzwischen (z.B. anderes Gerät) schon aktiviert
+          const foundCount = data.brainsFoundCount || 0;
+          const newScore = (data.score || 0) + BRAIN_POINTS;
+          update(ref(db, 'players/' + playerId), {
+            score: newScore,
+            [claimedField]: true,
+            brainsFoundCount: foundCount + 1
+          });
+          push(ref(db, 'gameLog'), {
+            text: '🧠 ' + (data.name || 'Jemand') + ' hat ein Gehirn aktiviert: +' + BRAIN_POINTS + ' Punkte',
+            at: Date.now()
+          });
+          showBrainBubble_spiel4("+" + BRAIN_POINTS + " Punkte", true);
+          if (logoEl) logoEl.classList.add("brain-fly-away");
+        });
+      }
+
+      if (brainNeededClicks_spiel4 === null) {
+        get(ref(db, 'players/' + playerId)).then((snap) => {
+          const data = snap.val() || {};
+          if (data["brainFound_spiel4"]) { brainNeededClicks_spiel4 = 0; if (logoEl) logoEl.classList.add("hidden"); return; }
+          brainNeededClicks_spiel4 = (data.brainsFoundCount || 0) + 1;
+          tryActivate();
+        });
+      } else {
+        tryActivate();
+      }
+    };
+</script>
+</head>
+<body class="blueprint-bg text-white min-h-screen flex flex-col justify-between p-4 md:p-8 select-none relative overflow-x-hidden">
+
+  <!-- TOP HUD BAR -->
+  <header class="relative z-10 flex justify-between items-center jax-card-blueprint p-4">
+    <div class="flex items-center space-x-3">      <span class="text-[#38bdf8]"><svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16l13-13 5 5-13 13z"/><path d="M14 6l2 2M10 10l2 2M6 14l2 2"/></svg></span>
+      <div>
+        <h1 class="font-jax text-lg font-extrabold tracking-wide text-[#38bdf8]">SPIEL 4: PI MAL DAUMEN</h1>
+        <div class="flex items-center gap-2 mt-1">
+          <div id="status-badge" class="jax-chip px-3 py-1 text-xs font-jax font-bold bg-white text-[#1a1a2e] inline-block">
+            INITIALISIERUNG
+          </div>
+          <div id="round-progress" class="text-[11px] text-[#38bdf8]/80 font-bold">Runde - von -</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-4 jax-chip bg-white px-4 py-2">
+      <div class="text-right">
+        <div id="player-info-name" class="text-sm font-jax font-bold text-[#1a1a2e]">Lade...</div>
+        <div id="player-info-score" class="text-xs font-black text-cyan-600">0 Pkt.</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- HOST PANEL -->
+  <div id="host-controls" class="hidden relative z-20 my-4 jax-card-blueprint p-4">
+    <div class="text-xs font-jax font-bold text-[#38bdf8] tracking-wider uppercase mb-3 flex items-center space-x-2">
+      <span><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h16l1-9-5 3-4-6-4 6-5-3z"/></svg></span><span>MODERATOR-PULT</span>
+    </div>
+    <div id="host-preview-box" class="bg-white text-[#1a1a2e] rounded-xl p-6 text-center mb-3">
+      Lade Vorschau...
+    </div>
+
+    <div id="hc-waiting">
+      <button onclick="hostStartRound()" class="w-full py-6 jax-btn bg-[#3ecbff] text-[#1a1a2e] font-jax font-bold text-lg flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg> Runde starten
+      </button>
+    </div>
+
+    <div id="hc-input" class="hidden space-y-2">
+      <div id="hc-submitted-count" class="text-center text-white text-xs font-bold py-1">0 von 0 abgegeben</div>
+      <button onclick="hostResolveRound()" class="w-full py-6 jax-btn bg-[#7017c9] text-white font-jax font-bold text-lg flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M4 20h16"/></svg> Auflösen
+      </button>
+    </div>
+
+    <div id="hc-result" class="hidden">
+      <button id="hc-next-round-btn" onclick="hostNextRound()" class="w-full py-6 jax-btn bg-white text-[#1a1a2e] font-jax font-bold text-lg flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Nächste Runde
+      </button>
+    </div>
+
+    <div id="hc-finished" class="hidden text-center text-white text-xs font-bold py-2">
+      <svg class="w-4 h-4 inline -mt-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h13l-3 4 3 4H5"/></svg> Alle Runden gespielt! Nutze den Button unten, um zurück ins Cockpit zu gehen.
+    </div>
+
+    <button onclick="hostRestartGame()" class="w-full mt-3 py-3 px-4 jax-btn bg-[#ffd23f] text-[#1a1a2e] font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.9-3.5M4 13a8 8 0 0 0 14.9 3.5"/><path d="M5 4v4h4M19 20v-4h-4"/></svg> Spiel neu starten
+    </button>
+  </div>
+
+  <!-- ZURÜCK-INS-COCKPIT: bewusst unten rechts fixiert, damit er nicht aus Versehen getroffen wird -->
+  <button id="host-end-game-btn" onclick="triggerReturnCountdown()" class="hidden fixed bottom-4 right-4 z-30 py-3 px-4 jax-btn bg-[#ff2e93] text-white font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/></svg> Spiel beenden & zurück ins Cockpit
+  </button>
+
+  <!-- HAUPTBEREICH -->
+  <main class="relative z-10 my-auto max-w-2xl w-full mx-auto text-center space-y-6 py-6">
+
+    <div id="player-answer-area" class="space-y-6">
+      <div id="waiting-area" class="hidden jax-card-blueprint p-10"></div>
+      <div id="input-area" class="hidden"></div>
+      <div id="result-area" class="hidden jax-card p-8"></div>
+      <div id="finished-area" class="hidden jax-card-blueprint p-10">
+        <div class="text-[#38bdf8] flex justify-center mb-3"><svg class="w-14 h-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h13l-3 4 3 4H5"/></svg></div>
+        <div class="font-jax text-2xl font-extrabold text-[#38bdf8]">Erledigt...</div>
+        <div class="text-white/50 text-xs mt-2">Der Moderator bringt euch gleich zurück ins Cockpit...</div>
+        <div id="finished-quote" class="text-xs mt-4 max-w-md mx-auto opacity-70"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="relative z-10 text-center text-xs text-cyan-900/60 pt-4">
+    <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9486-removebg-preview.png" class="inline-block h-4 w-4 align-middle mr-1 -mt-0.5" onerror="this.style.display='none'">Hirnschmalz-Arena • Schätz-Modus
+  </footer>
+
+  <!-- RÜCKKEHR-ZWISCHENSZENE -->
+  <div id="return-countdown-overlay" class="hidden fixed inset-0 bg-black z-[80] flex flex-col items-center justify-center">
+    <div class="text-amber-200/70 text-xs tracking-[0.3em] uppercase mb-4" style="font-family: Georgia, 'Times New Roman', serif;">Rückkehr ins Cockpit in</div>
+    <div id="return-countdown-number" class="text-amber-100 border-4 border-amber-200/40 rounded-full w-40 h-40 flex items-center justify-center text-6xl" style="font-family: Georgia, 'Times New Roman', serif;">5</div>
+  </div>
+
+
+  <img id="brain-logo" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9455-removebg-preview.png"
+    onclick="clickBrainLogo()" class="fixed bottom-2 left-2 h-8 md:h-10 w-auto z-30 cursor-pointer transition-transform hover:scale-110"
+    onerror="this.style.display='none'" alt="">
+</body>
+</html>
