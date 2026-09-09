@@ -223,73 +223,37 @@
 
     // FRAGEN-KATALOG (Standard-Fragen als Rückfallebene, falls im Editor noch nichts angelegt wurde)
     let questions = [
-      {
-        id: 1,
-        question: "Napoleon war für seine Zeit außergewöhnlich klein.",
-        correct: false,
-        fact: "Napoleon war mit rund 1,68 m für einen Franzosen seiner Zeit durchschnittlich groß, eher sogar leicht darüber. Der Mythos entstand durch eine Verwechslung von Maßeinheiten (französische Zoll waren länger als englische) sowie durch britische Propaganda-Karikaturen, die ihn absichtlich winzig darstellten.",
-        source: "https://www.watson.ch/wissen/alkohol/760089989-napoleon-war-gar-nicht-klein-und-16-weitere-mythen-die-so-nicht-stimmen",
-        points: 150
-      },
-      {
-        id: 2,
-        question: "Der Mensch nutzt nur etwa 10 % seines Gehirns.",
-        correct: false,
-        fact: "Bildgebende Verfahren zeigen, dass im Laufe eines Tages praktisch jeder Bereich des Gehirns aktiv wird - auch scheinbar 'ruhende' Areale haben wichtige Funktionen. Der Mythos hat keinen wissenschaftlichen Ursprung, hält sich aber hartnäckig in der Popkultur.",
-        source: "https://www.scientificamerican.com/article/do-people-only-use-10-percent-of-their-brains/",
-        points: 150
-      },
-      {
-        id: 3,
-        question: "Goldfische haben ein Gedächtnis von nur wenigen Sekunden.",
-        correct: false,
-        fact: "Studien zeigen, dass Goldfische sich an Dinge über Wochen und sogar Monate erinnern können - sie lassen sich zum Beispiel darauf trainieren, auf bestimmte Signale oder Farben zu reagieren, und behalten das gelernte Verhalten langfristig bei.",
-        source: "https://www.livescience.com/59187-goldfish-memory-myth.html",
-        points: 150
-      },
-      {
-        id: 4,
-        question: "Die Chinesische Mauer ist vom Weltraum aus mit bloßem Auge sichtbar.",
-        correct: false,
-        fact: "Astronauten, darunter mehrere chinesische Taikonauten, haben bestätigt, dass die Mauer aus der Erdumlaufbahn mit bloßem Auge nicht zu erkennen ist - sie ist einfach zu schmal im Verhältnis zur Entfernung. Andere, breitere menschengemachte Strukturen sind dagegen sichtbar.",
-        source: "https://www.scientificamerican.com/article/great-wall-of-china-is-not-visible-from-space/",
-        points: 150
-      },
-      {
-        id: 5,
-        question: "Man verliert die meiste Körperwärme über den Kopf.",
-        correct: false,
-        fact: "Der Mythos stammt aus einer US-Militärstudie der 1950er, bei der Probanden nur am Kopf unbedeckt waren - logischerweise ging dort die meiste Wärme verloren. Tatsächlich verliert man Wärme ungefähr proportional zur unbedeckten Hautfläche, der Kopf ist dabei nicht besonders bevorzugt.",
-        source: "https://www.bbc.com/future/article/20120121-do-we-really-lose-most-heat-through-our-heads",
-        points: 150
-      },
-      {
-        id: 6,
-        question: "Ein Blitz schlägt nie zweimal am selben Ort ein.",
-        correct: false,
-        fact: "Das Gegenteil ist der Fall: Das Empire State Building in New York wird im Durchschnitt 23-mal pro Jahr vom Blitz getroffen. Exponierte, hohe Objekte ziehen Blitze regelmäßig und wiederholt an.",
-        source: "https://www.wetterdienst.de/Deutschlandwetter/Thema_des_Tages/1415/irrtuemer-bei-gewittern",
-        points: 150
-      },
-      {
-        id: 7,
-        question: "Chamäleons wechseln ihre Farbe hauptsächlich, um sich vor Feinden zu tarnen.",
-        correct: false,
-        fact: "Farbwechsel bei Chamäleons dient vor allem der Kommunikation (z. B. Revierverhalten, Balz, Stimmungslage) und der Temperaturregulation, nicht in erster Linie der Tarnung. Manche Arten werden bei Erregung sogar auffälliger statt unauffälliger.",
-        source: "https://www.nationalgeographic.com/animals/article/chameleons-color-change-science",
-        points: 150
-      },
-      {
-        id: 8,
-        question: "Zucker macht Kinder hyperaktiv.",
-        correct: false,
-        fact: "Mehrere doppelblinde, placebokontrollierte Studien konnten keinen Zusammenhang zwischen Zuckerkonsum und hyperaktivem Verhalten bei Kindern nachweisen. Der Eindruck entsteht oft durch Situationen (Partys, Feiern), die ohnehin aufregend sind - unabhängig vom Zucker.",
-        source: "https://pubmed.ncbi.nlm.nih.gov/7563706/",
-        points: 150
-      }
+      { id: 1, question: "Herobrine war ursprünglich ein echter, versteckter NPC in Minecraft.", correct: 2,
+        fact: "Herobrine ist eine erfundene Community-Legende und war nie ein offizieller NPC.", source: "https://minecraft.wiki/w/Herobrine", points: 150 },
+      { id: 2, question: "Wenn man den Truck neben der MS Anne mit Stärke verschiebt, findet man darunter Mew.", correct: 1,
+        fact: "Der Truck existiert tatsächlich, aber Mew befindet sich dort nicht.", source: "https://bulbapedia.bulbagarden.net/wiki/Truck", points: 150 },
+      { id: 3, question: "Auf dem Mount Gordo kann man nachts den Geist einer ermordeten Frau sehen.", correct: 0,
+        fact: "Der Geist von Jolene erscheint tatsächlich zwischen 23:00 und 00:00 Uhr.", source: "https://gta.fandom.com/wiki/Jolene_Cranley-Evans", points: 150 },
+      { id: 4, question: "Ein Riese kann einen Spieler in Skyrim mit einem einzigen Schlag hunderte Meter durch die Luft schleudern.", correct: 0,
+        fact: "Die Physik des Spiels macht diesen legendären \"Skyrim Space Program\"-Effekt tatsächlich möglich.", source: "https://elderscrolls.fandom.com/wiki/Giant_(Skyrim)", points: 150 },
+      { id: 5, question: "Die Musik von Lavandia soll bei japanischen Kindern schwere gesundheitliche Schäden verursacht haben.", correct: 2,
+        fact: "Das sogenannte Lavandia-Syndrom ist eine Internet-Legende. Beweise für die Geschichte gibt es nicht.", source: "https://folklore.usc.edu/lavender-town-syndrome/", points: 150 },
+      { id: 6, question: "Ein geheimnisvoller Arcade-Automat namens Polybius soll Spieler in den 1980ern krank gemacht und sogar Gedächtnisverlust verursacht haben.", correct: 2,
+        fact: "Polybius ist eine berühmte Gaming-Urban-Legend. Für die Geschichte gibt es keine belastbaren Beweise.", source: "https://en.wikipedia.org/wiki/Polybius_(urban_legend)", points: 150 },
+      { id: 7, question: "In Fallout 4 kann man ein Kind finden, das über 200 Jahre in einem Kühlschrank überlebt hat.", correct: 0,
+        fact: "Das sogenannte \"Kid in the Fridge\" ist tatsächlich eine Quest beziehungsweise ein Easter Egg im Spiel.", source: "https://fallout.fandom.com/wiki/Kid_in_a_Fridge", points: 150 },
+      { id: 8, question: "In Cyberpunk 2077 kann man Hideo Kojima als NPC begegnen.", correct: 0,
+        fact: "Der bekannte Spieleentwickler hat tatsächlich einen kurzen Cameo-Auftritt im Spiel.", source: "https://cyberpunk.fandom.com/wiki/Hideo_Kojima", points: 150 },
+      { id: 9, question: "Es gibt eine angeblich verfluchte Sonic-Version, in der Sonic seine Freunde auf brutale Weise verfolgt.", correct: 2,
+        fact: "Sonic.exe ist eine bekannte Horror-Creepypasta und kein offizielles Sonic-Spiel.", source: "https://sonic.fandom.com/de/wiki/Sonic.exe", points: 150 },
+      { id: 10, question: "Die Minecraft-Musikdisc 11 enthält eine mysteriöse Aufnahme, in der scheinbar ein Spieler von etwas verfolgt wird.", correct: 0,
+        fact: "Die unheimliche Aufnahme existiert tatsächlich. Was genau darauf passiert, wurde von Mojang nie vollständig erklärt.", source: "https://minecraft.wiki/w/Music_Disc_11", points: 150 },
+      { id: 11, question: "In Super Mario 64 kann man Luigi durch einen geheimen Trick als spielbaren Charakter freischalten.", correct: 1,
+        fact: "Luigi ist im Originalspiel nicht spielbar. Das Gerücht wurde durch Hinweise wie \"L is real 2401\" berühmt.", source: "https://www.nintendolife.com/news/2019/08/feature_has_a_decades-old_super_mario_64_mystery_finally_been_cleared_up", points: 150 },
+      { id: 12, question: "Wenn man in Resident Evil 4 mehrfach auf den See schießt, greift ein riesiges Monster den Spieler an.", correct: 0,
+        fact: "Schießt man auf den See, erscheint tatsächlich der Del-Lago-Angriff.", source: "https://residentevil.fandom.com/wiki/Del_Lago", points: 150 },
+      { id: 13, question: "In einem Hotel in Pokémon X/Y kann plötzlich ein geisterhaftes Mädchen hinter dem Spieler erscheinen.", correct: 0,
+        fact: "Das sogenannte Ghost Girl ist ein echtes, bis heute ziemlich unheimliches Easter Egg.", source: "https://bulbapedia.bulbagarden.net/wiki/Walkthrough:Pok%C3%A9mon_X_and_Y/Part_8", points: 150 },
+      { id: 14, question: "Eine gebrauchte Kopie von Zelda: Majora's Mask soll den verfluchten Spielstand eines verstorbenen Jungen namens Ben enthalten haben.", correct: 2,
+        fact: "\"Ben Drowned\" ist eine berühmte Zelda-Creepypasta. Die Geschichte wurde von einem Fan erfunden.", source: "https://knowyourmeme.com/sensitive/memes/majoras-mask-creepypasta-ben-drowned", points: 150 },
+      { id: 15, question: "In Silent Hill 2 kann man ein geheimes Ende freischalten, in dem sich herausstellt, dass ein Hund hinter den Ereignissen steckt.", correct: 0,
+        fact: "Das sogenannte Dog Ending existiert tatsächlich und ist eines der bekanntesten geheimen Enden der Serie.", source: "https://www.silenthillmemories.net/sh2/endings_en.htm", points: 150 }
     ];
-
-    // Bonus-Mythen (Erweiterung) - eigener Pool, nicht im Standard-Katalog enthalten
     const bonusQuestions = [];
 
     // ==== RANG-TITEL: witziger Platzierungs-Hinweis statt exaktem Punktestand ====
@@ -417,28 +381,30 @@
     // Verfolgt pro Antwort-Option, welche Spieler dort beim letzten Render schon zu sehen
     // waren - nur wirklich NEUE Ankünfte bekommen die Kuller-Flug-Animation, damit nicht bei
     // jedem Render alle Köpfe erneut hereinkullern.
-    let lastRenderedVoteIds = [new Set(), new Set()];
+    let lastRenderedVoteIds = [new Set(), new Set(), new Set()];
 
+    // Nur die EIGENE Auswahl anzeigen (eigener Kopf-Avatar neben der eigenen Antwort) - was
+    // andere Spieler getippt haben, bleibt jetzt verborgen, bis die Runde aufgelöst wird.
     function renderLiveVotes(state) {
       const liveVotes = state.liveVotes || {};
-      for (let i = 0; i < 2; i++) {
+      const mySelection = liveVotes[playerId];
+      for (let i = 0; i < 3; i++) {
         const wrap = document.getElementById(`opt-votes-${i}`);
         if (!wrap) continue;
-        const idsHere = Object.keys(liveVotes).filter(id => Array.isArray(liveVotes[id]) && liveVotes[id].includes(i));
-        const prevSet = lastRenderedVoteIds[i];
+        const showMine = Array.isArray(mySelection) && mySelection.includes(i);
+        const wasShownBefore = lastRenderedVoteIds[i].has(playerId);
 
-        wrap.innerHTML = idsHere.map(id => {
-          const name = (allPlayers[id] || {}).name || "?";
+        if (showMine) {
+          const name = (allPlayers[playerId] || {}).name || "?";
           const headUrl = HEAD3_IMAGES[name];
-          const isNew = !prevSet.has(id);
-          if (headUrl) {
-            return `<img src="${headUrl}" title="${name}" class="vote-head-img${isNew ? ' vote-head-img-new' : ''}">`;
-          }
-          // Fallback für Spieler ohne hinterlegtes Kopf-Bild
-          return `<span class="inline-block bg-white/90 text-[#1a1a2e] text-[10px] font-bold px-2 py-0.5 rounded-full mr-1 mb-1">${name}</span>`;
-        }).join('');
-
-        lastRenderedVoteIds[i] = new Set(idsHere);
+          wrap.innerHTML = headUrl
+            ? `<img src="${headUrl}" title="${name}" class="vote-head-img${wasShownBefore ? '' : ' vote-head-img-new'}">`
+            : `<span class="inline-block bg-white/90 text-[#1a1a2e] text-[10px] font-bold px-2 py-0.5 rounded-full mr-1 mb-1">${name}</span>`;
+          lastRenderedVoteIds[i] = new Set([playerId]);
+        } else {
+          wrap.innerHTML = '';
+          lastRenderedVoteIds[i] = new Set();
+        }
       }
     }
 
@@ -807,8 +773,10 @@
     }
 
     // Haken-Benachrichtigung für den Host: sobald ALLE aktiven Spieler mindestens eine
-    // Antwort ausgewählt haben, wird das direkt am Feld angezeigt - der Host kann dann
-    // vorzeitig auflösen, statt auf die volle Zeit zu warten.
+    // Antwort ausgewählt haben, wird das direkt am Feld angezeigt - zudem löst der Host die
+    // Runde jetzt automatisch auf, sobald wirklich alle eingeloggt haben (kein manueller
+    // Klick mehr nötig, genau wie beim Ablauf der Zeit).
+    let allAnsweredAutoResolveTriggered = false;
     function updateAllAnsweredBadge(state) {
       const badge = document.getElementById("all-answered-badge");
       if (!badge) return;
@@ -821,6 +789,13 @@
       const hasAnswered = state.hasAnswered || {};
       const allDone = activeIds.length > 0 && activeIds.every(id => hasAnswered[id]);
       badge.classList.toggle("hidden", !allDone);
+
+      if (allDone && !allAnsweredAutoResolveTriggered) {
+        allAnsweredAutoResolveTriggered = true;
+        stopAnswerTimer();
+        update(ref(db, 'game7State'), { stage: 'result' });
+      }
+      if (!allDone) allAnsweredAutoResolveTriggered = false;
     }
 
     function updateUI(state, q) {
@@ -885,7 +860,8 @@
     function resetOptionButtons() {
       selectedIndices = [];
       resultAlreadyProcessed = false;
-      for (let i = 0; i < 2; i++) {
+      myAnswerLocked = false;
+      for (let i = 0; i < 3; i++) {
         const btn = document.getElementById(`opt-btn-${i}`);
         btn.disabled = true;
         btn.querySelector('.opt-text').innerText = "???";
@@ -893,11 +869,11 @@
       }
       document.getElementById("group-result-box")?.classList.add("hidden");
       document.getElementById("fail-note")?.classList.add("hidden");
-      lastRenderedVoteIds = [new Set(), new Set()];
+      lastRenderedVoteIds = [new Set(), new Set(), new Set()];
     }
 
     function disableOptionButtons(keepText, placeholder) {
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < 3; i++) {
         const btn = document.getElementById(`opt-btn-${i}`);
         btn.disabled = true;
         if (!keepText) btn.querySelector('.opt-text').innerText = placeholder;
@@ -906,12 +882,12 @@
     }
 
     function enableOptionButtons(q) {
-      const labels = ["WAHR", "FALSCH"];
-      for (let i = 0; i < 2; i++) {
+      const labels = ["WAHR", "FALSCH", "CREEPYPASTA"];
+      for (let i = 0; i < 3; i++) {
         const btn = document.getElementById(`opt-btn-${i}`);
         btn.querySelector('.opt-text').innerText = labels[i];
-        btn.disabled = isHost;
-        btn.className = getButtonBaseStyle(i) + (isHost ? " opacity-50 cursor-not-allowed" : renderSelectionSuffix(i));
+        btn.disabled = isHost || myAnswerLocked;
+        btn.className = getButtonBaseStyle(i) + (isHost || myAnswerLocked ? " opacity-50 cursor-not-allowed" : renderSelectionSuffix(i));
       }
     }
 
@@ -920,9 +896,9 @@
     }
 
     function showResults(q, state) {
-      const correctIdx = q.correct ? 0 : 1; // 0 = WAHR, 1 = FALSCH
-      const labels = ["WAHR", "FALSCH"];
-      for (let i = 0; i < 2; i++) {
+      const correctIdx = q.correct; // 0 = WAHR, 1 = FALSCH, 2 = CREEPYPASTA
+      const labels = ["WAHR", "FALSCH", "CREEPYPASTA"];
+      for (let i = 0; i < 3; i++) {
         const btn = document.getElementById(`opt-btn-${i}`);
         btn.disabled = true;
         btn.querySelector('.opt-text').innerText = labels[i];
@@ -995,32 +971,36 @@
     function getButtonBaseStyle(idx) {
       const colors = [
         "bg-[#7ed957] text-[#1a1a2e]", // WAHR
-        "bg-[#ff2e93] text-white"       // FALSCH
+        "bg-[#ff2e93] text-white",      // FALSCH
+        "bg-[#7017c9] text-white"       // CREEPYPASTA
       ];
       return `p-7 jax-btn font-jax font-extrabold text-2xl flex items-center justify-center space-x-4 ${colors[idx]}`;
     }
 
     // ANTWORT AUSWÄHLEN/ZURÜCKNEHMEN (SPIELER) - frei umschaltbar, solange die Runde offen ist.
     // Mehrere Antworten können gleichzeitig ausgewählt sein, falls die Frage mehrere richtige hat.
+    let myAnswerLocked = false;
+
     window.toggleOption = function(idx) {
       if (isHost) return; // Host spielt nicht mit
       if (!currentQuestionData || currentQuestionData.stage !== 'options_shown') return;
+      if (myAnswerLocked) return; // schon eingeloggt - keine Änderung mehr möglich
 
-      // Nur EINE Antwort gleichzeitig möglich - ein Klick auf die andere Option wechselt
-      // direkt dorthin, kein separates Abwählen mehr nötig.
       selectedIndices = [idx];
+      myAnswerLocked = true;
 
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < 3; i++) {
         const btn = document.getElementById(`opt-btn-${i}`);
         btn.className = getButtonBaseStyle(i) + renderSelectionSuffix(i);
+        btn.disabled = true;
       }
 
       // Live an Firebase melden, ob dieser Spieler aktuell mind. eine Antwort ausgewählt hat -
       // damit der Host sehen kann, sobald wirklich ALLE gewählt haben (Haken-Benachrichtigung).
       update(ref(db, 'game7State/hasAnswered'), { [playerId]: true });
 
-      // Live an Firebase melden, WELCHE Antwort genau ausgewählt ist - alle Spieler sehen
-      // live, wer WAHR oder FALSCH getippt hat.
+      // Live an Firebase melden, WELCHE Antwort genau ausgewählt ist - andere Spieler sehen
+      // das aber nicht mehr live, nur die eigene Auswahl bleibt sichtbar (siehe renderLiveVotes).
       update(ref(db, 'game7State/liveVotes'), { [playerId]: selectedIndices });
     };
 
@@ -1222,12 +1202,13 @@
       </div>
       <div id="clippy-bubble" class="hidden bg-white rounded-2xl shadow-lg p-5 text-left relative max-w-xl mx-auto">
         <p class="text-sm md:text-base leading-relaxed">
-          Ein Mythos wird vorgestellt - eine Behauptung, die entweder <b>WAHR</b> oder <b>FALSCH</b> ist.
-          Jeder entscheidet für sich, du hast dafür <b>1 Minute</b> Zeit. Die anderen sehen live,
-          wer sich für WAHR und wer sich für FALSCH entschieden hat.
+          Ein Mythos wird vorgestellt - eine Behauptung, die <b>WAHR</b>, <b>FALSCH</b> oder eine erfundene
+          <b>CREEPYPASTA</b> (Internet-Gruselgeschichte) ist. Jeder entscheidet für sich, du hast dafür
+          <b>1 Minute</b> Zeit. Einmal geklickt ist deine Antwort eingeloggt und lässt sich nicht mehr ändern -
+          was die anderen getippt haben, siehst du erst bei der Auflösung.
         </p>
         <div class="bg-[#f4f1ff] rounded-xl p-4 text-sm md:text-base mt-3">
-          Nach der Auflösung siehst du den Lösungstext mit Hintergrundwissen samt Quellenlink, und wer was geklickt hat.
+          Sobald alle eingeloggt haben oder die Zeit um ist, löst sich die Runde automatisch auf - mit Lösungstext, Hintergrundwissen samt Quellenlink, und wer was getippt hat.
         </div>
       </div>
     </div>
@@ -1248,8 +1229,8 @@
         </div>
       </div>
 
-      <!-- WAHR / FALSCH BUTTONS -->
-      <div class="text-[#1a1a2e]/60 text-xs font-semibold -mb-2">Tippe deine Antwort an - alle sehen live, wer wo gewählt hat! Du kannst deine Auswahl jederzeit ändern, solange die Zeit läuft.</div>
+      <!-- WAHR / FALSCH / CREEPYPASTA BUTTONS -->
+      <div class="text-[#1a1a2e]/60 text-xs font-semibold -mb-2">Tippe deine Antwort an - einmal geklickt ist sie eingeloggt und lässt sich nicht mehr ändern!</div>
       <div class="grid grid-cols-1 gap-4">
         <div class="flex items-center gap-2">
           <div id="opt-votes-0" class="flex flex-wrap items-center justify-end gap-1 min-h-[228px]"></div>
@@ -1265,6 +1246,14 @@
             <span class="opt-text">FALSCH</span>
           </button>
           <div id="opt-votes-1" class="flex flex-wrap items-center gap-1 min-h-[228px]"></div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div id="opt-votes-2" class="flex flex-wrap items-center justify-end gap-1 min-h-[228px]"></div>
+          <button id="opt-btn-2" onclick="toggleOption(2)" class="flex-1 p-8 jax-btn font-jax font-extrabold text-3xl flex items-center justify-center space-x-4 bg-[#7017c9] text-white opacity-40" disabled>
+            <span class="text-4xl">👻</span>
+            <span class="opt-text">CREEPYPASTA</span>
+          </button>
         </div>
       </div>
 

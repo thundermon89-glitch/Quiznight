@@ -216,7 +216,7 @@
         formType: "trueFalse",
         contentPath: "content/spiel7/questions",
         templatesPath: "content/spiel7/templates",
-        blank: () => ({ id: Date.now(), question: "", correct: false, fact: "", source: "", points: 150 }),
+        blank: () => ({ id: Date.now(), question: "", correct: 1, fact: "", source: "", points: 150 }),
         defaults: [
       {
         id: 1,
@@ -307,6 +307,7 @@
         formType: "quiz4",
         correctLabel: "Richtige Antwort",
         multiCorrect: false,
+        groupTieredScoring: true,
         contentPath: "content/spiel3/questions",
         templatesPath: "content/spiel3/templates",
         blank: () => ({ question: "", options: ["", "", "", ""], correct: [0], points: 150 }),
@@ -1063,11 +1064,17 @@
           </div>
           <div class="text-[11px] text-[#1a1a2e]/50">Grüner Haken = aktuell "${game.correctLabel || 'richtige Antwort'}". Klick auf einen Buchstaben, um sie ${game.multiCorrect ? 'ein- oder auszuschalten (auch mehrere gleichzeitig möglich)' : 'umzustellen'}.</div>
 
+          ${game.groupTieredScoring ? `
+          <div class="jax-chip bg-[#f4f1ff] p-3 text-[11px] text-[#1a1a2e]/70">
+            <b>Hinweis:</b> Bei diesem Spiel gibt's kein einstellbares Punktefeld pro Frage - die Punkte richten sich fest danach, wie viele Spieler gemeinsam richtig lagen: 1 Person allein = 400 Pkt., 2-3 Personen = 0 Pkt., 4 = 100 Pkt., 5 = 200 Pkt., alle gemeinsam = 300 Pkt.
+          </div>
+          ` : `
           <div class="flex items-center gap-2">
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
             <input type="number" autocomplete="off" value="${q.points ?? 100}" oninput="updatePoints(${idx}, this.value)"
               class="jax-input w-24 text-sm" />
           </div>
+          `}
         </div>
       `).join('');
     }
@@ -1217,18 +1224,21 @@
           </div>
 
           <div class="flex gap-2">
-            <button onclick="updateField(${idx}, 'correct', true)"
+            <button onclick="updateField(${idx}, 'correct', 0)"
               class="flex-1 jax-btn font-jax font-extrabold text-sm py-3"
-              style="background:${q.correct === true ? '#7ed957' : '#ffffff'}; color:#1a1a2e;">✅ WAHR</button>
-            <button onclick="updateField(${idx}, 'correct', false)"
+              style="background:${q.correct === 0 ? '#7ed957' : '#ffffff'}; color:#1a1a2e;">✅ WAHR</button>
+            <button onclick="updateField(${idx}, 'correct', 1)"
               class="flex-1 jax-btn font-jax font-extrabold text-sm py-3"
-              style="background:${q.correct === false ? '#ff2e93' : '#ffffff'}; color:${q.correct === false ? '#fff' : '#1a1a2e'};">❌ FALSCH</button>
+              style="background:${q.correct === 1 ? '#ff2e93' : '#ffffff'}; color:${q.correct === 1 ? '#fff' : '#1a1a2e'};">❌ FALSCH</button>
+            <button onclick="updateField(${idx}, 'correct', 2)"
+              class="flex-1 jax-btn font-jax font-extrabold text-sm py-3"
+              style="background:${q.correct === 2 ? '#7017c9' : '#ffffff'}; color:${q.correct === 2 ? '#fff' : '#1a1a2e'};">👻 CREEPYPASTA</button>
           </div>
-          <div class="text-[11px] text-[#1a1a2e]/50">Aktuell markiert als: ${q.correct === true ? '"WAHR" ist richtig' : '"FALSCH" ist richtig'}</div>
+          <div class="text-[11px] text-[#1a1a2e]/50">Aktuell markiert als: ${q.correct === 0 ? '"WAHR"' : q.correct === 2 ? '"CREEPYPASTA"' : '"FALSCH"'} ist richtig</div>
 
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Auflösungstext (Begründung)</label>
-            <textarea oninput="updateField(${idx}, 'fact', this.value)" rows="3" placeholder="Erklärung, warum das wahr/falsch ist..."
+            <textarea oninput="updateField(${idx}, 'fact', this.value)" rows="3" placeholder="Erklärung, warum das wahr/falsch/erfunden ist..."
               class="jax-input w-full mt-1 text-sm">${escapeAttr(q.fact || '')}</textarea>
           </div>
 
@@ -1487,7 +1497,7 @@
       </span>
       <select id="template-select" onchange="loadTemplate()" class="jax-input text-sm py-2"></select>
       <button onclick="deleteSelectedTemplate()" class="jax-btn bg-[#ff2e93] text-white px-3 py-2 text-xs font-jax font-bold" title="Ausgewählte Vorlage löschen">
-        ${icon('trash', 'w-4 h-4')}
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/></svg>
       </button>
       <button onclick="saveAsTemplate()" class="jax-btn bg-[#ffd23f] text-[#1a1a2e] px-3 py-2 text-xs font-jax font-bold">
         Aktuelle Liste als Vorlage speichern

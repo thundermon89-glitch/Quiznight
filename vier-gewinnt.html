@@ -36,14 +36,16 @@
     .countdown-pop { animation: countdownPop 0.5s cubic-bezier(.34,1.56,.64,1); }
 
     #c4-board {
-      display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px;
-      background: #1a3a8f; border: 5px solid #1a1a2e; border-radius: 18px; padding: 8px;
-      box-shadow: 6px 6px 0 rgba(0,0,0,0.85);
+      display: grid; grid-template-columns: repeat(14, 1fr); grid-template-rows: repeat(12, 1fr);
+      gap: 2px; background: #1a3a8f; border: 4px solid #1a1a2e; border-radius: 14px; padding: 6px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85);
+      aspect-ratio: 14 / 12; max-height: 58vh; max-width: 100%;
+      margin: 0 auto;
     }
-    .c4-col { display: flex; flex-direction: column-reverse; gap: 3px; cursor: pointer; }
+    .c4-col { display: flex; flex-direction: column-reverse; gap: 2px; cursor: pointer; }
     .c4-cell {
-      width: 100%; aspect-ratio: 1/1; border-radius: 50%; background: #0a1a4a;
-      border: 2px solid rgba(255,255,255,0.15); transition: transform 0.15s ease;
+      width: 100%; height: 100%; border-radius: 50%; background: #0a1a4a;
+      border: 1.5px solid rgba(255,255,255,0.15); transition: transform 0.15s ease;
     }
     .c4-col:hover .c4-cell.c4-empty { transform: scale(0.92); }
     @keyframes dropIn {
@@ -97,6 +99,7 @@
     });
 
     window.hostEndConnect4 = function() {
+      if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
       set(ref(db, 'connect4State'), null);
       update(ref(db, 'gameState'), { status: 'cockpit' });
     };
@@ -369,6 +372,7 @@
           isHost = true;
           document.getElementById("host-hint").classList.remove("hidden");
           document.getElementById("host-end-btn").classList.remove("hidden");
+          document.getElementById("host-end-persistent-btn").classList.remove("hidden");
         }
         // Prüfen, ob schon ein laufendes Spiel existiert (z.B. Seiten-Neuladen); falls nicht
         // und man Host ist, Startbutton anzeigen.
@@ -391,16 +395,20 @@
     ▶️ Runde starten
   </button>
 
+  <button id="host-end-persistent-btn" onclick="hostEndConnect4()" class="hidden fixed top-4 left-4 z-20 jax-btn bg-white text-[#1a1a2e] font-jax font-bold px-4 py-2.5 text-sm">
+    🏠 Spiel beenden & zurück ins Cockpit
+  </button>
+
   <div id="play-area" class="relative z-10 text-center w-full max-w-7xl px-2 py-4">
-    <h1 class="font-jax text-2xl md:text-4xl font-extrabold text-[#ff2e93] title-pop mb-3" style="text-shadow: 3px 3px 0 #08150a, -3px -3px 0 #08150a, 3px -3px 0 #08150a, -3px 3px 0 #08150a;">
+    <h1 class="font-jax text-lg md:text-2xl font-extrabold text-[#ff2e93] title-pop mb-1.5" style="text-shadow: 2px 2px 0 #08150a, -2px -2px 0 #08150a, 2px -2px 0 #08150a, -2px 2px 0 #08150a;">
       🔴 VIER GEWINNT
     </h1>
 
-    <div id="player-legend" class="flex flex-wrap justify-center gap-2 mb-3"></div>
+    <div id="player-legend" class="flex flex-wrap justify-center gap-1.5 mb-1.5"></div>
 
     <div id="turn-banner" class="hidden inline-block mb-3"></div>
 
-    <div id="turn-timer-wrap" class="hidden h-2.5 bg-white/20 rounded-full overflow-hidden mb-3 max-w-xs mx-auto border border-white/30">
+    <div id="turn-timer-wrap" class="hidden h-2 bg-white/20 rounded-full overflow-hidden mb-1.5 max-w-xs mx-auto border border-white/30">
       <div id="turn-timer-bar" class="h-full bg-[#ff2e93] rounded-full transition-all duration-150" style="width: 100%"></div>
     </div>
 

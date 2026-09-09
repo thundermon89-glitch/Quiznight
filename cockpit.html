@@ -1292,8 +1292,31 @@
       set(ref(db, 'paintEvent'), { id: Date.now(), dataUrl, name })
         .then(() => console.log('[Mal-Chat] Erfolgreich an Firebase gesendet.'))
         .catch((err) => console.error('[Mal-Chat] FEHLER beim Senden:', err));
+
+      checkPaintEasterEgg();
       window.closePaintWindow();
     };
+
+    // ==== EASTER EGG: wer 5x ein Bild verschickt hat, bekommt einmalig 80 Bonuspunkte ====
+    const PAINT_EASTER_EGG_POINTS = 80;
+    const PAINT_EASTER_EGG_THRESHOLD = 5;
+    function checkPaintEasterEgg() {
+      get(ref(db, 'players/' + playerId)).then((snap) => {
+        const data = snap.val() || {};
+        if (data.paintEasterEggFound) return; // schon einmal bekommen
+        const newCount = (data.paintSentCount || 0) + 1;
+        const updates = { paintSentCount: newCount };
+        if (newCount >= PAINT_EASTER_EGG_THRESHOLD) {
+          updates.paintEasterEggFound = true;
+          updates.score = (data.score || 0) + PAINT_EASTER_EGG_POINTS;
+          push(ref(db, 'gameLog'), {
+            text: '🎨 ' + (data.name || 'Jemand') + ' hat 5 Bilder verschickt und ein Easter-Egg gefunden: +' + PAINT_EASTER_EGG_POINTS + ' Punkte',
+            at: Date.now()
+          });
+        }
+        update(ref(db, 'players/' + playerId), updates);
+      });
+    }
 
     // Empfangsseite: fliegendes Bild einmal langsam über den Bildschirm ziehen lassen
     // Warteschlange statt direktem Anzeigen: sonst würde ein zweites, kurz danach
@@ -1457,15 +1480,13 @@
     </div>
 
     <div class="jax-card-dark p-6 flex flex-col items-center justify-between text-center space-y-4">
-      <div class="space-y-2">
-        <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/MS_Paint_%281995%29.svg"
-          class="w-18 h-18 mx-auto cursor-pointer hover:scale-110 transition-transform drop-shadow-[2px_2px_0_rgba(0,0,0,0.5)]"
-          style="width:72px;height:72px;"
-          onclick="openPaintWindow()" onerror="this.style.display='none'" alt="Mal-Chat">
-      </div>
-
       <div class="w-full my-auto space-y-3">
-        <div class="relative w-28 h-28 mx-auto z-30">
+        <div class="flex items-center justify-center gap-4">
+          <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/MS_Paint_%281995%29.svg"
+            class="cursor-pointer hover:scale-110 transition-transform drop-shadow-[2px_2px_0_rgba(0,0,0,0.5)]"
+            style="width:72px;height:72px;"
+            onclick="openPaintWindow()" onerror="this.style.display='none'" alt="Mal-Chat">
+          <div class="relative w-28 h-28 z-30">
           <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/cpu.png" alt="" ondblclick="openInvaderGame()" title="Doppelklick für ein kleines Geheimspiel..."
             class="w-28 h-28 cursor-pointer opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
           <div id="invader-bubble" class="hidden fixed z-[90]" style="left: 50%; top: 50%; transform: translate(-50%, -50%);">
@@ -1480,6 +1501,7 @@
               <div class="text-[9px] text-white/40 text-center mt-1.5">← → bewegen · Leertaste schießen</div>
               <div id="invader-highscore-box" class="mt-2 text-[10px] text-white/70"></div>
             </div>
+          </div>
           </div>
         </div>
         <button id="ready-toggle-btn" onclick="toggleReadyStatus()" class="w-full py-6 bg-[#ff2e93] jax-btn text-white font-jax font-extrabold text-xl flex items-center justify-center gap-2 jax-wiggle">
@@ -1563,8 +1585,8 @@
 
   <!-- Fliegendes Bild: zieht langsam über den Bildschirm, wenn jemand was gesendet hat -->
   <div id="paint-flyby-layer" class="hidden fixed inset-0 z-[94] pointer-events-none overflow-hidden">
-    <div id="paint-flyby-name" class="absolute text-white font-jax font-bold text-xs px-2 py-1 bg-black/60 rounded-full" style="top: 2%;"></div>
-    <img id="paint-flyby-img" class="absolute" style="top: 6%; width: 220px; border: 3px solid white; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.5);">
+    <div id="paint-flyby-name" class="absolute text-white font-jax font-bold text-xs px-2 py-1 bg-black/60 rounded-full" style="top: 0.5%;"></div>
+    <img id="paint-flyby-img" class="absolute" style="top: 3%; width: 220px; border: 3px solid white; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.5);">
   </div>
 </body>
 </html>
