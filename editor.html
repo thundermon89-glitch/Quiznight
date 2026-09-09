@@ -56,6 +56,15 @@
       font-weight: 600;
     }
     .jax-input:focus { outline: none; box-shadow: 0 0 0 3px #ffd23f; }
+    /* Browser-Autofill (Chrome/Edge) überschreibt sonst Hintergrund/Textfarbe der Felder,
+       bis man reinklickt - erzwingt hier unsere eigenen Farben dauerhaft. */
+    .jax-input:-webkit-autofill,
+    .jax-input:-webkit-autofill:hover,
+    .jax-input:-webkit-autofill:focus {
+      -webkit-text-fill-color: #1a1a2e;
+      -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+      transition: background-color 9999s ease-in-out 0s;
+    }
 
     @keyframes bounceIn { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
     .jax-pop { animation: bounceIn 0.4s cubic-bezier(.34,1.56,.64,1); }
@@ -109,21 +118,188 @@
         multiCorrect: true,
         contentPath: "content/spiel1/questions",
         templatesPath: "content/spiel1/templates",
-        blank: () => ({ question: "", options: ["", "", "", ""], correct: [0], points: 100 })
+        blank: () => ({ question: "", options: ["", "", "", ""], correct: [0], points: 100 }),
+        defaults: [
+      {
+        id: 1,
+        question: "Wie heißt die Hauptfigur in „The Legend of Zelda\"-Reihe?",
+        options: ["Zelda", "Link", "Ganon", "Epona"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Link. Viele denken, die Serie sei nach dem Helden benannt – tatsächlich ist Zelda die Prinzessin, die es zu retten gilt. Der spielbare grünbemützte Held heißt Link, benannt nach seiner Rolle als Verbindung zwischen Spieler und Spielwelt."
+      },
+      {
+        id: 2,
+        question: "Warum wurden in den 1980ern tausende E.T.-Kassetten von Atari in der Wüste vergraben?",
+        options: ["Radioaktiv verseucht", "Lagerkosten sparen, Millionen blieben unverkauft", "Werbe-Gag", "Regierungsverbot"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Lagerkosten sparen. E.T. für das Atari 2600 gilt bis heute als eines der schlechtesten Spiele der Geschichte und wurde in nur fünf Wochen unter massivem Zeitdruck entwickelt. Millionen unverkaufter Module verstopften Ataris Lager, weshalb man sie 1983 heimlich mit Bulldozern in New Mexico vergrub."
+      },
+      {
+        id: 3,
+        question: "Wer entwickelte das Erfolgsspiel Stardew Valley (2016)?",
+        options: ["Ein 50-köpfiges Studio", "Eine einzige Person, komplett im Alleingang", "Nintendo intern", "Ein Team aus drei Freunden"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist eine einzige Person. Eric „ConcernedApe\" Barone programmierte, komponierte und zeichnete über vier Jahre lang alles selbst – ohne vorherige Branchenerfahrung, an einem günstigen Ikea-Tisch. Bis heute wurden über 40 Millionen Exemplare verkauft."
+      },
+      {
+        id: 4,
+        question: "Warum ist der Nebel in Silent Hill (1999) so charakteristisch dicht?",
+        options: ["Künstlerische Gruselstimmung", "PS1-Hardware-Limit kaschieren", "Wetter-Feature", "Zensur-Vorgabe"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist PS1-Hardware-Limit. Die PlayStation 1 konnte keine großen Sichtweiten in 3D-Umgebungen rendern, ohne dass Objekte sichtbar aus dem Nichts auftauchten. Der dichte Nebel kaschierte diese technische Schwäche elegant und wurde dadurch unbeabsichtigt zum ikonischen Markenzeichen der ganzen Reihe."
+      },
+      {
+        id: 5,
+        question: "Welches Spiel gilt als der größte Flop der Videospielgeschichte?",
+        options: ["Skull and Bones", "Concord (Sony, 2024)", "E.T. – The Extra-Terrestrial", "Redfall"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Concord. Nach rund acht Jahren Entwicklung und geschätzten 400 Millionen US-Dollar Kosten wurde der Hero-Shooter nur zwei Wochen nach Release wieder komplett vom Markt genommen. Bei nie mehr als 697 gleichzeitigen Spielern auf Steam schloss Sony danach das komplette Entwicklerstudio."
+      },
+      {
+        id: 6,
+        question: "Welches ist das meistverkaufte Videospiel aller Zeiten?",
+        options: ["Grand Theft Auto V", "Minecraft", "Super Mario (gesamte Reihe)", "Tetris"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Minecraft. Es hat mittlerweile über 350 Millionen verkaufte Exemplare erreicht – mit großem Abstand vor GTA V mit rund 205 Millionen. Damit übertrifft es sogar Michael Jacksons „Thriller\", das meistverkaufte Album aller Zeiten, um ein Vielfaches."
+      },
+      {
+        id: 7,
+        question: "Trugen Wikinger tatsächlich gehörnte Helme?",
+        options: ["Ja, historisch belegt", "Nein, reiner Mythos", "Nur Häuptlinge", "Nur bei Ritualen"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Nein, reiner Mythos. Kein einziger archäologischer Fund aus der Wikingerzeit zeigt gehörnte Helme – im Kampf wären Hörner sogar hinderlich gewesen. Das Bild entstand erst im 19. Jahrhundert durch Kostümbildner, unter anderem für Wagners Opern."
+      },
+      {
+        id: 8,
+        question: "Warum stoppt Pac-Man beim 256. Level abrupt (\"Kill Screen\")?",
+        options: ["Absichtliches Spielende", "8-Bit-Zähler-Überlauf", "Bug im Ghost-AI", "Fehlende Level-Daten"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist 8-Bit-Zähler-Überlauf. Der interne Level-Zähler ist nur 8-Bit groß und kann maximal bis 255 zählen. Bei Level 256 läuft er über, wodurch der rechte Bildschirmrand zu Buchstabensalat wird und das Level unspielbar ist."
+      },
+      {
+        id: 9,
+        question: "Woher stammt der Name „Mario\"?",
+        options: ["Nach einem italienischen Opernsänger", "Nach dem Vermieter von Nintendos US-Lager", "Erfindung Miyamotos ohne Vorbild", "Nach einem Nintendo-Mitarbeiter"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist der Vermieter von Nintendos US-Lager. Als Nintendo Anfang der 1980er mit der Miete in Seattle im Rückstand war, kam Vermieter Mario Segale vorbei, um sein Geld einzufordern. Das Team war so beeindruckt, dass sie die zuvor „Jumpman\" genannte Figur nach ihm benannten."
+      },
+      {
+        id: 10,
+        question: "Was passierte zwei Arma-3-Entwicklern 2012 auf der griechischen Insel Lemnos?",
+        options: ["Design-Preis gewonnen", "Festnahme wegen Spionageverdachts", "Nichts, reine Legende", "Vom Militär angeheuert"],
+        correct: 1,
+        points: 150,
+        fact: "Die Antwort ist Festnahme wegen Spionageverdachts. Die beiden tschechischen Entwickler von Bohemia Interactive fotografierten und filmten für die Kartenerstellung eine echte Militäranlage auf der Insel. Sie wurden festgenommen und saßen über 120 Tage in griechischer Untersuchungshaft, bevor sie gegen Kaution freikamen."
+      },
+      {
+        id: 11,
+        question: "Welcher ist der erfolgreichste Videospiel-Film aller Zeiten (nach Einspielergebnis)?",
+        options: ["The Super Mario Bros. Movie (2023)", "A Minecraft Movie (2025)", "Sonic the Hedgehog 2", "Detective Pikachu"],
+        correct: 0,
+        points: 150,
+        fact: "Die Antwort ist The Super Mario Bros. Movie (2023). Mit über 1,3 Milliarden Dollar Einspielergebnis bleibt er der erfolgreichste Videospiel-Film aller Zeiten - auch nach dem Super Mario Galaxy Film von 2026, der zwar A Minecraft Movie überholte, aber weiterhin auf Platz 2 liegt."
+      }
+    ],
       },
       spiel7: {
         label: "Spiel 7: Mythos-Check",
         formType: "trueFalse",
         contentPath: "content/spiel7/questions",
         templatesPath: "content/spiel7/templates",
-        blank: () => ({ id: Date.now(), question: "", correct: false, fact: "", source: "", points: 150 })
+        blank: () => ({ id: Date.now(), question: "", correct: false, fact: "", source: "", points: 150 }),
+        defaults: [
+      {
+        id: 1,
+        question: "Napoleon war für seine Zeit außergewöhnlich klein.",
+        correct: false,
+        fact: "Napoleon war mit rund 1,68 m für einen Franzosen seiner Zeit durchschnittlich groß, eher sogar leicht darüber. Der Mythos entstand durch eine Verwechslung von Maßeinheiten (französische Zoll waren länger als englische) sowie durch britische Propaganda-Karikaturen, die ihn absichtlich winzig darstellten.",
+        source: "https://www.watson.ch/wissen/alkohol/760089989-napoleon-war-gar-nicht-klein-und-16-weitere-mythen-die-so-nicht-stimmen",
+        points: 150
+      },
+      {
+        id: 2,
+        question: "Der Mensch nutzt nur etwa 10 % seines Gehirns.",
+        correct: false,
+        fact: "Bildgebende Verfahren zeigen, dass im Laufe eines Tages praktisch jeder Bereich des Gehirns aktiv wird - auch scheinbar 'ruhende' Areale haben wichtige Funktionen. Der Mythos hat keinen wissenschaftlichen Ursprung, hält sich aber hartnäckig in der Popkultur.",
+        source: "https://www.scientificamerican.com/article/do-people-only-use-10-percent-of-their-brains/",
+        points: 150
+      },
+      {
+        id: 3,
+        question: "Goldfische haben ein Gedächtnis von nur wenigen Sekunden.",
+        correct: false,
+        fact: "Studien zeigen, dass Goldfische sich an Dinge über Wochen und sogar Monate erinnern können - sie lassen sich zum Beispiel darauf trainieren, auf bestimmte Signale oder Farben zu reagieren, und behalten das gelernte Verhalten langfristig bei.",
+        source: "https://www.livescience.com/59187-goldfish-memory-myth.html",
+        points: 150
+      },
+      {
+        id: 4,
+        question: "Die Chinesische Mauer ist vom Weltraum aus mit bloßem Auge sichtbar.",
+        correct: false,
+        fact: "Astronauten, darunter mehrere chinesische Taikonauten, haben bestätigt, dass die Mauer aus der Erdumlaufbahn mit bloßem Auge nicht zu erkennen ist - sie ist einfach zu schmal im Verhältnis zur Entfernung. Andere, breitere menschengemachte Strukturen sind dagegen sichtbar.",
+        source: "https://www.scientificamerican.com/article/great-wall-of-china-is-not-visible-from-space/",
+        points: 150
+      },
+      {
+        id: 5,
+        question: "Man verliert die meiste Körperwärme über den Kopf.",
+        correct: false,
+        fact: "Der Mythos stammt aus einer US-Militärstudie der 1950er, bei der Probanden nur am Kopf unbedeckt waren - logischerweise ging dort die meiste Wärme verloren. Tatsächlich verliert man Wärme ungefähr proportional zur unbedeckten Hautfläche, der Kopf ist dabei nicht besonders bevorzugt.",
+        source: "https://www.bbc.com/future/article/20120121-do-we-really-lose-most-heat-through-our-heads",
+        points: 150
+      },
+      {
+        id: 6,
+        question: "Ein Blitz schlägt nie zweimal am selben Ort ein.",
+        correct: false,
+        fact: "Das Gegenteil ist der Fall: Das Empire State Building in New York wird im Durchschnitt 23-mal pro Jahr vom Blitz getroffen. Exponierte, hohe Objekte ziehen Blitze regelmäßig und wiederholt an.",
+        source: "https://www.wetterdienst.de/Deutschlandwetter/Thema_des_Tages/1415/irrtuemer-bei-gewittern",
+        points: 150
+      },
+      {
+        id: 7,
+        question: "Chamäleons wechseln ihre Farbe hauptsächlich, um sich vor Feinden zu tarnen.",
+        correct: false,
+        fact: "Farbwechsel bei Chamäleons dient vor allem der Kommunikation (z. B. Revierverhalten, Balz, Stimmungslage) und der Temperaturregulation, nicht in erster Linie der Tarnung. Manche Arten werden bei Erregung sogar auffälliger statt unauffälliger.",
+        source: "https://www.nationalgeographic.com/animals/article/chameleons-color-change-science",
+        points: 150
+      },
+      {
+        id: 8,
+        question: "Zucker macht Kinder hyperaktiv.",
+        correct: false,
+        fact: "Mehrere doppelblinde, placebokontrollierte Studien konnten keinen Zusammenhang zwischen Zuckerkonsum und hyperaktivem Verhalten bei Kindern nachweisen. Der Eindruck entsteht oft durch Situationen (Partys, Feiern), die ohnehin aufregend sind - unabhängig vom Zucker.",
+        source: "https://pubmed.ncbi.nlm.nih.gov/7563706/",
+        points: 150
+      }
+    ],
       },
       spiel4: {
         label: "Spiel 4: Pi mal Daumen",
         formType: "estimateImg",
         contentPath: "content/spiel4/rounds",
         templatesPath: "content/spiel4/templates",
-        blank: () => ({ question: "", image: "", unit: "m", answer: 0, min: 0, max: 1000, tolerance: 50, points: 200, fact: "" })
+        blank: () => ({ question: "", image: "", unit: "m", answer: 0, min: 0, max: 1000, tolerance: 50, points: 200, fact: "" }),
+        defaults: [
+      { unit: '€', id: 1, emoji: "🎮", question: "Was kostet Die Sims 4 mit wirklich allen Erweiterungen (97 Stück insgesamt) zusammen?", answer: 1429.03, min: 0, max: 3000, tolerance: 200, points: 200,
+        fact: "Die Sims 4 ist mittlerweile zu einem wahren Kostenmonster herangewachsen, wenn man wirklich alle bisher erschienenen Erweiterungen, Gameplay-Packs und Accessoires zusammenrechnet. Über die Jahre hinweg sind so 97 einzelne Zusatzinhalte zusammengekommen, vom großen Erweiterungspack bis zum kleinen Accessoire-Paket. Wer wirklich jedes einzelne Stück zum vollen Preis kaufen würde, müsste dafür 1.429,03 Euro auf den Tisch legen. Zum Vergleich: Das Grundspiel selbst ist inzwischen komplett kostenlos erhältlich, während die Erweiterungen den eigentlichen Umsatz bringen. Kein Wunder also, dass die meisten Spieler eher gezielt einzelne Packs kaufen, statt auf die komplette Sammlung zu sparen." },
+      { unit: 'h', id: 2, emoji: "🎮", question: "Wie lange kann man mit dem originalen Game Boy (4 AA-Batterien) am Stück spielen?", answer: 30, min: 0, max: 100, tolerance: 8, points: 200 },
+      { unit: 'Blöcke', id: 3, emoji: "⛏️", question: "Wie viele Blöcke hoch ist die maximale Bauhöhe in Minecraft (vom Grundgestein bis zum Himmel)?", answer: 319, min: 0, max: 500, tolerance: 25, points: 200,
+        fact: "Seit dem großen Höhen-Update (Version 1.18) reicht die Welt in Minecraft von Y-64 bis Y255, was einer Bauhöhe von insgesamt 319 Blöcken entspricht. Davor war die Welt lange Zeit auf nur 256 Blöcke begrenzt." },
+      { unit: 'Mio.', id: 4, emoji: "🖥️", question: "Wie viele Spieler waren beim absoluten Rekord-Peak gleichzeitig auf Steam online (in Millionen)?", answer: 36, min: 0, max: 50, tolerance: 4, points: 200 },
+      { unit: 'm', id: 5, emoji: "🗽", question: "Wie hoch ist die Freiheitsstatue in New York (von der Fackelspitze bis zum Sockel unten, in Metern)?", answer: 93, min: 0, max: 200, tolerance: 10, points: 200 },
+      { unit: 'm', id: 6, emoji: "🗼", question: "Wie hoch ist der Schiefe Turm von Pisa auf seiner höheren (nördlichen) Seite (in Metern)?", answer: 57, min: 0, max: 100, tolerance: 6, points: 200 },
+      { unit: 'm', id: 7, emoji: "⛪", question: "Wie hoch ist der Südturm des Kölner Doms (in Metern)?", answer: 157, min: 0, max: 250, tolerance: 15, points: 200 }
+    ],
       },
       spiel3: {
         label: "Spiel 3: Schaf oder Wolf?",
@@ -132,14 +308,223 @@
         multiCorrect: false,
         contentPath: "content/spiel3/questions",
         templatesPath: "content/spiel3/templates",
-        blank: () => ({ question: "", options: ["", "", "", ""], correct: [0], points: 150 })
+        blank: () => ({ question: "", options: ["", "", "", ""], correct: [0], points: 150 }),
+        defaults: [
+{
+        id: 11,
+        question: "Welche besondere Fähigkeit hat der Krallenfrosch?",
+        options: [
+          "Er laicht, wenn ihm Urin schwangerer Personen injiziert wird.",
+          "Er betäubt Fische durch Ultraschall-Vibrationen seiner Krallen.",
+          "Er verglast bei Dürre jahrelang zu einem durchsichtigen Klumpen.",
+          "Er verdaut verschluckte Kieselsteine zur Mineralstoffaufnahme."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://de.wikipedia.org/wiki/Froschtest?wprov=sfla1"
+      },
+      {
+        id: 12,
+        question: "Warum hielten manche Schäfer Gerüchten zufolge eine bestimmte Ziegenart in ihrer Schafherde?",
+        options: [
+          "Sie fällt bei Schreck in Ohnmacht und dient Raubtieren als leichte Beute, während die Schafe fliehen.",
+          "Sie gab einen besonders lauten Mecker-Schrei von sich, sobald sich ein Wolf näherte, und diente dadurch als natürliche Alarmanlage.",
+          "Sie hatte angeblich einen beruhigenden Einfluss auf die Schafe und verhinderte, dass die Herde bei Gefahr auseinanderlief.",
+          "Sie fraß bevorzugt giftige Pflanzen am Wegesrand und schützte die Schafe dadurch davor, versehentlich davon zu fressen."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.zeit.de/wissen/umwelt/2012-01/unterschaetztes-tier-fainting-goats"
+      },
+      {
+        id: 13,
+        question: "Welches Einstellungskriterium sorgte dafür, dass das FBI praktisch nicht in der Lage war, Cybersecurityexperten einzustellen?",
+        options: [
+          "Ein negativer Drogentest.",
+          "Ein einwandfreier Führerschein.",
+          "Keine Vorstrafen wegen Hacking.",
+          "Keine illegalen Downloads von Software."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.heise.de/news/FBI-hat-Personalmangel-bei-Informatikern-2766898.html"
+      },
+      {
+        id: 14,
+        question: "Warum mussten 27 menschliche Gene umbenannt werden?",
+        options: [
+          "Damit Excel sie nicht automatisch umformatiert.",
+          "Weil Forscher beim Vorlesen der Namen ständig unfreiwillig fluchten.",
+          "Weil manche Gennamen mit Erreger-Abkürzungen verwechselt wurden.",
+          "Weil Gene wie Comicfiguren hießen und die Rechteinhaber klagen wollten."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.sueddeutsche.de/wirtschaft/microsoft-excel-genforschung-namen-1.4992440"
+      },
+      {
+        id: 15,
+        question: "Rapper Snoop Dogg zahlt laut eigenen Angaben einem Mann 40–50.000 $, um was in Vollzeit zu tun?",
+        options: [
+          "Er hat ihn zum Drehen seiner Joints eingestellt.",
+          "Er hat ihn eingestellt, um täglich seine Sneaker-Sammlung zu sortieren.",
+          "Er zahlt ihm dafür, ständig seine Kette zu polieren.",
+          "Er hat ihn als persönlichen 'Yeah'-Rufer bei Aufnahmen engagiert."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.npr.org/2022/06/13/1104529582/snoop-dogg-gives-his-full-time-blunt-roller-a-raise-due-to-inflation"
+      },
+      {
+        id: 16,
+        question: "Was war das Besondere an der erfolgreichen Klage einer 58-jährigen Frau gegen einen 18-jährigen Jungen, der ihr schwere Verletzungen zugefügt hatte?",
+        options: [
+          "Sie klagte gegen einen Toten – seine Leichenteile trafen sie nach einem Zugunglück.",
+          "Er beging die Tat schlafwandelnd und wusste nichts davon.",
+          "Er galt zur Tatzeit als vermisst und tauchte erst durch die Klage wieder auf.",
+          "Er steckte zur Tatzeit noch im Mutterleib."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.huffpost.com/entry/hiroyuki-joho-sued_n_1175172"
+      },
+      {
+        id: 17,
+        question: "Was machen UPS-Fahrer nahezu nie?",
+        options: [
+          "Linksabbiegen – die Routenplanung vermeidet das bewusst, um Zeit und Sprit zu sparen.",
+          "Rückwärts einparken – die Software plant nur Vorwärtsparkplätze ein.",
+          "Radio hören – erlaubt sind nur firmeneigene Hörbücher.",
+          "Mit laufendem Motor tanken – aus Sicherheitsvorschrift strikt verboten."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.welt.de/wirtschaft/article161916731/UPS-Rechtsabbiegen-fuer-weniger-Unfaelle-und-mehr-Effizienz.html"
+      },
+      {
+        id: 18,
+        question: "Welche Aufgabe hat der NASA-Mitarbeiter George Aldrich?",
+        options: [
+          "Er ist 'Chief Sniffer' – er riecht an allem, was mit ins All soll, da Gerüche dort zum Ausschlusskriterium werden können.",
+          "Er ist 'Chief Taster' – er kostet jede Astronautenmahlzeit vor dem Start.",
+          "Er ist offizieller 'Stille-Tester' – er lauscht, ob Bauteile im Vakuum ungewöhnliche Geräusche machen.",
+          "Er ist 'Chief Folder' – er faltet die Raumanzüge nach einem geheimen Origami-Verfahren."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://interestingengineering.com/science/nasas-chief-sniffer-explains-how-his-nose-helps-astronauts"
+      },
+      {
+        id: 19,
+        question: "Im Jahr 1932 hatte Winston Churchill ein Attest, das ihm was erlaubte?",
+        options: [
+          "Ein Attest erlaubte ihm, zu den Mahlzeiten Alkohol zu trinken.",
+          "Ein Attest erlaubte ihm, während Reden zu rauchen.",
+          "Ein Attest befreite ihn von jeglicher Frühsport-Pflicht.",
+          "Ein Attest erlaubte ihm, Kabinettssitzungen im Schlafanzug abzuhalten."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://www.openculture.com/2023/12/winston-churchill-gets-a-doctors-note-to-drink-unlimited-alcohol-while-visiting-the-u-s-during-prohibition-1932.html#google_vignette"
+      },
+      {
+        id: 20,
+        question: "Was erhält man, wenn man bei VW die Teilenummer 199 398 500 A bestellt?",
+        options: [
+          "Die Volkswagen-Currywurst – VW stellt sie selbst her und verkauft mehr davon als von manchen Fahrzeugmodellen.",
+          "Ein Fläschchen VW-eigenes Parfüm mit 'Neuwagengeruch'.",
+          "Ein Paar Wollsocken aus der VW-Werksschneiderei.",
+          "Eine Flasche VW-Hausbier, gebraut in der Werkskantine Wolfsburg."
+        ],
+        correct: 0,
+        points: 150,
+        source: "https://de.wikipedia.org/wiki/Volkswagen-Currywurst?wprov=sfla1"
+      }
+    ],
       },
       spiel5: {
         label: "Spiel 5: Verpixelt!",
         formType: "imageQa",
         contentPath: "content/spiel5/questions",
         templatesPath: "content/spiel5/templates",
-        blank: () => ({ imageUrl: "", answer: "" })
+        blank: () => ({ imageUrl: "", answer: "" }),
+        defaults: [
+      {
+        id: 1,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_10_2026-08-31_20-07-54.jpg",
+        answer: "Tetris"
+      },
+      {
+        id: 2,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_11_2026-08-31_20-07-54.jpg",
+        answer: "Super Mario World"
+      },
+      {
+        id: 3,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_12_2026-08-31_20-07-54.jpg",
+        answer: "Lemmings"
+      },
+      {
+        id: 4,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_13_2026-08-31_20-07-54.jpg",
+        answer: "No One Lives Forever"
+      },
+      {
+        id: 5,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_15_2026-08-31_20-07-54.jpg",
+        answer: "Fussball Manager 2004"
+      },
+      {
+        id: 6,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_16_2026-08-31_20-07-54.jpg",
+        answer: "Diablo 2"
+      },
+      {
+        id: 7,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_7_2026-08-31_20-07-53.jpg",
+        answer: "Minecraft"
+      },
+      {
+        id: 8,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_8_2026-08-31_20-07-53.jpg",
+        answer: "Terraria"
+      },
+      {
+        id: 9,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_9_2026-08-31_20-07-53.jpg",
+        answer: "Half Life"
+      },
+      {
+        id: 10,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_6_2026-08-31_20-07-53.jpg",
+        answer: "Zomboid"
+      },
+      {
+        id: 11,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_20_2026-08-31_20-07-54.jpg",
+        answer: "The Forest"
+      },
+      {
+        id: 12,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_19_2026-08-31_20-07-54.jpg",
+        answer: "Alan Wake"
+      },
+      {
+        id: 13,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_18_2026-08-31_20-07-54.jpg",
+        answer: "Gothic"
+      },
+      {
+        id: 14,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_17_2026-08-31_20-07-54.jpg",
+        answer: "Tony Hawk's Pro Skater 2"
+      },
+      {
+        id: 15,
+        imageUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/photo_14_2026-08-31_20-07-54.jpg",
+        answer: "Gran Turismo"
+      }
+    ],
       },
       spiel9: {
         label: "Spiel 9: Zeitreise",
@@ -147,28 +532,207 @@
         contentPath: "content/spiel9/rounds",
         templatesPath: "content/spiel9/templates",
         blank: () => ({ id: Date.now(), emoji: "🕹️", question: "", points: 200,
-          events: [{ id: 'a', label: '', emoji: '', year: 2000, fact: '' }] })
+          events: [{ id: 'a', label: '', emoji: '', year: 2000, fact: '' }] }),
+        defaults: [
+      {
+        id: 1, emoji: "🕹️", question: "Bringe diese Kult-Klassiker in die Reihenfolge ihres Erscheinens (früh → spät):",
+        events: [
+          { id: 'a', label: 'Game Boy (Nintendo)', emoji: '🎮', year: 1989, fact: 'Erschien im April 1989 in Japan, im Herbst desselben Jahres in Nordamerika, in Europa erst 1990.' },
+          { id: 'b', label: 'Moorhuhn', emoji: '🐔', year: 1999, fact: 'Im Oktober 1999 als Werbespiel für Johnnie Walker veröffentlicht - verbreitete sich rasant als E-Mail-Geheimtipp.' },
+          { id: 'c', label: 'Apple iPod', emoji: '🎵', year: 2001, fact: 'Am 23. Oktober 2001 von Steve Jobs vorgestellt, mit dem berühmten Slogan "1.000 songs in your pocket".' }
+        ],
+        correctOrder: ['a', 'b', 'c'], points: 200
+      },
+      {
+        id: 2, emoji: "💬", question: "Bringe diese Kommunikations-Dienste in die richtige Reihenfolge (früh → spät):",
+        events: [
+          { id: 'a', label: 'ICQ', emoji: '💬', year: 1996, fact: 'November 1996 - die magischen siebenstelligen Nummern und das legendäre "Uh-Oh!" prägten eine ganze Generation.' },
+          { id: 'b', label: 'Skype', emoji: '📞', year: 2003, fact: 'August 2003 - plötzliche Telefonate über den PC mit dem blauen Wolken-Logo fühlten sich damals absolut futuristisch an.' },
+          { id: 'c', label: 'MySpace', emoji: '🌐', year: 2003, fact: 'Ging im Sommer 2003 online, nur wenige Wochen nach Skype. Jeder bastelte sein Profil mit HTML-Code und kürte seine Top-8-Freunde.' },
+          { id: 'd', label: 'StudiVZ', emoji: '🎓', year: 2005, fact: 'Oktober 2005 - vor Facebook der absolute Pflicht-Treffpunkt für Studenten. Die roten Seiten liefen auf jeder WG-Party.' }
+        ],
+        correctOrder: ['a', 'b', 'c', 'd'], points: 250
+      },
+      {
+        id: 3, emoji: "🎮", question: "Bringe diese Meilensteine der Gaming- und Tech-Welt in die richtige Reihenfolge (früh → spät):",
+        events: [
+          { id: 'a', label: 'PlayStation (PS1) - Marktstart in Japan', emoji: '🎮', year: 1994, fact: 'Nach einem geplatzten Deal mit Nintendo brachte Sony im Dezember 1994 die PS1 heraus und revolutionierte den Markt.' },
+          { id: 'b', label: 'Google geht online', emoji: '🔍', year: 1998, fact: 'Startete im September 1998 als Forschungsprojekt in einer Garage - damals nutzten die meisten noch AltaVista oder Lycos.' },
+          { id: 'c', label: 'Erste Xbox (Microsoft)', emoji: '🕹️', year: 2001, fact: 'Microsoft betrat im November 2001 den Konsolenmarkt - im Gepäck: Halo: Combat Evolved.' },
+          { id: 'd', label: 'Steam (Valve)', emoji: '🖥️', year: 2003, fact: 'Startete im September 2003 primär als Zwangstool, um Patches für Counter-Strike 1.6 und Half-Life 2 zu verteilen.' },
+          { id: 'e', label: 'Minecraft (Alpha)', emoji: '⛏️', year: 2009, fact: 'Notch veröffentlichte die erste spielbare Version im Mai 2009 - bis zum globalen Phänomen dauerte es noch Jahre.' }
+        ],
+        correctOrder: ['a', 'b', 'c', 'd', 'e'], points: 300
+      },
+      {
+        id: 4, emoji: "📰", question: "Bringe diese Society-Schlagzeilen in die Reihenfolge, wann sie öffentlich bekannt wurden (früh → spät):",
+        events: [
+          { id: 'd', label: 'Pamela Anderson', year: 1996, image: 'https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9522-removebg-preview.png', fact: '1996 einer der ersten großen Fälle dieser Art überhaupt - noch vor der Zeit des Massen-Internets, verbreitete es sich zunächst über VHS-Kopien.' },
+          { id: 'a', label: 'Paris Hilton', year: 2003, image: 'https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/Paris_Hilton_et_Doug_Reinhardt_66%C3%A8me_Festival_de_Venise__Mostra__2__cropped_-removebg-preview.png', fact: 'Wurde 2003 zur landesweiten Boulevard-Schlagzeile und prägte ihr Image als Society-Ikone der frühen 2000er.' },
+          { id: 'b', label: 'Kim Kardashian', year: 2007, image: 'https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/KimkaTapes.png', fact: '2007 wurde daraus einer der Ausgangspunkte für den Aufstieg der ganzen Kardashian-Jenner-Familie zu Reality-TV-Stars.' },
+          { id: 'c', label: 'Hulk Hogan', year: 2012, image: 'https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/hulk.png', fact: '2012 wurde daraus ein jahrelanger Rechtsstreit gegen ein Boulevard-Portal, der 2016 mit einem Rekord-Urteil endete.' }
+        ],
+        correctOrder: ['d', 'a', 'b', 'c'], points: 200
+      }
+    ]
       },
       spiel2: {
         label: "Spiel 2: Rätselfeuer",
         formType: "story",
         contentPath: "content/spiel2/stories",
         templatesPath: "content/spiel2/templates",
-        blank: () => ({ id: Date.now(), teaser: "", solution: "", image: "", points: 250 })
+        blank: () => ({ id: Date.now(), teaser: "", solution: "", image: "", points: 250 }),
+        defaults: [
+      {
+        id: 1,
+        teaser: "Was wurde 2005 in die National Toy Hall of Fame (Rochester, New York) aufgenommen?",
+        solution: "Ein Pappkarton",
+        points: 250
+      },
+      {
+        id: 2,
+        teaser: "Wer oder was sind die Cocaine Hippos?",
+        solution: "In den 1980er-Jahren baute sich der berüchtigte Drogenbaron Pablo Escobar ein riesiges privates Anwesen (Hacienda Nápoles) mit einem illegalen Privatzoo. Dafür importierte er unter anderem vier Nilpferde aus Afrika. Nach seinem Tod 1993 wurden die meisten Tiere des Zoos in andere Hände übergeben, aber die Flusspferde wurden ihrem Schicksal überlassen, weil ihr Transport schlicht zu gefährlich und teuer war. Sie überlebten, fanden in Kolumbien perfekte Bedingungen ohne natürliche Feinde und vermehrten sich rasant zu einer echten Plage.",
+        image: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/HpAQuPc.gif",
+        points: 250
+      },
+      {
+        id: 3,
+        teaser: "Warum helfen Menschen weltweit Fischen in Utrecht?",
+        solution: "Weil sie über eine Live-Webcam an einer Schleuse in Utrecht (Niederlande) zusehen können, wie Fische auf ihrer Wanderung zu den Laichgründen feststecken. Sobald genug Fische vor der geschlossenen Schleuse warten, drückt man online einen virtuellen „Klingel\"-Button auf visdeurbel.nl, und ein echter Schleusenwärter öffnet die Schleuse für sie. So kann jeder von überall auf der Welt Fischen aus der Ferne beim Durchkommen helfen.",
+        points: 250
+      }
+    ],
       },
       spiel6: {
         label: "Spiel 6: Film-Zündschnur",
         formType: "movieGuess",
         contentPath: "content/spiel6/rounds",
         templatesPath: "content/spiel6/templates",
-        blank: () => ({ id: Date.now(), videoUrl: "", videoType: "video/mp4", answer: "", altAnswers: [] })
+        blank: () => ({ id: Date.now(), videoUrl: "", videoType: "video/mp4", answer: "", altAnswers: [] }),
+        defaults: [
+      { id: 1, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/91971df2b8f8f33b516e16fc35df8dd9193fd776/01-bang-boom-bang.mp4.webm", videoType: "video/webm", answer: "Bang Boom Bang", altAnswers: ["Bang Boom Bang - Ein todsicheres Ding"] },
+      { id: 2, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/91971df2b8f8f33b516e16fc35df8dd9193fd776/02-pulp-fiction.mp4.mkv", videoType: "video/x-matroska", answer: "Pulp Fiction", altAnswers: [] },
+      { id: 3, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/91971df2b8f8f33b516e16fc35df8dd9193fd776/03-truman-show.mp4.webm", videoType: "video/webm", answer: "The Truman Show", altAnswers: ["Die Truman Show"] },
+      { id: 4, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/91971df2b8f8f33b516e16fc35df8dd9193fd776/04-trainspotting.mp4.mkv", videoType: "video/x-matroska", answer: "Trainspotting", altAnswers: [] },
+      { id: 5, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/05-american-beauty.mp4.mkv", videoType: "video/x-matroska", answer: "American Beauty", altAnswers: [] },
+      { id: 6, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/06-dirty-dancing.mp4.mkv", videoType: "video/x-matroska", answer: "Dirty Dancing", altAnswers: [] },
+      { id: 7, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/07-turtles.mp4.mkv", videoType: "video/x-matroska", answer: "Teenage Mutant Ninja Turtles", altAnswers: ["TMNT", "Ninja Turtles", "Turtles"] },
+      { id: 8, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/08-from-dusk-till-dawn.mp4.webm", videoType: "video/webm", answer: "From Dusk Till Dawn", altAnswers: ["From Dusk to Dawn"] },
+      { id: 9, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/09-gangs-of-new-york.mp4.mkv", videoType: "video/x-matroska", answer: "Gangs of New York", altAnswers: [] },
+      // WARTET NOCH AUF DEN VOLLSTÄNDIGEN LINK - die #10-URL kam abgeschnitten an (mit #12
+      // zusammengerutscht). Bitte den echten Link für "10-sin-city..." nachreichen.
+      { id: 10, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/10-sin-city.mp4.mkv", videoType: "video/x-matroska", answer: "Sin City", altAnswers: [] },
+      { id: 11, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/11-bad-boys-2.mp4.mkv", videoType: "video/x-matroska", answer: "Bad Boys II", altAnswers: ["Bad Boys 2"] },
+      { id: 12, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/12-der-schakal.mp4.mkv", videoType: "video/x-matroska", answer: "The Jackal", altAnswers: ["Der Schakal"] }
+    ],
       },
       spiel8: {
         label: "Spiel 8: Schriftzug-Salat",
         formType: "distortedImage",
         contentPath: "content/spiel8/covers",
         templatesPath: "content/spiel8/templates",
-        blank: () => ({ id: Date.now(), distortedUrl: "", originalUrl: "", title: "", points: 150 })
+        blank: () => ({ id: Date.now(), distortedUrl: "", originalUrl: "", title: "", points: 150 }),
+        defaults: [
+      {
+        id: 1,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Counter%20strike.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/%C2%B4counter%20strike%201.jpg",
+        title: "Counter Strike",
+        points: 150
+      },
+      {
+        id: 2,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/DOOM.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/doom1.jpg",
+        title: "DOOM",
+        points: 150
+      },
+      {
+        id: 3,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Driver.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/driver1.jpg",
+        title: "Driver",
+        points: 150
+      },
+      {
+        id: 4,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/FIFA%2098.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/fifa98.jpg",
+        title: "FIFA 98",
+        points: 150
+      },
+      {
+        id: 5,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Fortnite.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/fortnite1.jpg",
+        title: "Fortnite",
+        points: 150
+      },
+      {
+        id: 6,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/GTA.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Gta1.jpg",
+        title: "GTA",
+        points: 150
+      },
+      {
+        id: 7,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Halo.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Halo1.png",
+        title: "Halo",
+        points: 150
+      },
+      {
+        id: 8,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Hitman.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/hitman1.jpg",
+        title: "Hitman",
+        points: 150
+      },
+      {
+        id: 9,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Ready%20or%20not%20.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/ready%20or%20not1.jpg",
+        title: "Ready or not",
+        points: 150
+      },
+      {
+        id: 10,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/serious%20sam.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/SeriousSam1.jpg",
+        title: "Serious Sam",
+        points: 150
+      },
+      {
+        id: 11,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Skyrim.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/skyrim1.jpg",
+        title: "Skyrim",
+        points: 150
+      },
+      {
+        id: 12,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Super%20Mariokart.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/super%20mariokart1.jpg",
+        title: "Super Mario Kart",
+        points: 150
+      },
+      {
+        id: 13,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Tomb%20raider.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Tomb%20Raider1.png",
+        title: "Tomb Raider",
+        points: 150
+      },
+      {
+        id: 14,
+        distortedUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Zelda.png",
+        originalUrl: "https://github.com/thundermon89-glitch/Quiznight/raw/main/Zelda1.jpg",
+        title: "Zelda",
+        points: 150
+      }
+    ]
       }
     };
 
@@ -196,7 +760,10 @@
       const game = GAMES[currentGameKey];
       get(ref(db, game.contentPath)).then((snap) => {
         const data = snap.val();
-        items = (Array.isArray(data) && data.length > 0) ? data : [game.blank()];
+        // Fällt auf die echten, im Spiel eingebauten Standard-Fragen zurück (falls in
+        // Firebase noch nichts gespeichert wurde) - nicht mehr auf eine einzelne Leerfrage.
+        const fallback = (Array.isArray(game.defaults) && game.defaults.length > 0) ? game.defaults : [game.blank()];
+        items = (Array.isArray(data) && data.length > 0) ? data : fallback;
         renderEditor();
         markSaved();
       });
@@ -435,7 +1002,7 @@
 
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Lösung (nur der Host sieht das zur Kontrolle)</label>
-            <input type="text" value="${escapeAttr(q.answer || '')}" placeholder="z.B. Spieltitel eingeben..."
+            <input type="text" autocomplete="off" value="${escapeAttr(q.answer || '')}" placeholder="z.B. Spieltitel eingeben..."
               oninput="updateField(${idx}, 'answer', this.value)"
               class="jax-input w-full mt-1 text-base" style="border-color:#7ed957;" />
           </div>
@@ -458,7 +1025,7 @@
 
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Frage</label>
-            <input type="text" value="${escapeAttr(q.question)}" placeholder="Fragetext eingeben..."
+            <input type="text" autocomplete="off" value="${escapeAttr(q.question)}" placeholder="Fragetext eingeben..."
               oninput="updateField(${idx}, 'question', this.value)"
               class="jax-input w-full mt-1 text-base" />
           </div>
@@ -475,7 +1042,7 @@
                   title="${game.correctLabel || 'Richtige Antwort'} ${game.multiCorrect ? 'umschalten' : 'markieren'}">
                   ${isCorrect ? icon('check', 'w-4 h-4') : String.fromCharCode(65 + optIdx)}
                 </button>
-                <input type="text" value="${escapeAttr(q.options[optIdx] || '')}" placeholder="Antwort ${String.fromCharCode(65 + optIdx)}"
+                <input type="text" autocomplete="off" value="${escapeAttr(q.options[optIdx] || '')}" placeholder="Antwort ${String.fromCharCode(65 + optIdx)}"
                   oninput="updateOption(${idx}, ${optIdx}, this.value)"
                   class="jax-input flex-1 text-sm" style="border-color: ${optColors[optIdx]};" />
               </div>
@@ -485,7 +1052,7 @@
 
           <div class="flex items-center gap-2">
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
-            <input type="number" value="${q.points ?? 100}" oninput="updatePoints(${idx}, this.value)"
+            <input type="number" autocomplete="off" value="${q.points ?? 100}" oninput="updatePoints(${idx}, this.value)"
               class="jax-input w-24 text-sm" />
           </div>
         </div>
@@ -515,13 +1082,13 @@
           </div>
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Bild/GIF bei der Auflösung (optional)</label>
-            <input type="text" value="${escapeAttr(q.image || '')}" placeholder="https://..."
+            <input type="text" autocomplete="off" value="${escapeAttr(q.image || '')}" placeholder="https://..."
               oninput="updateField(${idx}, 'image', this.value)"
               class="jax-input w-full mt-1 text-sm" />
           </div>
           <div class="flex items-center gap-2">
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
-            <input type="number" value="${q.points ?? 250}" oninput="updateField(${idx}, 'points', parseInt(this.value, 10) || 0)"
+            <input type="number" autocomplete="off" value="${q.points ?? 250}" oninput="updateField(${idx}, 'points', parseInt(this.value, 10) || 0)"
               class="jax-input w-24 text-sm" />
           </div>
         </div>
@@ -541,7 +1108,7 @@
           </div>
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Video-Link (lokale Datei-URL)</label>
-            <input type="text" value="${escapeAttr(q.videoUrl || '')}" placeholder="https://raw.githubusercontent.com/.../trailer.mp4"
+            <input type="text" autocomplete="off" value="${escapeAttr(q.videoUrl || '')}" placeholder="https://raw.githubusercontent.com/.../trailer.mp4"
               oninput="updateField(${idx}, 'videoUrl', this.value)"
               class="jax-input w-full mt-1 text-sm" />
           </div>
@@ -555,13 +1122,13 @@
           </div>
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Richtiger Filmtitel</label>
-            <input type="text" value="${escapeAttr(q.answer || '')}" placeholder="z.B. Pulp Fiction"
+            <input type="text" autocomplete="off" value="${escapeAttr(q.answer || '')}" placeholder="z.B. Pulp Fiction"
               oninput="updateField(${idx}, 'answer', this.value)"
               class="jax-input w-full mt-1 text-sm" style="border-color:#7ed957;" />
           </div>
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Alternative Schreibweisen (kommagetrennt, optional)</label>
-            <input type="text" value="${escapeAttr((q.altAnswers || []).join(', '))}" placeholder="z.B. Bad Boys 2, Bad Boys II"
+            <input type="text" autocomplete="off" value="${escapeAttr((q.altAnswers || []).join(', '))}" placeholder="z.B. Bad Boys 2, Bad Boys II"
               oninput="updateField(${idx}, 'altAnswers', this.value.split(',').map(s => s.trim()).filter(Boolean))"
               class="jax-input w-full mt-1 text-sm" />
           </div>
@@ -586,7 +1153,7 @@
             </div>
             <div class="flex-1">
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Verzerrtes/verpixeltes Bild (wird zuerst gezeigt)</label>
-              <input type="text" value="${escapeAttr(q.distortedUrl || '')}" placeholder="https://..."
+              <input type="text" autocomplete="off" value="${escapeAttr(q.distortedUrl || '')}" placeholder="https://..."
                 oninput="updateField(${idx}, 'distortedUrl', this.value)"
                 class="jax-input w-full mt-1 text-sm" />
             </div>
@@ -597,20 +1164,20 @@
             </div>
             <div class="flex-1">
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Original-Bild (wird bei der Auflösung gezeigt)</label>
-              <input type="text" value="${escapeAttr(q.originalUrl || '')}" placeholder="https://..."
+              <input type="text" autocomplete="off" value="${escapeAttr(q.originalUrl || '')}" placeholder="https://..."
                 oninput="updateField(${idx}, 'originalUrl', this.value)"
                 class="jax-input w-full mt-1 text-sm" />
             </div>
           </div>
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Titel (richtige Antwort)</label>
-            <input type="text" value="${escapeAttr(q.title || '')}" placeholder="z.B. Counter Strike"
+            <input type="text" autocomplete="off" value="${escapeAttr(q.title || '')}" placeholder="z.B. Counter Strike"
               oninput="updateField(${idx}, 'title', this.value)"
               class="jax-input w-full mt-1 text-sm" style="border-color:#7ed957;" />
           </div>
           <div class="flex items-center gap-2">
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
-            <input type="number" value="${q.points ?? 150}" oninput="updateField(${idx}, 'points', parseInt(this.value, 10) || 0)"
+            <input type="number" autocomplete="off" value="${q.points ?? 150}" oninput="updateField(${idx}, 'points', parseInt(this.value, 10) || 0)"
               class="jax-input w-24 text-sm" />
           </div>
         </div>
@@ -631,7 +1198,7 @@
 
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Behauptung (Mythos)</label>
-            <input type="text" value="${escapeAttr(q.question || '')}" placeholder="z.B. Napoleon war für seine Zeit außergewöhnlich klein."
+            <input type="text" autocomplete="off" value="${escapeAttr(q.question || '')}" placeholder="z.B. Napoleon war für seine Zeit außergewöhnlich klein."
               oninput="updateField(${idx}, 'question', this.value)"
               class="jax-input w-full mt-1 text-base" />
           </div>
@@ -654,14 +1221,14 @@
 
           <div class="flex items-center gap-2">
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase flex-shrink-0">Quelle</label>
-            <input type="text" value="${escapeAttr(q.source || '')}" placeholder="https://..."
+            <input type="text" autocomplete="off" value="${escapeAttr(q.source || '')}" placeholder="https://..."
               oninput="updateField(${idx}, 'source', this.value)"
               class="jax-input flex-1 text-xs" />
           </div>
 
           <div class="flex items-center gap-2">
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
-            <input type="number" value="${q.points ?? 150}" oninput="updateField(${idx}, 'points', parseInt(this.value, 10) || 0)"
+            <input type="number" autocomplete="off" value="${q.points ?? 150}" oninput="updateField(${idx}, 'points', parseInt(this.value, 10) || 0)"
               class="jax-input w-24 text-sm" />
           </div>
         </div>
@@ -683,18 +1250,18 @@
           <div class="grid grid-cols-[80px_1fr_100px] gap-2">
             <div>
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Emoji</label>
-              <input type="text" value="${escapeAttr(round.emoji || '')}" oninput="updateField(${rIdx}, 'emoji', this.value)"
+              <input type="text" autocomplete="off" value="${escapeAttr(round.emoji || '')}" oninput="updateField(${rIdx}, 'emoji', this.value)"
                 class="jax-input w-full mt-1 text-sm text-center" />
             </div>
             <div>
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Rundentext</label>
-              <input type="text" value="${escapeAttr(round.question || '')}" placeholder="z.B. Bringe diese ... in die richtige Reihenfolge:"
+              <input type="text" autocomplete="off" value="${escapeAttr(round.question || '')}" placeholder="z.B. Bringe diese ... in die richtige Reihenfolge:"
                 oninput="updateField(${rIdx}, 'question', this.value)"
                 class="jax-input w-full mt-1 text-sm" />
             </div>
             <div>
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
-              <input type="number" value="${round.points ?? 200}" oninput="updateField(${rIdx}, 'points', parseInt(this.value, 10) || 0)"
+              <input type="number" autocomplete="off" value="${round.points ?? 200}" oninput="updateField(${rIdx}, 'points', parseInt(this.value, 10) || 0)"
                 class="jax-input w-full mt-1 text-sm" />
             </div>
           </div>
@@ -703,15 +1270,15 @@
           <div class="space-y-2">
             ${(round.events || []).map((ev, eIdx) => `
               <div class="grid grid-cols-[50px_1fr_90px_36px] gap-2 items-start bg-[#f4f1ff] rounded-xl p-2">
-                <input type="text" value="${escapeAttr(ev.emoji || '')}" placeholder="🎮" oninput="updateEventField(${rIdx}, ${eIdx}, 'emoji', this.value)"
+                <input type="text" autocomplete="off" value="${escapeAttr(ev.emoji || '')}" placeholder="🎮" oninput="updateEventField(${rIdx}, ${eIdx}, 'emoji', this.value)"
                   class="jax-input text-sm text-center" />
                 <div class="space-y-1">
-                  <input type="text" value="${escapeAttr(ev.label || '')}" placeholder="Bezeichnung..." oninput="updateEventField(${rIdx}, ${eIdx}, 'label', this.value)"
+                  <input type="text" autocomplete="off" value="${escapeAttr(ev.label || '')}" placeholder="Bezeichnung..." oninput="updateEventField(${rIdx}, ${eIdx}, 'label', this.value)"
                     class="jax-input w-full text-sm" />
-                  <input type="text" value="${escapeAttr(ev.fact || '')}" placeholder="Hintergrundtext (optional)..." oninput="updateEventField(${rIdx}, ${eIdx}, 'fact', this.value)"
+                  <input type="text" autocomplete="off" value="${escapeAttr(ev.fact || '')}" placeholder="Hintergrundtext (optional)..." oninput="updateEventField(${rIdx}, ${eIdx}, 'fact', this.value)"
                     class="jax-input w-full text-xs" />
                 </div>
-                <input type="number" value="${ev.year ?? 2000}" placeholder="Jahr" oninput="updateEventField(${rIdx}, ${eIdx}, 'year', parseInt(this.value, 10) || 0)"
+                <input type="number" autocomplete="off" value="${ev.year ?? 2000}" placeholder="Jahr" oninput="updateEventField(${rIdx}, ${eIdx}, 'year', parseInt(this.value, 10) || 0)"
                   class="jax-input text-sm" />
                 <button onclick="removeEvent(${rIdx}, ${eIdx})" class="w-9 h-9 jax-btn bg-[#ff2e93] text-white flex items-center justify-center" ${(round.events || []).length <= 2 ? 'disabled title="Mindestens 2 Ereignisse nötig"' : ''}>${icon('trash', 'w-3.5 h-3.5')}</button>
               </div>
@@ -759,7 +1326,7 @@
 
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Frage / Titel</label>
-            <input type="text" value="${escapeAttr(q.question || '')}" placeholder="Fragetext eingeben oder umbenennen..."
+            <input type="text" autocomplete="off" value="${escapeAttr(q.question || '')}" placeholder="Fragetext eingeben oder umbenennen..."
               oninput="updateField(${idx}, 'question', this.value)"
               class="jax-input w-full mt-1 text-base" />
           </div>
@@ -773,7 +1340,7 @@
             </div>
             <div class="flex-1">
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Bild-Link (optional)</label>
-              <input type="text" value="${escapeAttr(q.image || '')}" placeholder="https://... (z.B. eBay-Kleinanzeigen-Screenshot)"
+              <input type="text" autocomplete="off" value="${escapeAttr(q.image || '')}" placeholder="https://... (z.B. eBay-Kleinanzeigen-Screenshot)"
                 oninput="updateField(${idx}, 'image', this.value)"
                 class="jax-input w-full mt-1 text-sm" />
             </div>
@@ -782,22 +1349,22 @@
           <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
             <div>
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Antwort</label>
-              <input type="number" step="any" value="${q.answer ?? 0}" oninput="updateField(${idx}, 'answer', parseFloat(this.value) || 0)"
+              <input type="number" autocomplete="off" step="any" value="${q.answer ?? 0}" oninput="updateField(${idx}, 'answer', parseFloat(this.value) || 0)"
                 class="jax-input w-full mt-1 text-sm" style="border-color:#7ed957;" />
             </div>
             <div>
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Einheit</label>
-              <input type="text" value="${escapeAttr(q.unit || '')}" placeholder="z.B. €, m, kg, Stk." oninput="updateField(${idx}, 'unit', this.value)"
+              <input type="text" autocomplete="off" value="${escapeAttr(q.unit || '')}" placeholder="z.B. €, m, kg, Stk." oninput="updateField(${idx}, 'unit', this.value)"
                 class="jax-input w-full mt-1 text-sm" />
             </div>
             <div>
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Toleranz</label>
-              <input type="number" step="any" value="${q.tolerance ?? 0}" oninput="updateField(${idx}, 'tolerance', parseFloat(this.value) || 0)"
+              <input type="number" autocomplete="off" step="any" value="${q.tolerance ?? 0}" oninput="updateField(${idx}, 'tolerance', parseFloat(this.value) || 0)"
                 class="jax-input w-full mt-1 text-sm" />
             </div>
             <div>
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
-              <input type="number" value="${q.points ?? 200}" oninput="updateField(${idx}, 'points', parseInt(this.value, 10) || 0)"
+              <input type="number" autocomplete="off" value="${q.points ?? 200}" oninput="updateField(${idx}, 'points', parseInt(this.value, 10) || 0)"
                 class="jax-input w-full mt-1 text-sm" />
             </div>
           </div>
@@ -805,19 +1372,19 @@
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Regler-Minimum</label>
-              <input type="number" step="any" value="${q.min ?? 0}" oninput="updateField(${idx}, 'min', parseFloat(this.value) || 0)"
+              <input type="number" autocomplete="off" step="any" value="${q.min ?? 0}" oninput="updateField(${idx}, 'min', parseFloat(this.value) || 0)"
                 class="jax-input w-full mt-1 text-sm" />
             </div>
             <div>
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Regler-Maximum</label>
-              <input type="number" step="any" value="${q.max ?? 1000}" oninput="updateField(${idx}, 'max', parseFloat(this.value) || 0)"
+              <input type="number" autocomplete="off" step="any" value="${q.max ?? 1000}" oninput="updateField(${idx}, 'max', parseFloat(this.value) || 0)"
                 class="jax-input w-full mt-1 text-sm" />
             </div>
           </div>
 
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Bild im Hintergrundtext (optional)</label>
-            <input type="text" value="${escapeAttr(q.factImage || '')}" placeholder="https://... (wird über dem Hintergrundtext gezeigt)"
+            <input type="text" autocomplete="off" value="${escapeAttr(q.factImage || '')}" placeholder="https://... (wird über dem Hintergrundtext gezeigt)"
               oninput="updateField(${idx}, 'factImage', this.value)"
               class="jax-input w-full mt-1 text-sm" />
           </div>
@@ -846,7 +1413,17 @@
 
     function renderGameTabs() {
       const wrap = document.getElementById("game-tabs");
-      const activeTabs = Object.keys(GAMES).map(key => {
+      // Nach der Zahl im Spielnamen sortieren (spiel1, spiel2, spiel3...), nicht nach der
+      // zufälligen Einfüge-Reihenfolge im GAMES-Objekt - "sekwars" o.ä. ohne Zahl landet hinten.
+      const sortedKeys = Object.keys(GAMES).sort((a, b) => {
+        const numA = parseInt((a.match(/\d+/) || [])[0], 10);
+        const numB = parseInt((b.match(/\d+/) || [])[0], 10);
+        if (isNaN(numA) && isNaN(numB)) return a.localeCompare(b);
+        if (isNaN(numA)) return 1;
+        if (isNaN(numB)) return -1;
+        return numA - numB;
+      });
+      const activeTabs = sortedKeys.map(key => {
         const isActive = key === currentGameKey;
         return `<button onclick="switchGame('${key}')" class="game-tab selectable ${isActive ? 'active' : ''} px-4 py-2 text-xs font-jax font-bold" style="${isActive ? '' : 'background:#ffffff;'}">${GAMES[key].label}</button>`;
       }).join('');
