@@ -527,6 +527,7 @@
           playChestOpenAnimation();
         });
       }
+      maybeShowPaintFlyby(gs);
     });
 
     // ---- Alberner Lade-Ticker: rotiert unsinnige "Lade..."-Sprüche als Deko ----
@@ -1094,6 +1095,159 @@
       if (e.key === 'ArrowRight') invaderKeys.right = false;
     });
 
+    // ==== MAL-CHAT: kleines Paint-Fenster, gemalte Bilder fliegen über den Bildschirm aller
+    // Mitspieler. Spam-Schutz per Cooldown, damit nicht im Sekundentakt Bilder losfliegen. ====
+    const PAINT_COLORS = ['#000000', '#ffffff', '#ff2e93', '#3ecbff', '#ffd23f', '#7ed957', '#7017c9', '#ff8a3d'];
+    const PAINT_COOLDOWN_MS = 20000;
+    let paintTool = { color: '#000000', mode: 'pen' };
+    let paintDrawing = false;
+    let paintCtx = null;
+    let paintCooldownInterval = null;
+    let lastSeenPaintEventId = null;
+
+    window.openPaintWindow = function() {
+      document.getElementById("paint-window").classList.remove("hidden");
+      initPaintCanvas();
+      updatePaintCooldownUI();
+    };
+    window.closePaintWindow = function() {
+      document.getElementById("paint-window").classList.add("hidden");
+      clearInterval(paintCooldownInterval);
+    };
+
+    function initPaintCanvas() {
+      const canvas = document.getElementById("paint-canvas");
+      if (!paintCtx) {
+        paintCtx = canvas.getContext("2d");
+        paintCtx.fillStyle = "#fff";
+        paintCtx.fillRect(0, 0, canvas.width, canvas.height);
+        paintCtx.lineCap = "round";
+        paintCtx.lineJoin = "round";
+
+        const swatchWrap = document.getElementById("paint-color-swatches");
+        swatchWrap.innerHTML = PAINT_COLORS.map(c =>
+          `<button onclick="setPaintColor('${c}')" class="w-5 h-5 rounded-sm" style="background:${c}; border: 1px solid #404040;" title="${c}"></button>`
+        ).join('');
+
+        let lastX = 0, lastY = 0;
+        function getPos(e) {
+          const rect = canvas.getBoundingClientRect();
+          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          return { x: (clientX - rect.left) * (canvas.width / rect.width), y: (clientY - rect.top) * (canvas.height / rect.height) };
+        }
+        function startDraw(e) {
+          e.preventDefault();
+          paintDrawing = true;
+          const p = getPos(e);
+          lastX = p.x; lastY = p.y;
+        }
+        function moveDraw(e) {
+          if (!paintDrawing) return;
+          e.preventDefault();
+          const p = getPos(e);
+          paintCtx.strokeStyle = paintTool.mode === 'eraser' ? '#ffffff' : paintTool.color;
+          paintCtx.lineWidth = paintTool.mode === 'eraser' ? 14 : 3;
+          paintCtx.beginPath();
+          paintCtx.moveTo(lastX, lastY);
+          paintCtx.lineTo(p.x, p.y);
+          paintCtx.stroke();
+          lastX = p.x; lastY = p.y;
+        }
+        function endDraw() { paintDrawing = false; }
+
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', moveDraw);
+        window.addEventListener('mouseup', endDraw);
+        canvas.addEventListener('touchstart', startDraw, { passive: false });
+        canvas.addEventListener('touchmove', moveDraw, { passive: false });
+        canvas.addEventListener('touchend', endDraw);
+      }
+    }
+
+    window.setPaintColor = function(c) {
+      paintTool = { color: c, mode: 'pen' };
+      document.getElementById("paint-eraser-btn").style.outline = "none";
+    };
+    window.setPaintTool = function(mode) {
+      paintTool.mode = mode;
+      document.getElementById("paint-eraser-btn").style.outline = mode === 'eraser' ? "2px solid #ff2e93" : "none";
+    };
+    window.clearPaintCanvas = function() {
+      if (!paintCtx) return;
+      paintCtx.fillStyle = "#fff";
+      paintCtx.fillRect(0, 0, 280, 160);
+    };
+
+    function getPaintCooldownRemaining() {
+      const last = parseInt(localStorage.getItem("quiz_last_paint_sent") || "0", 10);
+      return Math.max(0, PAINT_COOLDOWN_MS - (Date.now() - last));
+    }
+
+    function updatePaintCooldownUI() {
+      clearInterval(paintCooldownInterval);
+      const textEl = document.getElementById("paint-cooldown-text");
+      const btn = document.getElementById("paint-send-btn");
+      function tick() {
+        const remaining = getPaintCooldownRemaining();
+        if (remaining > 0) {
+          textEl.innerText = "⏳ Noch " + Math.ceil(remaining / 1000) + "s bis zum nächsten Bild...";
+          btn.disabled = true;
+          btn.style.opacity = "0.5";
+        } else {
+          textEl.innerText = "";
+          btn.disabled = false;
+          btn.style.opacity = "1";
+          clearInterval(paintCooldownInterval);
+        }
+      }
+      tick();
+      paintCooldownInterval = setInterval(tick, 500);
+    }
+
+    window.sendPaintDrawing = function() {
+      if (getPaintCooldownRemaining() > 0) return; // Spam-Schutz - Button ist eigentlich schon deaktiviert
+      const canvas = document.getElementById("paint-canvas");
+      const dataUrl = canvas.toDataURL("image/png");
+      const name = (document.getElementById("cockpit-user-name")?.innerText || "Jemand").trim();
+
+      localStorage.setItem("quiz_last_paint_sent", String(Date.now()));
+      update(ref(db, 'gameState'), {
+        paintEvent: { id: Date.now(), dataUrl, name }
+      });
+      window.closePaintWindow();
+    };
+
+    // Empfangsseite: fliegendes Bild einmal langsam über den Bildschirm ziehen lassen
+    function maybeShowPaintFlyby(gs) {
+      const ev = gs && gs.paintEvent;
+      if (!ev || !ev.id || ev.id === lastSeenPaintEventId) return;
+      lastSeenPaintEventId = ev.id;
+      if (Date.now() - ev.id > 15000) return; // zu alt, z.B. nach Seiten-Neuladen
+
+      const layer = document.getElementById("paint-flyby-layer");
+      const img = document.getElementById("paint-flyby-img");
+      const nameEl = document.getElementById("paint-flyby-name");
+      if (!layer || !img) return;
+
+      nameEl.innerText = "🖌️ " + (ev.name || "Jemand") + " hat gemalt:";
+      img.src = ev.dataUrl;
+      img.style.left = "-260px";
+      img.style.transition = "none";
+      nameEl.style.left = "-200px";
+      nameEl.style.transition = "none";
+      layer.classList.remove("hidden");
+
+      requestAnimationFrame(() => {
+        img.style.transition = "left 9s linear";
+        nameEl.style.transition = "left 9s linear";
+        img.style.left = "calc(100vw + 20px)";
+        nameEl.style.left = "calc(100vw + 20px)";
+      });
+
+      setTimeout(() => layer.classList.add("hidden"), 9300);
+    }
+
     window.clickBrainLogo = function() {
       if (isHost) return; // Host spielt nicht um Punkte - für ihn passiert hier nichts
       const claimedField = "brainFound_cockpit";
@@ -1206,6 +1360,10 @@
 
       <div class="w-full my-auto space-y-3">
         <div class="relative w-14 h-14 mx-auto z-30">
+          <div class="absolute -top-9 left-1/2 -translate-x-1/2 flex items-center justify-center w-8 h-8 rounded-lg bg-white border-2 border-[#1a1a2e] cursor-pointer shadow-[2px_2px_0_rgba(0,0,0,0.6)] hover:scale-110 transition-transform"
+            onclick="openPaintWindow()" title="Mal was und schick's rum!">
+            <span class="text-base">🖌️</span>
+          </div>
           <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/cpu.png" alt="" ondblclick="openInvaderGame()" title="Doppelklick für ein kleines Geheimspiel..."
             class="w-14 h-14 cursor-pointer opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
           <div id="invader-bubble" class="hidden fixed z-[90]" style="left: 50%; top: 50%; transform: translate(-50%, -50%);">
@@ -1273,5 +1431,35 @@
   <img id="brain-logo" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9455-removebg-preview.png"
     onclick="clickBrainLogo()" class="hidden fixed bottom-2 left-2 h-8 md:h-10 w-auto z-30 cursor-pointer transition-transform hover:scale-110"
     onerror="this.style.display='none'" alt="">
+
+  <!-- ==== MAL-CHAT: kleines Paint-Fenster im Win95-Look, gemalte Bilder fliegen über den
+       Bildschirm aller Mitspieler. Eigenständiges kleines Extra, keine Original-Assets. ==== -->
+  <div id="paint-window" class="hidden fixed inset-0 z-[95] flex items-center justify-center bg-black/50">
+    <div class="bg-[#c0c0c0]" style="width: 320px; border: 2px solid #fff; border-right-color:#404040; border-bottom-color:#404040; box-shadow: 2px 2px 0 rgba(0,0,0,0.6);">
+      <div class="flex items-center justify-between px-1.5 py-1" style="background: linear-gradient(90deg, #000080, #1084d0);">
+        <span class="text-white text-[11px] font-bold" style="font-family: 'Segoe UI', Tahoma, sans-serif;">🎨 Mal-Chat</span>
+        <button onclick="closePaintWindow()" class="w-4 h-4 flex items-center justify-center text-[10px] font-bold" style="background:#c0c0c0; border: 1px solid #fff; border-right-color:#404040; border-bottom-color:#404040;">✕</button>
+      </div>
+      <div class="p-2 space-y-2">
+        <div class="flex gap-1 flex-wrap items-center" style="background:#c0c0c0; border: 1px solid #808080; border-top-color:#404040; border-left-color:#404040; padding: 3px;">
+          ${''}
+          <div id="paint-color-swatches" class="flex gap-1"></div>
+          <button onclick="setPaintTool('eraser')" id="paint-eraser-btn" class="w-6 h-6 text-xs bg-white border border-[#404040]" title="Radierer">🧹</button>
+          <button onclick="clearPaintCanvas()" class="text-[10px] px-2 py-1 bg-[#c0c0c0]" style="border: 1px solid #fff; border-right-color:#404040; border-bottom-color:#404040;">Neu</button>
+        </div>
+        <canvas id="paint-canvas" width="280" height="160" class="cursor-crosshair" style="background:#fff; border: 2px solid #404040; border-right-color:#fff; border-bottom-color:#fff; display:block; margin:0 auto;"></canvas>
+        <div class="flex items-center justify-between gap-2">
+          <div id="paint-cooldown-text" class="text-[10px] text-[#1a1a2e]/60 flex-1"></div>
+          <button id="paint-send-btn" onclick="sendPaintDrawing()" class="text-xs px-3 py-1.5 bg-[#c0c0c0] font-bold" style="border: 1px solid #fff; border-right-color:#404040; border-bottom-color:#404040;">Senden 📤</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fliegendes Bild: zieht langsam über den Bildschirm, wenn jemand was gesendet hat -->
+  <div id="paint-flyby-layer" class="hidden fixed inset-0 z-[94] pointer-events-none overflow-hidden">
+    <div id="paint-flyby-name" class="absolute text-white font-jax font-bold text-xs px-2 py-1 bg-black/60 rounded-full" style="top: 10%;"></div>
+    <img id="paint-flyby-img" class="absolute" style="top: 15%; width: 220px; border: 3px solid white; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.5);">
+  </div>
 </body>
 </html>
