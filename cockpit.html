@@ -533,6 +533,7 @@
     // damit andere häufige Schreibvorgänge dort das Bild nicht überschreiben, bevor es bei
     // allen ankommt.
     onValue(ref(db, 'paintEvent'), (snapshot) => {
+      console.log('[Mal-Chat] Empfangs-Listener ausgelöst, Daten vorhanden:', !!snapshot.val());
       maybeShowPaintFlyby(snapshot.val());
     });
 
@@ -1282,25 +1283,31 @@
       const canvas = document.getElementById("paint-canvas");
       const dataUrl = canvas.toDataURL("image/png");
       const name = (document.getElementById("cockpit-user-name")?.innerText || "Jemand").trim();
+      console.log('[Mal-Chat] Sende Bild, Größe (Zeichen):', dataUrl.length, 'Name:', name);
 
       localStorage.setItem("quiz_last_paint_sent", String(Date.now()));
       // Eigener, dedizierter Firebase-Pfad statt in "gameState" - das Feld wird von vielen
       // anderen Vorgängen (Bereitschaft-Reset, Countdown, Status-Wechsel) häufig überschrieben,
       // wodurch das Bild bei anderen Spielern teils gar nicht ankam.
-      set(ref(db, 'paintEvent'), { id: Date.now(), dataUrl, name });
+      set(ref(db, 'paintEvent'), { id: Date.now(), dataUrl, name })
+        .then(() => console.log('[Mal-Chat] Erfolgreich an Firebase gesendet.'))
+        .catch((err) => console.error('[Mal-Chat] FEHLER beim Senden:', err));
       window.closePaintWindow();
     };
 
     // Empfangsseite: fliegendes Bild einmal langsam über den Bildschirm ziehen lassen
     function maybeShowPaintFlyby(ev) {
-      if (!ev || !ev.id || ev.id === lastSeenPaintEventId) return;
+      console.log('[Mal-Chat] maybeShowPaintFlyby aufgerufen mit:', ev ? { id: ev.id, name: ev.name, hatBild: !!ev.dataUrl } : ev);
+      if (!ev || !ev.id) { console.log('[Mal-Chat] Abbruch: kein Event/keine ID'); return; }
+      if (ev.id === lastSeenPaintEventId) { console.log('[Mal-Chat] Abbruch: schon gesehen (id war bereits', lastSeenPaintEventId, ')'); return; }
       lastSeenPaintEventId = ev.id;
-      if (Date.now() - ev.id > 15000) return; // zu alt, z.B. nach Seiten-Neuladen
+      if (Date.now() - ev.id > 15000) { console.log('[Mal-Chat] Abbruch: zu alt (', Date.now() - ev.id, 'ms)'); return; }
+      console.log('[Mal-Chat] Zeige Bild jetzt an.');
 
       const layer = document.getElementById("paint-flyby-layer");
       const img = document.getElementById("paint-flyby-img");
       const nameEl = document.getElementById("paint-flyby-name");
-      if (!layer || !img) return;
+      if (!layer || !img) { console.log('[Mal-Chat] Abbruch: HTML-Elemente fehlen', !!layer, !!img); return; }
 
       nameEl.innerText = "🖌️ " + (ev.name || "Jemand") + " hat gemalt:";
       img.src = ev.dataUrl;
