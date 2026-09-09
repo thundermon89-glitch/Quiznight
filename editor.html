@@ -74,6 +74,7 @@
       border-radius: 16px;
       box-shadow: 3px 3px 0 rgba(0,0,0,0.7);
       transition: transform .1s ease;
+      color: #1a1a2e;
     }
     .game-tab.active { background: #ffd23f; color: #1a1a2e; }
     .game-tab.inactive { background: #ffffff; color: #1a1a2e; opacity: 0.5; cursor: not-allowed; }
@@ -82,7 +83,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getDatabase, ref, set, get, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     const firebaseConfig = {
       databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
@@ -817,6 +818,18 @@
       });
     };
 
+    window.deleteSelectedTemplate = function() {
+      const select = document.getElementById("template-select");
+      const name = select.value;
+      if (!name) { alert("Bitte erst eine Vorlage aus der Liste auswählen."); return; }
+      if (!confirm(`Vorlage "${name}" wirklich unwiderruflich löschen?`)) return;
+      const game = GAMES[currentGameKey];
+      remove(ref(db, game.templatesPath + '/' + name)).then(() => {
+        select.value = "";
+        loadTemplateList();
+      });
+    };
+
     // ==== SPEICHERN (macht die Fragen im Spiel aktiv) ====
     // Welches Feld je Fragetyp den "ist diese Frage eigentlich ausgefüllt"-Test besteht
     const REQUIRED_FIELD = {
@@ -1269,18 +1282,26 @@
           <div class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase pt-1">Ereignisse (Reihenfolge wird beim Speichern automatisch nach Jahr sortiert)</div>
           <div class="space-y-2">
             ${(round.events || []).map((ev, eIdx) => `
-              <div class="grid grid-cols-[50px_1fr_90px_36px] gap-2 items-start bg-[#f4f1ff] rounded-xl p-2">
-                <input type="text" autocomplete="off" value="${escapeAttr(ev.emoji || '')}" placeholder="🎮" oninput="updateEventField(${rIdx}, ${eIdx}, 'emoji', this.value)"
-                  class="jax-input text-sm text-center" />
-                <div class="space-y-1">
-                  <input type="text" autocomplete="off" value="${escapeAttr(ev.label || '')}" placeholder="Bezeichnung..." oninput="updateEventField(${rIdx}, ${eIdx}, 'label', this.value)"
-                    class="jax-input w-full text-sm" />
-                  <input type="text" autocomplete="off" value="${escapeAttr(ev.fact || '')}" placeholder="Hintergrundtext (optional)..." oninput="updateEventField(${rIdx}, ${eIdx}, 'fact', this.value)"
-                    class="jax-input w-full text-xs" />
+              <div class="bg-[#f4f1ff] rounded-xl p-2 space-y-1.5">
+                <div class="grid grid-cols-[50px_1fr_90px_36px] gap-2 items-start">
+                  <div class="flex flex-col items-center gap-1">
+                    <input type="text" autocomplete="off" value="${escapeAttr(ev.emoji || '')}" placeholder="🎮" oninput="updateEventField(${rIdx}, ${eIdx}, 'emoji', this.value)"
+                      class="jax-input text-sm text-center w-full" title="Wird nur genutzt, wenn kein Bild gesetzt ist" />
+                    ${ev.image ? `<img src="${escapeAttr(ev.image)}" class="w-10 h-10 rounded object-cover border-2 border-[#1a1a2e]" alt="">` : ''}
+                  </div>
+                  <div class="space-y-1">
+                    <input type="text" autocomplete="off" value="${escapeAttr(ev.label || '')}" placeholder="Bezeichnung..." oninput="updateEventField(${rIdx}, ${eIdx}, 'label', this.value)"
+                      class="jax-input w-full text-sm" />
+                    <input type="text" autocomplete="off" value="${escapeAttr(ev.fact || '')}" placeholder="Hintergrundtext (optional)..." oninput="updateEventField(${rIdx}, ${eIdx}, 'fact', this.value)"
+                      class="jax-input w-full text-xs" />
+                  </div>
+                  <input type="number" autocomplete="off" value="${ev.year ?? 2000}" placeholder="Jahr" oninput="updateEventField(${rIdx}, ${eIdx}, 'year', parseInt(this.value, 10) || 0)"
+                    class="jax-input text-sm" />
+                  <button onclick="removeEvent(${rIdx}, ${eIdx})" class="w-9 h-9 jax-btn bg-[#ff2e93] text-white flex items-center justify-center" ${(round.events || []).length <= 2 ? 'disabled title="Mindestens 2 Ereignisse nötig"' : ''}>${icon('trash', 'w-3.5 h-3.5')}</button>
                 </div>
-                <input type="number" autocomplete="off" value="${ev.year ?? 2000}" placeholder="Jahr" oninput="updateEventField(${rIdx}, ${eIdx}, 'year', parseInt(this.value, 10) || 0)"
-                  class="jax-input text-sm" />
-                <button onclick="removeEvent(${rIdx}, ${eIdx})" class="w-9 h-9 jax-btn bg-[#ff2e93] text-white flex items-center justify-center" ${(round.events || []).length <= 2 ? 'disabled title="Mindestens 2 Ereignisse nötig"' : ''}>${icon('trash', 'w-3.5 h-3.5')}</button>
+                <input type="text" autocomplete="off" value="${escapeAttr(ev.image || '')}" placeholder="Bild-Link (optional, ersetzt das Emoji, falls gesetzt)"
+                  oninput="updateEventField(${rIdx}, ${eIdx}, 'image', this.value)"
+                  class="jax-input w-full text-xs" />
               </div>
             `).join('')}
           </div>
@@ -1465,6 +1486,9 @@
         Vorlagen
       </span>
       <select id="template-select" onchange="loadTemplate()" class="jax-input text-sm py-2"></select>
+      <button onclick="deleteSelectedTemplate()" class="jax-btn bg-[#ff2e93] text-white px-3 py-2 text-xs font-jax font-bold" title="Ausgewählte Vorlage löschen">
+        ${icon('trash', 'w-4 h-4')}
+      </button>
       <button onclick="saveAsTemplate()" class="jax-btn bg-[#ffd23f] text-[#1a1a2e] px-3 py-2 text-xs font-jax font-bold">
         Aktuelle Liste als Vorlage speichern
       </button>
