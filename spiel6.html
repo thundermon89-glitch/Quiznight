@@ -50,6 +50,12 @@
     #fuse-spark span { display: inline-block; animation: sparkFlicker 0.3s ease-in-out infinite; }
 
     @keyframes pointsTick { 0% { transform: scale(1.15); } 100% { transform: scale(1); } }
+    @keyframes wrongGuessShake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+    .wrong-guess-shake { animation: wrongGuessShake 0.4s ease-in-out; border-color: #ff2e93 !important; }
     .points-tick { animation: pointsTick 0.15s ease-out; }
 
     @keyframes leaderRowIn {
@@ -139,9 +145,44 @@
     });
 
     window.hostEndGame6 = function() {
-      set(ref(db, 'game6State'), null);
-      update(ref(db, 'gameState'), { status: 'cockpit' });
+      if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
+      update(ref(db, 'gameState'), { returnCountdownAt: Date.now() });
     };
+
+    // ==== RÜCKKEHR-ZWISCHENSZENE: schwarzer Bildschirm mit Countdown, wie in den anderen
+    // Spielen auch - fehlte hier bisher komplett. ====
+    let lastSeenReturnCountdownAt = null;
+    onValue(ref(db, 'gameState/returnCountdownAt'), (snapshot) => {
+      const startedAt = snapshot.val();
+      if (startedAt && startedAt !== lastSeenReturnCountdownAt) {
+        lastSeenReturnCountdownAt = startedAt;
+        runReturnCountdown(startedAt);
+      }
+    });
+
+    function runReturnCountdown(startedAt) {
+      const overlay = document.getElementById('return-countdown-overlay');
+      const numberEl = document.getElementById('return-countdown-number');
+      if (!overlay || !numberEl) return;
+      overlay.classList.remove('hidden');
+      const DURATION = 5;
+      let doneTriggered = false;
+      function tick() {
+        const elapsed = (Date.now() - startedAt) / 1000;
+        const remaining = Math.max(0, DURATION - elapsed);
+        numberEl.innerText = remaining > 0.05 ? Math.ceil(remaining) : '✓';
+        if (remaining > 0.05) {
+          requestAnimationFrame(tick);
+        } else if (!doneTriggered) {
+          doneTriggered = true;
+          if (isHost) {
+            set(ref(db, 'game6State'), null);
+            update(ref(db, 'gameState'), { status: 'cockpit' });
+          }
+        }
+      }
+      tick();
+    }
 
     // ================= HOST: RUNDE STARTEN/BEENDEN =================
     let movieRoundIdx = 0;
@@ -186,6 +227,7 @@
 
     // ================= SPIELER: RATEN =================
     let mySolved = false;
+    let myVideoPlaybackStartedAt = null; // wann das Video bei DIESER Person tatsächlich losläuft
     let movieTickInterval = null;
     let movieSuggestDebounce = null;
 
@@ -219,13 +261,19 @@
         if (state.stage !== 'movie_playing') return;
         const round = movieRounds.find(r => r.id === state.movieRoundId) || movieRounds[0];
         const validAnswers = [round.answer, ...(round.altAnswers || [])].map(normalizeGuess);
-        if (!validAnswers.includes(guess)) return; // falsch - einfach nochmal versuchen
+        if (!validAnswers.includes(guess)) {
+          showWrongGuessFeedback(); // sichtbare Rückmeldung - sonst wirkt's wie "Button tut nichts"
+          return;
+        }
 
         // Mehrfach-Gewinner-Modell: JEDER, der richtig liegt, bekommt einen Eintrag mit SEINEN
         // eigenen Punkten zum Zeitpunkt seiner Antwort - kein "nur der Erste gewinnt" mehr.
+        // Punkte werden anhand des tatsächlichen Video-Startzeitpunkts bei DIESER Person
+        // berechnet (konsistent mit der angezeigten Zündschnur), nicht der Firebase-Zeit.
+        const referenceStart = myVideoPlaybackStartedAt || state.movieStartedAt;
         runTransaction(ref(db, 'game6State/movieGuesses/' + playerId), (current) => {
           if (current) return current; // schon gelöst, nicht doppelt schreiben
-          return { points: currentMoviePoints(state.movieStartedAt), guessedAt: Date.now() };
+          return { points: currentMoviePoints(referenceStart), guessedAt: Date.now() };
         }).then((result) => {
           const val = result && result.snapshot && result.snapshot.val();
           if (result.committed && val) {
@@ -243,6 +291,25 @@
         });
       });
     };
+
+    function showWrongGuessFeedback() {
+      const input = document.getElementById("movie-guess-input");
+      if (!input) return;
+      input.classList.remove("wrong-guess-shake");
+      void input.offsetWidth;
+      input.classList.add("wrong-guess-shake");
+
+      let hint = document.getElementById("wrong-guess-hint");
+      if (!hint) {
+        hint = document.createElement("div");
+        hint.id = "wrong-guess-hint";
+        hint.className = "text-[#ff2e93] text-sm font-bold mt-1";
+        input.parentElement?.appendChild(hint);
+      }
+      hint.innerText = "❌ Leider falsch - versuch's nochmal!";
+      clearTimeout(hint._hideTimeout);
+      hint._hideTimeout = setTimeout(() => { hint.innerText = ""; }, 2000);
+    }
 
     // ================= RENDERING =================
     function renderLeaderboard(state, targetElId) {
@@ -315,6 +382,7 @@
         clearInterval(movieTickInterval);
         document.getElementById("movie-iframe-wrap")?.replaceChildren();
         mySolved = false;
+        myVideoPlaybackStartedAt = null;
         return;
       }
 
@@ -355,6 +423,7 @@
           // ein Neustart DERSELBEN Runde das Video nicht neu laden, weil die ID gleich bleibt.
           if (iframeWrap && iframeWrap.dataset.loadedFor !== String(state.movieStartedAt)) {
             iframeWrap.innerHTML = "";
+            myVideoPlaybackStartedAt = null; // noch nicht wirklich losgelaufen
             // Lokale Video-Datei statt YouTube-Einbettung - keine Werbung mehr möglich, da
             // YouTube beim eigentlichen Abspielen gar nicht mehr involviert ist. Die Datei ist
             // schon vorab auf den gewünschten Ausschnitt zugeschnitten, daher kein "start=..."
@@ -371,6 +440,13 @@
             source.src = round.videoUrl;
             source.type = round.videoType || "video/mp4";
             freshVideo.appendChild(source);
+            // WICHTIG: der Punkte-Countdown startet erst, wenn das Video bei DIESER Person
+            // tatsächlich zu spielen beginnt - nicht schon beim synchronen Firebase-Zeitstempel.
+            // Sonst verliert, wer langsamer lädt (z.B. schlechtere Verbindung), unfair schon
+            // Punkte, bevor bei ihm überhaupt etwas zu sehen ist.
+            freshVideo.addEventListener('playing', () => {
+              if (!myVideoPlaybackStartedAt) myVideoPlaybackStartedAt = Date.now();
+            }, { once: true });
             iframeWrap.appendChild(freshVideo);
             iframeWrap.dataset.loadedFor = String(state.movieStartedAt);
             // Manche Browser blockieren Autoplay mit Ton ohne direkte Nutzerinteraktion -
@@ -383,8 +459,12 @@
           }
           clearInterval(movieTickInterval);
           const tick = () => {
-            const pts = updateFuse(state.movieStartedAt);
-            if (pts <= 0) {
+            // Solange das Video bei dieser Person noch gar nicht angesprungen ist, zeigt die
+            // Zündschnur die vollen Punkte an und tickt noch nicht runter - fair für alle,
+            // unabhängig von Ladezeit.
+            const referenceStart = myVideoPlaybackStartedAt || Date.now();
+            const pts = updateFuse(referenceStart);
+            if (myVideoPlaybackStartedAt && pts <= 0) {
               clearInterval(movieTickInterval);
               if (isHost) update(ref(db, 'game6State'), { stage: 'movie_result' });
             }
@@ -543,6 +623,12 @@
     </div>
 
   </main>
+
+  <!-- RÜCKKEHR-ZWISCHENSZENE -->
+  <div id="return-countdown-overlay" class="hidden fixed inset-0 bg-black z-[80] flex flex-col items-center justify-center">
+    <div class="text-amber-200/70 text-xs tracking-[0.3em] uppercase mb-4" style="font-family: Georgia, 'Times New Roman', serif;">Rückkehr ins Cockpit in</div>
+    <div id="return-countdown-number" class="text-amber-100 border-4 border-amber-200/40 rounded-full w-40 h-40 flex items-center justify-center text-6xl" style="font-family: Georgia, 'Times New Roman', serif;">5</div>
+  </div>
 
 </body>
 </html>

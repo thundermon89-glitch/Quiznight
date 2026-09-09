@@ -319,13 +319,22 @@
       }
     });
 
-    onValue(ref(db, 'game9State'), (snapshot) => {
-      const state = snapshot.val() || { roundIdx: 0, stage: 'waiting' };
-      latestState = state;
-      renderAll(state);
-      maybeRevealHalflifeEgg(state);
+    // Fragen aus dem Editor laden, falls dort welche gepflegt wurden - sonst bleiben die
+    // eingebauten Standard-Runden (rounds-Array oben) als Rückfallebene aktiv.
+    get(ref(db, 'content/spiel9/rounds')).then((snap) => {
+      const custom = snap.val();
+      if (Array.isArray(custom) && custom.length > 0) {
+        rounds.length = 0;
+        rounds.push(...custom);
+      }
 
-      // Frühauflösung: sobald alle aktiven Spieler eingeloggt haben, muss der Host nicht
+      onValue(ref(db, 'game9State'), (snapshot) => {
+        const state = snapshot.val() || { roundIdx: 0, stage: 'waiting' };
+        latestState = state;
+        renderAll(state);
+        maybeRevealHalflifeEgg(state);
+
+        // Frühauflösung: sobald alle aktiven Spieler eingeloggt haben, muss der Host nicht
       // auf die vollen 2 Minuten warten - der Host-Client löst dann sofort auf.
       if (isHost && state.stage === 'input') {
         const ids = getActivePlayerIds();
@@ -336,6 +345,7 @@
           hostResolveRound();
         }
       }
+      });
     });
 
     onValue(ref(db, 'gameState'), (snapshot) => {

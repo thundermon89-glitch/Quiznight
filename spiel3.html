@@ -543,10 +543,47 @@
       }
     });
 
+    // ==== ANTWORT-MISCHUNG: die richtige Antwort soll nicht immer auf Position A landen.
+    // Deterministisch anhand der Frage-ID gemischt, damit alle Spieler gleichzeitig dieselbe
+    // Reihenfolge sehen (wichtig für die Live-Stimmen-Anzeige) - gilt automatisch auch für
+    // jede künftig neu hinzugefügte Frage, ohne dass man selbst an die Reihenfolge denken muss.
+    function mixSeed(seed) {
+      // Hash-Durchmischung, damit aufeinanderfolgende Fragen-IDs (1,2,3...) nicht ähnlich
+      // korrelierte Zufallsfolgen liefern - sonst würde die richtige Antwort trotz Mischung
+      // bei vielen Fragen wieder auf ähnlichen Positionen landen. Der Faktor 3 wurde gegen
+      // den tatsächlichen Datensatz getestet und liefert eine sehr gleichmäßige Verteilung.
+      let x = (((seed || 1) * 3)) ^ 0x9e3779b9;
+      x = Math.imul(x ^ (x >>> 16), 0x85ebca6b);
+      x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35);
+      x = x ^ (x >>> 16);
+      return (x >>> 0) % 233280;
+    }
+
+    function seededShuffleIndices(seed, length) {
+      const arr = Array.from({ length }, (_, i) => i);
+      let s = mixSeed(seed);
+      for (let i = arr.length - 1; i > 0; i--) {
+        s = (s * 9301 + 49297) % 233280;
+        const j = Math.floor((s / 233280) * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function getShuffledQuestion(q) {
+      if (!q || !Array.isArray(q.options)) return q;
+      const order = seededShuffleIndices(q.id || 0, q.options.length);
+      return {
+        ...q,
+        options: order.map(i => q.options[i]),
+        correct: order.indexOf(q.correct)
+      };
+    }
+
     function startListeningWithQuestions() {
       onValue(ref(db, 'game3State'), (snapshot) => {
         const state = snapshot.val() || { questionIdx: 0, stage: 'intro' }; // intro, waiting, question_shown, options_shown, result
-        const q = questions[state.questionIdx || 0];
+        const q = getShuffledQuestion(questions[state.questionIdx || 0]);
         currentQuestionData = { ...q, stage: state.stage, correctOption: state.correctOption };
         latestQuestion = q;
 

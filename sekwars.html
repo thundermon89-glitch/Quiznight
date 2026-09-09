@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hirnschmalz-Arena - Spiel 4: Pi mal Daumen</title>
+  <title>Hirnschmalz-Arena - Sekwars</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -136,24 +136,29 @@
     // ==== RUNDEN-KATALOG: 3x Größe in Metern (0-1000) + 3x Gewicht in Kilogramm (0-1000, mit
     // Gramm-genauer Lösung) + 3x Länge in Zentimetern (0-200, exakt) ====
     const rounds = [
-      { unit: 'm', id: 1, emoji: "🗼", question: "Wie hoch ist der Eiffelturm (in Metern, inkl. Antenne)?", answer: 330, min: 0, max: 1000, tolerance: 40, points: 200 },
-      { unit: 'm', id: 2, emoji: "🏙️", question: "Wie hoch ist der Burj Khalifa (in Metern)?", answer: 828, min: 0, max: 1000, tolerance: 60, points: 200 },
-      { unit: 'm', id: 3, emoji: "⛪", question: "Wie hoch ist der Kölner Dom (in Metern)?", answer: 157, min: 0, max: 1000, tolerance: 20, points: 200 },
+      { unit: '€', id: 1, emoji: "🎮", question: "Was kostet Die Sims 4 mit wirklich allen Erweiterungen (97 Stück insgesamt) zusammen?", answer: 1429.03, min: 0, max: 3000, tolerance: 200, points: 200,
+        fact: "Die Sims 4 ist mittlerweile zu einem wahren Kostenmonster herangewachsen, wenn man wirklich alle bisher erschienenen Erweiterungen, Gameplay-Packs und Accessoires zusammenrechnet. Über die Jahre hinweg sind so 97 einzelne Zusatzinhalte zusammengekommen, vom großen Erweiterungspack bis zum kleinen Accessoire-Paket. Wer wirklich jedes einzelne Stück zum vollen Preis kaufen würde, müsste dafür 1.429,03 Euro auf den Tisch legen. Zum Vergleich: Das Grundspiel selbst ist inzwischen komplett kostenlos erhältlich, während die Erweiterungen den eigentlichen Umsatz bringen. Kein Wunder also, dass die meisten Spieler eher gezielt einzelne Packs kaufen, statt auf die komplette Sammlung zu sparen." },
+      { unit: 'h', id: 2, emoji: "🎮", question: "Wie lange kann man mit dem originalen Game Boy (4 AA-Batterien) am Stück spielen?", answer: 30, min: 0, max: 100, tolerance: 8, points: 200 },
+      { unit: 'Blöcke', id: 3, emoji: "⛏️", question: "Wie viele Blöcke hoch ist die maximale Bauhöhe in Minecraft (vom Grundgestein bis zum Himmel)?", answer: 319, min: 0, max: 500, tolerance: 25, points: 200,
+        fact: "Seit dem großen Höhen-Update (Version 1.18) reicht die Welt in Minecraft von Y-64 bis Y255, was einer Bauhöhe von insgesamt 319 Blöcken entspricht. Davor war die Welt lange Zeit auf nur 256 Blöcke begrenzt." },
+      { unit: 'Mio.', id: 4, emoji: "🖥️", question: "Wie viele Spieler waren beim absoluten Rekord-Peak gleichzeitig auf Steam online (in Millionen)?", answer: 36, min: 0, max: 50, tolerance: 4, points: 200 },
+      { unit: 'm', id: 5, emoji: "🗽", question: "Wie hoch ist die Freiheitsstatue in New York (von der Fackelspitze bis zum Sockel unten, in Metern)?", answer: 93, min: 0, max: 200, tolerance: 10, points: 200 },
+      { unit: 'm', id: 6, emoji: "🗼", question: "Wie hoch ist der Schiefe Turm von Pisa auf seiner höheren (nördlichen) Seite (in Metern)?", answer: 57, min: 0, max: 100, tolerance: 6, points: 200 },
+      { unit: 'm', id: 7, emoji: "⛪", question: "Wie hoch ist der Südturm des Kölner Doms (in Metern)?", answer: 157, min: 0, max: 250, tolerance: 15, points: 200 }
 
-      { unit: 'kg', id: 4, emoji: "🦁", question: "Wie viel wiegt ein ausgewachsener Löwe (männlich, in Kilogramm)?", answer: 190.5, min: 0, max: 1000, tolerance: 30, points: 200 },
-      { unit: 'kg', id: 5, emoji: "🎹", question: "Wie viel wiegt ein durchschnittlicher Konzertflügel (in Kilogramm)?", answer: 350.75, min: 0, max: 1000, tolerance: 50, points: 200 },
-      { unit: 'kg', id: 6, emoji: "🐄", question: "Wie viel wiegt eine ausgewachsene Milchkuh (in Kilogramm)?", answer: 750.2, min: 0, max: 1000, tolerance: 60, points: 200 },
-
-      { unit: 'cm', id: 7, emoji: "🧍", question: "Wie groß ist ein durchschnittlicher erwachsener Mann in Deutschland (in Zentimetern)?", answer: 180, min: 0, max: 200, tolerance: 8, points: 200 },
-      { unit: 'cm', id: 8, emoji: "🎾", question: "Wie lang ist ein Tennisschläger (in Zentimetern)?", answer: 68, min: 0, max: 200, tolerance: 5, points: 200 },
-      { unit: 'cm', id: 9, emoji: "🧊", question: "Wie hoch ist ein handelsüblicher Standard-Kühlschrank (in Zentimetern)?", answer: 180, min: 0, max: 200, tolerance: 10, points: 200 }
-      // Weitere Runden nach dem gleichen Schema ergänzbar (unit: 'm', 'kg' oder 'cm')
+      // ==== PLATZ FÜR WEITERE FRAGEN MIT BILD (z.B. eBay-Kleinanzeigen-Screenshots) ====
+      // Einfach nach diesem Schema ergänzen (Komma nicht vergessen, das "image"-Feld ist
+      // optional - Fragen ohne Bild funktionieren weiterhin genauso wie bisher):
+      // ,
+      // { unit: '€', id: 8, emoji: "📱", question: "Was wird hier auf eBay Kleinanzeigen verlangt?",
+      //   image: "https://raw.githubusercontent.com/DEIN-USER/DEIN-REPO/main/screenshot.png",
+      //   answer: 250, min: 0, max: 1000, tolerance: 40, points: 200 }
     ];
 
     // Anzeige-Nachkommastellen je Einheit: Gewicht (kg) wird auf 2 Nachkommastellen angezeigt
     // kg: 2 Nachkommastellen, Komma als Dezimaltrennzeichen (deutsche Schreibweise).
     // formatUnitValueHtml liefert die Nachkommastellen zusätzlich kleiner geschrieben.
-    const UNIT_DECIMALS = { m: 0, kg: 2, cm: 0 };
+    const UNIT_DECIMALS = { m: 0, kg: 2, cm: 0, '€': 2, h: 0, Blöcke: 0, 'Mio.': 0 };
     function formatUnitValue(value, unit) {
       const decimals = UNIT_DECIMALS[unit] ?? 0;
       return Number(value).toFixed(decimals).replace('.', ',');
@@ -215,10 +220,20 @@
       }
     });
 
-    onValue(ref(db, 'game4State'), (snapshot) => {
-      const state = snapshot.val() || { roundIdx: 0, stage: 'waiting' };
-      latestState = state;
-      renderAll(state);
+    // Fragen aus dem Editor laden, falls dort welche gepflegt wurden - sonst bleiben die
+    // eingebauten Standard-Fragen (rounds-Array oben) als Rückfallebene aktiv.
+    get(ref(db, 'content/sekwars/questions')).then((snap) => {
+      const custom = snap.val();
+      if (Array.isArray(custom) && custom.length > 0) {
+        rounds.length = 0;
+        rounds.push(...custom);
+      }
+
+      onValue(ref(db, 'sekwarsState'), (snapshot) => {
+        const state = snapshot.val() || { roundIdx: 0, stage: 'waiting' };
+        latestState = state;
+        renderAll(state);
+      });
     });
 
     onValue(ref(db, 'gameState'), (snapshot) => {
@@ -230,7 +245,7 @@
 
     window.hostRestartGame = function() {
       if (!confirm("Spiel wirklich neu starten? Der Fortschritt dieser Runde geht verloren (Punkte bleiben erhalten).")) return;
-      set(ref(db, 'game4State'), { roundIdx: 0, stage: 'waiting' });
+      set(ref(db, 'sekwarsState'), { roundIdx: 0, stage: 'waiting' });
     };
 
     function generateRiddleClues(pid, sortedIds, players) {
@@ -333,18 +348,18 @@
     // ================= HOST AKTIONEN =================
 
     window.hostStartRound = () => {
-      update(ref(db, 'game4State'), { stage: 'input', submissions: null, awardedPoints: null });
+      update(ref(db, 'sekwarsState'), { stage: 'input', submissions: null, awardedPoints: null });
     };
 
     window.hostResolveRound = () => {
-      get(ref(db, 'game4State')).then((snap) => {
+      get(ref(db, 'sekwarsState')).then((snap) => {
         const s = snap.val() || {};
         const idx = s.roundIdx || 0;
         const round = rounds[idx];
         const submissions = s.submissions || {};
         const ids = Object.keys(submissions);
         if (ids.length === 0) {
-          update(ref(db, 'game4State'), { stage: 'result', awardedPoints: {} });
+          update(ref(db, 'sekwarsState'), { stage: 'result', awardedPoints: {} });
           return;
         }
         const promises = ids.map((pid) => {
@@ -359,19 +374,19 @@
         Promise.all(promises).then((results) => {
           const awardedPoints = {};
           results.forEach(r => { awardedPoints[r.pid] = r.pts; });
-          update(ref(db, 'game4State'), { stage: 'result', awardedPoints });
+          update(ref(db, 'sekwarsState'), { stage: 'result', awardedPoints });
         });
       });
     };
 
     window.hostNextRound = () => {
-      get(ref(db, 'game4State/roundIdx')).then((snap) => {
+      get(ref(db, 'sekwarsState/roundIdx')).then((snap) => {
         const idx = snap.val() || 0;
         const nextIdx = idx + 1;
         if (nextIdx >= rounds.length) {
-          set(ref(db, 'game4State'), { roundIdx: idx, stage: 'finished' });
+          set(ref(db, 'sekwarsState'), { roundIdx: idx, stage: 'finished' });
         } else {
-          set(ref(db, 'game4State'), { roundIdx: nextIdx, stage: 'waiting' });
+          set(ref(db, 'sekwarsState'), { roundIdx: nextIdx, stage: 'waiting' });
         }
       });
     };
@@ -381,13 +396,13 @@
     window.onSliderInput = function(val) {
       const idx = (latestState && latestState.roundIdx) || 0;
       const round = rounds[idx];
-      currentSliderValue = round.unit === 'kg' ? parseFloat(val) : parseInt(val, 10);
+      currentSliderValue = (round.unit === 'kg' || round.unit === '€') ? parseFloat(val) : parseInt(val, 10);
       const disp = document.getElementById("slider-value-display");
       if (disp) disp.innerHTML = formatUnitValueHtml(currentSliderValue, round.unit) + " " + round.unit;
     };
 
     window.submitEstimate = function() {
-      update(ref(db, 'game4State/submissions'), { [playerId]: currentSliderValue });
+      update(ref(db, 'sekwarsState/submissions'), { [playerId]: currentSliderValue });
     };
 
     // ================= RENDERING =================
@@ -408,6 +423,7 @@
       box.innerHTML = `
         <div class="text-cyan-600 font-jax font-bold mb-2 flex items-center justify-center gap-1">${icon('book','w-4 h-4')} Vorschau - Runde ${(state.roundIdx || 0) + 1} von ${rounds.length}:</div>
         <div class="font-jax font-extrabold text-[#1a1a2e] text-xl md:text-2xl mb-3">${round.emoji ? round.emoji + ' ' : ''}${round.question}</div>
+        ${round.image ? `<img src="${round.image}" class="max-w-xs max-h-48 mx-auto rounded-xl border-2 border-[#1a1a2e] mb-3 object-contain" alt="Frage-Bild">` : ''}
         <div class="text-cyan-600 font-bold text-xs uppercase tracking-wide mb-1">Lösung</div>
         ${solutionHtml}
       `;
@@ -490,7 +506,7 @@
         currentSliderValue = Math.round((round.min + round.max) / 2);
       }
 
-      const sliderStep = round.unit === 'kg' ? 0.01 : 1;
+      const sliderStep = round.unit === 'kg' ? 0.01 : (round.unit === '€' ? 1 : 1);
 
       let widgetHtml = '';
       if (mySubmission !== undefined) {
@@ -514,6 +530,7 @@
       wrap.innerHTML = `
         <div class="jax-card p-8 text-center">
           <p class="font-jax text-2xl md:text-3xl font-extrabold text-[#1a1a2e] mb-6">${round.emoji ? `<span class="text-4xl">${round.emoji}</span><br>` : ''}${round.question}</p>
+          ${round.image ? `<img src="${round.image}" class="max-w-sm max-h-64 w-full mx-auto rounded-xl border-3 border-[#1a1a2e] mb-6 object-contain shadow-lg" alt="Frage-Bild">` : ''}
           <div id="input-widget">${widgetHtml}</div>
           <div class="text-[#1a1a2e]/40 text-xs mt-4">${submittedCount} von ${ids.length} abgegeben</div>
         </div>
@@ -530,6 +547,10 @@
         <div class="text-center mb-4">
           <div class="text-cyan-600 text-xs uppercase tracking-wide font-bold">Richtige Antwort</div>
           <div class="font-jax text-4xl font-extrabold text-[#1a1a2e]">${formatUnitValueHtml(round.answer, round.unit)} ${round.unit}</div>
+          ${round.fact ? `<div class="text-[#1a1a2e]/70 text-sm mt-3 max-w-md mx-auto text-left">
+            ${round.factImage ? `<img src="${round.factImage}" class="max-w-full max-h-56 mx-auto rounded-xl border-2 border-[#1a1a2e] mb-2 object-contain" alt="Hintergrundbild">` : ''}
+            ${round.fact}
+          </div>` : ''}
         </div>
         <div class="space-y-2 max-w-md mx-auto">
           ${ids.map(id => {
@@ -623,7 +644,7 @@
   <header class="relative z-10 flex justify-between items-center jax-card-blueprint p-4">
     <div class="flex items-center space-x-3">      <span class="text-[#38bdf8]"><svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16l13-13 5 5-13 13z"/><path d="M14 6l2 2M10 10l2 2M6 14l2 2"/></svg></span>
       <div>
-        <h1 class="font-jax text-lg font-extrabold tracking-wide text-[#38bdf8]">SPIEL 4: PI MAL DAUMEN</h1>
+        <h1 class="font-jax text-lg font-extrabold tracking-wide text-[#38bdf8]">SEKWARS</h1>
         <div class="flex items-center gap-2 mt-1">
           <div id="status-badge" class="jax-chip px-3 py-1 text-xs font-jax font-bold bg-white text-[#1a1a2e] inline-block">
             INITIALISIERUNG
