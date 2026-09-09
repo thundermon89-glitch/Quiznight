@@ -1317,6 +1317,12 @@
       nameEl.style.transition = "none";
       layer.classList.remove("hidden");
 
+      // Reflow erzwingen: sonst übernimmt der Browser den Reset auf die Startposition beim
+      // zweiten Mal nicht rechtzeitig, bevor die neue Animation direkt danach losläuft - das
+      // Bild "springt" dann sofort ans Ziel statt sichtbar rüberzufliegen.
+      void img.offsetWidth;
+      void nameEl.offsetWidth;
+
       requestAnimationFrame(() => {
         img.style.transition = "left 9s linear";
         nameEl.style.transition = "left 9s linear";
