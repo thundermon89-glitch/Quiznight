@@ -614,6 +614,12 @@
       }
     };
 
+    window.resetInvaderHighscores = function() {
+      if (confirm("Space-Invaders-Bestenliste wirklich komplett löschen?")) {
+        remove(ref(db, 'invaderHighscores'));
+      }
+    };
+
     window.exitAdminCockpit = () => {
       // Nimmt jetzt ALLE Spieler mit zurück zur Lobby, nicht nur den Host
       set(ref(db, 'gameState'), { status: 'waiting' }).then(() => {
@@ -746,6 +752,9 @@
 
       <button onclick="resetEntireLobby()" class="w-full py-2 bg-red-950/60 hover:bg-red-900 border border-red-500 text-red-300 text-xs font-bold rounded transition">
         🗑️ LOBBY KOMPLETT ZURÜCKSETZEN
+      </button>
+      <button onclick="resetInvaderHighscores()" class="w-full py-2 bg-purple-950/60 hover:bg-purple-900 border border-purple-500 text-purple-300 text-xs font-bold rounded transition">
+        👾 Space-Invaders-Rangliste zurücksetzen
       </button>
     </div>
 
