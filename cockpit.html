@@ -823,39 +823,58 @@
       const ctx = canvas.getContext("2d");
       const W = canvas.width, H = canvas.height;
 
-      const ALIEN_ROWS = 4, ALIEN_COLS = 7;
-      const ALIEN_W = 22, ALIEN_H = 14, ALIEN_GAP = 8;
-      const gridWidth = ALIEN_COLS * (ALIEN_W + ALIEN_GAP) - ALIEN_GAP;
+      const stars = Array.from({ length: 40 }, () => ({
+        x: Math.random() * W, y: Math.random() * H,
+        r: Math.random() * 1.3 + 0.3, tw: Math.random() * Math.PI * 2
+      }));
 
       invaderState = {
-        player: { x: W / 2 - 12, y: H - 22, w: 24, h: 10, speed: 3.2 },
-        bullets: [], // { x, y, dy, fromPlayer }
+        player: { x: W / 2 - 12, y: H - 24, w: 26, h: 12, speed: 3.2 },
+        bullets: [],
         aliens: [],
         alienDir: 1,
         alienSpeed: 0.5,
         alienStepDown: 10,
         lives: 3,
         score: 0,
-        gameOver: false,
+        level: 1,
+        stars,
+        levelTransitionUntil: 0,
         lastAlienShot: 0
       };
-
-      let id = 0;
-      for (let r = 0; r < ALIEN_ROWS; r++) {
-        for (let c = 0; c < ALIEN_COLS; c++) {
-          invaderState.aliens.push({
-            id: id++, alive: true,
-            x: (W - gridWidth) / 2 + c * (ALIEN_W + ALIEN_GAP),
-            y: 26 + r * (ALIEN_H + ALIEN_GAP),
-            w: ALIEN_W, h: ALIEN_H,
-            color: r === 0 ? '#ff2e93' : r === 1 ? '#ffd23f' : r === 2 ? '#3ecbff' : '#7ed957'
-          });
-        }
-      }
+      spawnInvaderWave(invaderState, W);
 
       invaderRunning = true;
       updateInvaderHud();
       invaderLoop(canvas, ctx, W, H);
+    }
+
+    // Baut eine neue Alien-Welle - jede Stufe etwas voller und schneller als die letzte.
+    function spawnInvaderWave(s, W) {
+      const level = s.level;
+      const ALIEN_ROWS = Math.min(6, 3 + level);
+      const ALIEN_COLS = Math.min(9, 6 + Math.floor(level / 2));
+      const ALIEN_W = 20, ALIEN_H = 13, ALIEN_GAP = 7;
+      const gridWidth = ALIEN_COLS * (ALIEN_W + ALIEN_GAP) - ALIEN_GAP;
+      const palette = ['#ff2e93', '#ffd23f', '#3ecbff', '#7ed957', '#ff8a3d', '#a78bfa'];
+
+      s.aliens = [];
+      let id = 0;
+      for (let r = 0; r < ALIEN_ROWS; r++) {
+        for (let c = 0; c < ALIEN_COLS; c++) {
+          s.aliens.push({
+            id: id++, alive: true,
+            x: (W - gridWidth) / 2 + c * (ALIEN_W + ALIEN_GAP),
+            y: 24 + r * (ALIEN_H + ALIEN_GAP),
+            w: ALIEN_W, h: ALIEN_H,
+            shape: r % 3,
+            color: palette[r % palette.length]
+          });
+        }
+      }
+      s.alienDir = 1;
+      s.alienSpeed = Math.min(2.4, 0.5 + (level - 1) * 0.35);
+      s.bullets = [];
     }
 
     function updateInvaderHud() {
@@ -863,11 +882,21 @@
       if (!s) return;
       document.getElementById("invader-lives").innerText = "❤️".repeat(Math.max(0, s.lives));
       document.getElementById("invader-score").innerText = s.score + " Pkt.";
+      const lvlEl = document.getElementById("invader-level");
+      if (lvlEl) lvlEl.innerText = "Level " + s.level;
     }
 
     function invaderLoop(canvas, ctx, W, H) {
       if (!invaderRunning) return;
       const s = invaderState;
+
+      // Kurze Pause zwischen den Leveln - Schwarm steht, nur die kurze Einblendung läuft
+      if (Date.now() < s.levelTransitionUntil) {
+        drawInvaderFrame(ctx, W, H, s);
+        drawInvaderLevelBanner(ctx, W, H, "LEVEL " + s.level, "#ffd23f");
+        invaderRafId = requestAnimationFrame(() => invaderLoop(canvas, ctx, W, H));
+        return;
+      }
 
       // Spieler bewegen
       if (invaderKeys.left) s.player.x -= s.player.speed;
@@ -889,7 +918,7 @@
         if (hitEdge) {
           s.alienDir *= -1;
           aliveAliens.forEach(a => a.y += s.alienStepDown);
-          s.alienSpeed = Math.min(3.5, s.alienSpeed + 0.15); // schneller, je weniger übrig
+          s.alienSpeed = Math.min(4, s.alienSpeed + 0.15); // schneller, je weniger übrig
         }
         // Alien erreicht Spieler-Reihe -> Leben verlieren + Angriffswelle zurücksetzen
         if (aliveAliens.some(a => a.y + a.h >= s.player.y)) {
@@ -908,7 +937,7 @@
         s.aliens.forEach(a => {
           if (a.alive && b.x > a.x && b.x < a.x + a.w && b.y > a.y && b.y < a.y + a.h) {
             a.alive = false;
-            b.y = -999; // entfernt es faktisch im nächsten Filter-Durchlauf
+            b.y = -999;
             s.score += 10;
           }
         });
@@ -924,43 +953,128 @@
 
       updateInvaderHud();
 
-      // Sieg/Niederlage prüfen
-      const stillAlive = s.aliens.some(a => a.alive);
-      if (s.lives <= 0 || !stillAlive) {
+      // Niederlage geprüft
+      if (s.lives <= 0) {
         invaderRunning = false;
         drawInvaderFrame(ctx, W, H, s);
-        ctx.fillStyle = "rgba(0,0,0,0.75)";
+        ctx.fillStyle = "rgba(0,0,0,0.78)";
         ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = s.lives <= 0 ? "#ff2e93" : "#7ed957";
-        ctx.font = "bold 16px 'Baloo 2', sans-serif";
+        ctx.fillStyle = "#ff2e93";
+        ctx.font = "bold 18px 'Baloo 2', sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(s.lives <= 0 ? "Game Over!" : "Geschafft!", W / 2, H / 2 - 10);
+        ctx.shadowColor = "#ff2e93"; ctx.shadowBlur = 12;
+        ctx.fillText("GAME OVER", W / 2, H / 2 - 14);
+        ctx.shadowBlur = 0;
         ctx.fillStyle = "#fff";
-        ctx.font = "12px 'Baloo 2', sans-serif";
-        ctx.fillText("Score: " + s.score, W / 2, H / 2 + 12);
+        ctx.font = "13px 'Baloo 2', sans-serif";
+        ctx.fillText("Level " + s.level + " · Score: " + s.score, W / 2, H / 2 + 10);
         submitInvaderHighscore(s.score);
         return;
+      }
+
+      // Level geschafft -> nächste, vollere und schnellere Welle statt Spielende
+      const stillAlive = s.aliens.some(a => a.alive);
+      if (!stillAlive) {
+        s.level += 1;
+        s.score += 50; // Level-Bonus
+        spawnInvaderWave(s, W);
+        s.levelTransitionUntil = Date.now() + 1300;
+        updateInvaderHud();
       }
 
       drawInvaderFrame(ctx, W, H, s);
       invaderRafId = requestAnimationFrame(() => invaderLoop(canvas, ctx, W, H));
     }
 
+    function drawInvaderLevelBanner(ctx, W, H, text, color) {
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(0, H / 2 - 22, W, 44);
+      ctx.fillStyle = color;
+      ctx.font = "bold 20px 'Baloo 2', sans-serif";
+      ctx.textAlign = "center";
+      ctx.shadowColor = color; ctx.shadowBlur = 14;
+      ctx.fillText(text, W / 2, H / 2 + 7);
+      ctx.shadowBlur = 0;
+    }
+
+    // Kleines, hübscheres Alien-Sprite statt eines schlichten Rechtecks - 3 leicht
+    // unterschiedliche "Arten" je nach Reihe, per einfacher Formen zusammengesetzt.
+    function drawAlienSprite(ctx, a, wobble) {
+      const { x, y, w, h, color, shape } = a;
+      ctx.save();
+      ctx.translate(x + w / 2, y + h / 2 + Math.sin(wobble) * 1.2);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color; ctx.shadowBlur = 6;
+      if (shape === 0) {
+        // rundlicher Typ
+        ctx.beginPath(); ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#0a0e17";
+        ctx.beginPath(); ctx.arc(-w / 5, -h / 8, 1.6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(w / 5, -h / 8, 1.6, 0, Math.PI * 2); ctx.fill();
+      } else if (shape === 1) {
+        // eckiger "Krabben"-Typ
+        ctx.fillRect(-w / 2, -h / 4, w, h / 2);
+        ctx.fillRect(-w / 2 + 3, -h / 2, w - 6, h / 3);
+        ctx.fillRect(-w / 2 - 3, h / 6, 4, h / 4);
+        ctx.fillRect(w / 2 - 1, h / 6, 4, h / 4);
+        ctx.fillStyle = "#0a0e17";
+        ctx.fillRect(-4, -h / 6, 2.5, 2.5);
+        ctx.fillRect(1.5, -h / 6, 2.5, 2.5);
+      } else {
+        // spitzer "Diamant"-Typ
+        ctx.beginPath();
+        ctx.moveTo(0, -h / 2); ctx.lineTo(w / 2, 0); ctx.lineTo(0, h / 2); ctx.lineTo(-w / 2, 0);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#0a0e17";
+        ctx.beginPath(); ctx.arc(0, 0, 1.8, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+      ctx.shadowBlur = 0;
+    }
+
     function drawInvaderFrame(ctx, W, H, s) {
+      // Sternenhimmel-Hintergrund
       ctx.clearRect(0, 0, W, H);
-      // Spieler
-      ctx.fillStyle = "#7ed957";
-      ctx.fillRect(s.player.x, s.player.y, s.player.w, s.player.h);
-      // Aliens
-      s.aliens.forEach(a => {
-        if (!a.alive) return;
-        ctx.fillStyle = a.color;
-        ctx.fillRect(a.x, a.y, a.w, a.h);
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, "#05030c"); grad.addColorStop(1, "#0d0820");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+      const t = Date.now() / 500;
+      s.stars.forEach(st => {
+        const tw = 0.5 + 0.5 * Math.sin(t + st.tw);
+        ctx.globalAlpha = 0.3 + tw * 0.6;
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2); ctx.fill();
       });
-      // Geschosse
+      ctx.globalAlpha = 1;
+
+      // Spieler-Raumschiff (kleines Dreieck-Design statt Klotz)
+      const p = s.player;
+      ctx.save();
+      ctx.translate(p.x + p.w / 2, p.y + p.h / 2);
+      ctx.fillStyle = "#7ed957";
+      ctx.shadowColor = "#7ed957"; ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(0, -p.h / 2);
+      ctx.lineTo(p.w / 2, p.h / 2);
+      ctx.lineTo(p.w / 4, p.h / 3);
+      ctx.lineTo(-p.w / 4, p.h / 3);
+      ctx.lineTo(-p.w / 2, p.h / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+
+      // Aliens
+      const wobble = Date.now() / 300;
+      s.aliens.forEach(a => { if (a.alive) drawAlienSprite(ctx, a, wobble + a.id); });
+
+      // Geschosse mit leichtem Glow
       s.bullets.forEach(b => {
         ctx.fillStyle = b.fromPlayer ? "#ffd23f" : "#ff2e93";
+        ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 5;
         ctx.fillRect(b.x - 1.5, b.y - 5, 3, 8);
+        ctx.shadowBlur = 0;
       });
     }
 
@@ -1099,6 +1213,7 @@
               <button onclick="closeInvaderGame()" class="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[#ff2e93] text-white font-black text-sm flex items-center justify-center border-2 border-[#1a1a2e] z-10">✕</button>
               <div class="flex items-center justify-between mb-1.5 px-1">
                 <span class="text-[10px] text-[#7ed957] font-jax font-bold" id="invader-lives">❤️❤️❤️</span>
+                <span class="text-[10px] text-[#a78bfa] font-jax font-bold" id="invader-level">Level 1</span>
                 <span class="text-[10px] text-[#ffd23f] font-jax font-bold" id="invader-score">0 Pkt.</span>
               </div>
               <canvas id="invader-canvas" width="280" height="260" class="w-full rounded-lg" style="background:#000; image-rendering: pixelated;"></canvas>
