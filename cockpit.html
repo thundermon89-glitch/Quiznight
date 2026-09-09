@@ -778,6 +778,208 @@
       setTimeout(() => bubble.remove(), 1400);
     }
 
+    // ==== GEHEIMSPIEL: kleiner Alien-Shooter, öffnet sich per Doppelklick auf den Mikrochip.
+    // Keine Verbindung zum echten Punktestand - nur ein gemeinsam sichtbarer Highscore. ====
+    let invaderState = null;
+    let invaderRunning = false;
+    let invaderKeys = { left: false, right: false };
+    let invaderRafId = null;
+
+    window.openInvaderGame = function() {
+      document.getElementById("invader-bubble").classList.remove("hidden");
+      startInvaderGame();
+      loadInvaderHighscores();
+    };
+
+    window.closeInvaderGame = function() {
+      document.getElementById("invader-bubble").classList.add("hidden");
+      invaderRunning = false;
+      if (invaderRafId) cancelAnimationFrame(invaderRafId);
+    };
+
+    function loadInvaderHighscores() {
+      get(ref(db, 'invaderHighscores')).then((snap) => {
+        const scores = snap.val() || {};
+        const sorted = Object.values(scores).sort((a, b) => b.score - a.score).slice(0, 5);
+        const box = document.getElementById("invader-highscore-box");
+        if (!box) return;
+        if (sorted.length === 0) { box.innerHTML = "Noch kein Highscore vorhanden."; return; }
+        box.innerHTML = "🏆 Bestenliste:<br>" + sorted.map((s, i) =>
+          `${i + 1}. ${s.name} - ${s.score} Pkt.`
+        ).join('<br>');
+      });
+    }
+
+    function submitInvaderHighscore(finalScore) {
+      if (finalScore <= 0) return;
+      const name = (document.getElementById("cockpit-user-name")?.innerText || "Jemand").trim();
+      push(ref(db, 'invaderHighscores'), { name, score: finalScore, at: Date.now() }).then(() => {
+        loadInvaderHighscores();
+      });
+    }
+
+    function startInvaderGame() {
+      const canvas = document.getElementById("invader-canvas");
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+
+      const ALIEN_ROWS = 4, ALIEN_COLS = 7;
+      const ALIEN_W = 22, ALIEN_H = 14, ALIEN_GAP = 8;
+      const gridWidth = ALIEN_COLS * (ALIEN_W + ALIEN_GAP) - ALIEN_GAP;
+
+      invaderState = {
+        player: { x: W / 2 - 12, y: H - 22, w: 24, h: 10, speed: 3.2 },
+        bullets: [], // { x, y, dy, fromPlayer }
+        aliens: [],
+        alienDir: 1,
+        alienSpeed: 0.5,
+        alienStepDown: 10,
+        lives: 3,
+        score: 0,
+        gameOver: false,
+        lastAlienShot: 0
+      };
+
+      let id = 0;
+      for (let r = 0; r < ALIEN_ROWS; r++) {
+        for (let c = 0; c < ALIEN_COLS; c++) {
+          invaderState.aliens.push({
+            id: id++, alive: true,
+            x: (W - gridWidth) / 2 + c * (ALIEN_W + ALIEN_GAP),
+            y: 26 + r * (ALIEN_H + ALIEN_GAP),
+            w: ALIEN_W, h: ALIEN_H,
+            color: r === 0 ? '#ff2e93' : r === 1 ? '#ffd23f' : r === 2 ? '#3ecbff' : '#7ed957'
+          });
+        }
+      }
+
+      invaderRunning = true;
+      updateInvaderHud();
+      invaderLoop(canvas, ctx, W, H);
+    }
+
+    function updateInvaderHud() {
+      const s = invaderState;
+      if (!s) return;
+      document.getElementById("invader-lives").innerText = "❤️".repeat(Math.max(0, s.lives));
+      document.getElementById("invader-score").innerText = s.score + " Pkt.";
+    }
+
+    function invaderLoop(canvas, ctx, W, H) {
+      if (!invaderRunning) return;
+      const s = invaderState;
+
+      // Spieler bewegen
+      if (invaderKeys.left) s.player.x -= s.player.speed;
+      if (invaderKeys.right) s.player.x += s.player.speed;
+      s.player.x = Math.max(0, Math.min(W - s.player.w, s.player.x));
+
+      // Geschosse bewegen
+      s.bullets.forEach(b => b.y += b.dy);
+      s.bullets = s.bullets.filter(b => b.y > -10 && b.y < H + 10);
+
+      // Alien-Schwarm bewegen
+      const aliveAliens = s.aliens.filter(a => a.alive);
+      if (aliveAliens.length > 0) {
+        let hitEdge = false;
+        aliveAliens.forEach(a => {
+          a.x += s.alienDir * s.alienSpeed;
+          if (a.x <= 0 || a.x + a.w >= W) hitEdge = true;
+        });
+        if (hitEdge) {
+          s.alienDir *= -1;
+          aliveAliens.forEach(a => a.y += s.alienStepDown);
+          s.alienSpeed = Math.min(3.5, s.alienSpeed + 0.15); // schneller, je weniger übrig
+        }
+        // Alien erreicht Spieler-Reihe -> Leben verlieren + Angriffswelle zurücksetzen
+        if (aliveAliens.some(a => a.y + a.h >= s.player.y)) {
+          s.lives = 0;
+        }
+        // Gelegentlicher Gegner-Schuss
+        if (Date.now() - s.lastAlienShot > 900 && Math.random() < 0.35) {
+          const shooter = aliveAliens[Math.floor(Math.random() * aliveAliens.length)];
+          s.bullets.push({ x: shooter.x + shooter.w / 2, y: shooter.y + shooter.h, dy: 2.2, fromPlayer: false });
+          s.lastAlienShot = Date.now();
+        }
+      }
+
+      // Kollisionen: Spieler-Geschoss vs. Alien
+      s.bullets.filter(b => b.fromPlayer).forEach(b => {
+        s.aliens.forEach(a => {
+          if (a.alive && b.x > a.x && b.x < a.x + a.w && b.y > a.y && b.y < a.y + a.h) {
+            a.alive = false;
+            b.y = -999; // entfernt es faktisch im nächsten Filter-Durchlauf
+            s.score += 10;
+          }
+        });
+      });
+      // Kollision: Alien-Geschoss vs. Spieler
+      s.bullets.filter(b => !b.fromPlayer).forEach(b => {
+        if (b.x > s.player.x && b.x < s.player.x + s.player.w && b.y > s.player.y && b.y < s.player.y + s.player.h) {
+          b.y = 9999;
+          s.lives -= 1;
+        }
+      });
+      s.bullets = s.bullets.filter(b => b.y > -10 && b.y < H + 10);
+
+      updateInvaderHud();
+
+      // Sieg/Niederlage prüfen
+      const stillAlive = s.aliens.some(a => a.alive);
+      if (s.lives <= 0 || !stillAlive) {
+        invaderRunning = false;
+        drawInvaderFrame(ctx, W, H, s);
+        ctx.fillStyle = "rgba(0,0,0,0.75)";
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = s.lives <= 0 ? "#ff2e93" : "#7ed957";
+        ctx.font = "bold 16px 'Baloo 2', sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(s.lives <= 0 ? "Game Over!" : "Geschafft!", W / 2, H / 2 - 10);
+        ctx.fillStyle = "#fff";
+        ctx.font = "12px 'Baloo 2', sans-serif";
+        ctx.fillText("Score: " + s.score, W / 2, H / 2 + 12);
+        submitInvaderHighscore(s.score);
+        return;
+      }
+
+      drawInvaderFrame(ctx, W, H, s);
+      invaderRafId = requestAnimationFrame(() => invaderLoop(canvas, ctx, W, H));
+    }
+
+    function drawInvaderFrame(ctx, W, H, s) {
+      ctx.clearRect(0, 0, W, H);
+      // Spieler
+      ctx.fillStyle = "#7ed957";
+      ctx.fillRect(s.player.x, s.player.y, s.player.w, s.player.h);
+      // Aliens
+      s.aliens.forEach(a => {
+        if (!a.alive) return;
+        ctx.fillStyle = a.color;
+        ctx.fillRect(a.x, a.y, a.w, a.h);
+      });
+      // Geschosse
+      s.bullets.forEach(b => {
+        ctx.fillStyle = b.fromPlayer ? "#ffd23f" : "#ff2e93";
+        ctx.fillRect(b.x - 1.5, b.y - 5, 3, 8);
+      });
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (!invaderRunning) return;
+      if (e.key === 'ArrowLeft') invaderKeys.left = true;
+      if (e.key === 'ArrowRight') invaderKeys.right = true;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (invaderState && invaderState.bullets.filter(b => b.fromPlayer).length < 3) {
+          invaderState.bullets.push({ x: invaderState.player.x + invaderState.player.w / 2, y: invaderState.player.y, dy: -4.5, fromPlayer: true });
+        }
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft') invaderKeys.left = false;
+      if (e.key === 'ArrowRight') invaderKeys.right = false;
+    });
+
     window.clickBrainLogo = function() {
       if (isHost) return; // Host spielt nicht um Punkte - für ihn passiert hier nichts
       const claimedField = "brainFound_cockpit";
@@ -842,6 +1044,25 @@
         <p class="text-xs text-white/70 font-semibold">Bereit machen für die nächste Runde!</p>
       </div>
     </div>
+
+    <div class="relative flex-shrink-0 mx-2">
+      <img id="microchip-icon" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/renewable-energy.png"
+        ondblclick="openInvaderGame()" title="Doppelklick für ein kleines Geheimspiel..."
+        class="w-9 h-9 cursor-pointer opacity-70 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+      <div id="invader-bubble" class="hidden absolute left-1/2 top-full z-50 mt-3" style="transform: translateX(-50%);">
+        <div class="bg-[#0a0e17] border-[3px] border-[#1a1a2e] rounded-2xl p-3 shadow-2xl relative" style="width: 300px;">
+          <button onclick="closeInvaderGame()" class="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[#ff2e93] text-white font-black text-sm flex items-center justify-center border-2 border-[#1a1a2e] z-10">✕</button>
+          <div class="flex items-center justify-between mb-1.5 px-1">
+            <span class="text-[10px] text-[#7ed957] font-jax font-bold" id="invader-lives">❤️❤️❤️</span>
+            <span class="text-[10px] text-[#ffd23f] font-jax font-bold" id="invader-score">0 Pkt.</span>
+          </div>
+          <canvas id="invader-canvas" width="280" height="260" class="w-full rounded-lg" style="background:#000; image-rendering: pixelated;"></canvas>
+          <div class="text-[9px] text-white/40 text-center mt-1.5">← → bewegen · Leertaste schießen</div>
+          <div id="invader-highscore-box" class="mt-2 text-[10px] text-white/70"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="jax-card px-4 py-2 flex items-center space-x-3">
       <div>
         <div id="cockpit-user-name" class="text-sm font-jax font-bold text-[#1a1a2e]">PILOT</div>
