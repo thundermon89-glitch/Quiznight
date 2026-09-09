@@ -494,9 +494,19 @@
       if (isHost) hostControlsWaiting?.classList.remove("hidden");
     }
 
-    onValue(ref(db, 'game6State'), (snapshot) => {
-      const state = snapshot.val() || { stage: 'waiting' };
-      renderAll(state);
+    // Filmrunden aus dem Editor laden, falls dort welche gepflegt wurden - sonst bleiben die
+    // eingebauten Standard-Runden (movieRounds-Array oben) als Rückfallebene aktiv.
+    get(ref(db, 'content/spiel6/rounds')).then((snap) => {
+      const custom = snap.val();
+      if (Array.isArray(custom) && custom.length > 0) {
+        movieRounds.length = 0;
+        movieRounds.push(...custom);
+      }
+
+      onValue(ref(db, 'game6State'), (snapshot) => {
+        const state = snapshot.val() || { stage: 'waiting' };
+        renderAll(state);
+      });
     });
 
     window.onload = () => {

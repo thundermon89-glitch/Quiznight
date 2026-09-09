@@ -102,13 +102,6 @@
     // ==== SPIEL-KATALOG: welche Spiele haben einen (reinen Text-)Editor? ====
     // Weitere Spiele lassen sich hier einfach ergänzen, sobald ihr Format nur aus Text besteht.
     const GAMES = {
-      sekwars: {
-        label: "Sekwars",
-        formType: "estimateImg",
-        contentPath: "content/sekwars/questions",
-        templatesPath: "content/sekwars/templates",
-        blank: () => ({ question: "", image: "", unit: "€", answer: 0, min: 0, max: 1000, tolerance: 50, points: 200, fact: "" })
-      },
       spiel1: {
         label: "Spiel 1: Kreuzverhör",
         formType: "quiz4",
@@ -155,12 +148,29 @@
         templatesPath: "content/spiel9/templates",
         blank: () => ({ id: Date.now(), emoji: "🕹️", question: "", points: 200,
           events: [{ id: 'a', label: '', emoji: '', year: 2000, fact: '' }] })
+      },
+      spiel2: {
+        label: "Spiel 2: Rätselfeuer",
+        formType: "story",
+        contentPath: "content/spiel2/stories",
+        templatesPath: "content/spiel2/templates",
+        blank: () => ({ id: Date.now(), teaser: "", solution: "", image: "", points: 250 })
+      },
+      spiel6: {
+        label: "Spiel 6: Film-Zündschnur",
+        formType: "movieGuess",
+        contentPath: "content/spiel6/rounds",
+        templatesPath: "content/spiel6/templates",
+        blank: () => ({ id: Date.now(), videoUrl: "", videoType: "video/mp4", answer: "", altAnswers: [] })
+      },
+      spiel8: {
+        label: "Spiel 8: Schriftzug-Salat",
+        formType: "distortedImage",
+        contentPath: "content/spiel8/covers",
+        templatesPath: "content/spiel8/templates",
+        blank: () => ({ id: Date.now(), distortedUrl: "", originalUrl: "", title: "", points: 150 })
       }
     };
-    const COMING_SOON = [
-      "Spiel 2: Rätselfeuer", "Spiel 4: Pi mal Daumen",
-      "Spiel 6: Film-Zündschnur", "Spiel 8: Schriftzug-Salat"
-    ];
 
     let currentGameKey = "spiel1";
     let items = [];       // aktuell im Editor bearbeitete Liste
@@ -241,15 +251,21 @@
     };
 
     // ==== SPEICHERN (macht die Fragen im Spiel aktiv) ====
+    // Welches Feld je Fragetyp den "ist diese Frage eigentlich ausgefüllt"-Test besteht
+    const REQUIRED_FIELD = {
+      imageQa: 'imageUrl',
+      story: 'teaser',
+      movieGuess: 'answer',
+      distortedImage: 'title'
+      // alle anderen Typen (quiz4, trueFalse, estimateImg, timeline) prüfen auf 'question'
+    };
+
     window.saveActive = function() {
       const game = GAMES[currentGameKey];
-      let cleaned = game.formType === 'imageQa'
-        ? items.filter(it => (it.imageUrl || "").trim().length > 0)
-        : items.filter(it => (it.question || "").trim().length > 0);
+      const requiredField = REQUIRED_FIELD[game.formType] || 'question';
+      let cleaned = items.filter(it => (it[requiredField] || "").toString().trim().length > 0);
       if (cleaned.length === 0) {
-        alert(game.formType === 'imageQa'
-          ? "Mindestens ein Bild wird benötigt, bevor gespeichert werden kann."
-          : "Mindestens eine Frage mit Text wird benötigt, bevor gespeichert werden kann.");
+        alert("Mindestens ein ausgefüllter Eintrag wird benötigt, bevor gespeichert werden kann.");
         return;
       }
       if (game.formType === 'timeline') {
@@ -379,11 +395,13 @@
     function renderEditor() {
       const game = GAMES[currentGameKey];
       const list = document.getElementById("question-list");
-      if (game.formType === 'qa') list.innerHTML = renderQaList(game);
-      else if (game.formType === 'imageQa') list.innerHTML = renderImageQaList(game);
+      if (game.formType === 'imageQa') list.innerHTML = renderImageQaList(game);
       else if (game.formType === 'estimateImg') list.innerHTML = renderEstimateImgList(game);
       else if (game.formType === 'timeline') list.innerHTML = renderTimelineList(game);
       else if (game.formType === 'trueFalse') list.innerHTML = renderTrueFalseList(game);
+      else if (game.formType === 'story') list.innerHTML = renderStoryList(game);
+      else if (game.formType === 'movieGuess') list.innerHTML = renderMovieGuessList(game);
+      else if (game.formType === 'distortedImage') list.innerHTML = renderDistortedImageList(game);
       else list.innerHTML = renderQuiz4List(game);
     }
 
@@ -468,6 +486,131 @@
           <div class="flex items-center gap-2">
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
             <input type="number" value="${q.points ?? 100}" oninput="updatePoints(${idx}, this.value)"
+              class="jax-input w-24 text-sm" />
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderStoryList(game) {
+      return items.map((q, idx) => `
+        <div class="jax-card p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="jax-chip bg-[#7017c9] text-white px-3 py-1 text-xs font-jax font-bold">Story ${idx + 1}</div>
+            <div class="flex gap-1.5">
+              <button onclick="moveQuestion(${idx}, -1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === 0 ? 'disabled' : ''}>${icon('up', 'w-4 h-4')}</button>
+              <button onclick="moveQuestion(${idx}, 1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === items.length - 1 ? 'disabled' : ''}>${icon('down', 'w-4 h-4')}</button>
+              <button onclick="deleteQuestion(${idx})" class="w-8 h-8 jax-btn bg-[#ff2e93] text-white flex items-center justify-center">${icon('trash', 'w-4 h-4')}</button>
+            </div>
+          </div>
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Rätsel-Teaser (die Frage, die zuerst gezeigt wird)</label>
+            <textarea oninput="updateField(${idx}, 'teaser', this.value)" rows="2" placeholder="z.B. Was wurde 2005 in die National Toy Hall of Fame aufgenommen?"
+              class="jax-input w-full mt-1 text-sm">${escapeAttr(q.teaser || '')}</textarea>
+          </div>
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Lösung (die ganze Auflösungs-Geschichte)</label>
+            <textarea oninput="updateField(${idx}, 'solution', this.value)" rows="4" placeholder="Die ausführliche Auflösung..."
+              class="jax-input w-full mt-1 text-sm" style="border-color:#7ed957;">${escapeAttr(q.solution || '')}</textarea>
+          </div>
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Bild/GIF bei der Auflösung (optional)</label>
+            <input type="text" value="${escapeAttr(q.image || '')}" placeholder="https://..."
+              oninput="updateField(${idx}, 'image', this.value)"
+              class="jax-input w-full mt-1 text-sm" />
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
+            <input type="number" value="${q.points ?? 250}" oninput="updateField(${idx}, 'points', parseInt(this.value, 10) || 0)"
+              class="jax-input w-24 text-sm" />
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderMovieGuessList(game) {
+      return items.map((q, idx) => `
+        <div class="jax-card p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="jax-chip bg-[#7017c9] text-white px-3 py-1 text-xs font-jax font-bold">Film ${idx + 1}</div>
+            <div class="flex gap-1.5">
+              <button onclick="moveQuestion(${idx}, -1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === 0 ? 'disabled' : ''}>${icon('up', 'w-4 h-4')}</button>
+              <button onclick="moveQuestion(${idx}, 1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === items.length - 1 ? 'disabled' : ''}>${icon('down', 'w-4 h-4')}</button>
+              <button onclick="deleteQuestion(${idx})" class="w-8 h-8 jax-btn bg-[#ff2e93] text-white flex items-center justify-center">${icon('trash', 'w-4 h-4')}</button>
+            </div>
+          </div>
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Video-Link (lokale Datei-URL)</label>
+            <input type="text" value="${escapeAttr(q.videoUrl || '')}" placeholder="https://raw.githubusercontent.com/.../trailer.mp4"
+              oninput="updateField(${idx}, 'videoUrl', this.value)"
+              class="jax-input w-full mt-1 text-sm" />
+          </div>
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Dateityp</label>
+            <select onchange="updateField(${idx}, 'videoType', this.value)" class="jax-input w-full mt-1 text-sm">
+              <option value="video/mp4" ${q.videoType === 'video/mp4' ? 'selected' : ''}>MP4</option>
+              <option value="video/webm" ${q.videoType === 'video/webm' ? 'selected' : ''}>WebM</option>
+              <option value="video/x-matroska" ${q.videoType === 'video/x-matroska' ? 'selected' : ''}>MKV (nicht überall unterstützt)</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Richtiger Filmtitel</label>
+            <input type="text" value="${escapeAttr(q.answer || '')}" placeholder="z.B. Pulp Fiction"
+              oninput="updateField(${idx}, 'answer', this.value)"
+              class="jax-input w-full mt-1 text-sm" style="border-color:#7ed957;" />
+          </div>
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Alternative Schreibweisen (kommagetrennt, optional)</label>
+            <input type="text" value="${escapeAttr((q.altAnswers || []).join(', '))}" placeholder="z.B. Bad Boys 2, Bad Boys II"
+              oninput="updateField(${idx}, 'altAnswers', this.value.split(',').map(s => s.trim()).filter(Boolean))"
+              class="jax-input w-full mt-1 text-sm" />
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderDistortedImageList(game) {
+      return items.map((q, idx) => `
+        <div class="jax-card p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="jax-chip bg-[#7017c9] text-white px-3 py-1 text-xs font-jax font-bold">Bild ${idx + 1}</div>
+            <div class="flex gap-1.5">
+              <button onclick="moveQuestion(${idx}, -1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === 0 ? 'disabled' : ''}>${icon('up', 'w-4 h-4')}</button>
+              <button onclick="moveQuestion(${idx}, 1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === items.length - 1 ? 'disabled' : ''}>${icon('down', 'w-4 h-4')}</button>
+              <button onclick="deleteQuestion(${idx})" class="w-8 h-8 jax-btn bg-[#ff2e93] text-white flex items-center justify-center">${icon('trash', 'w-4 h-4')}</button>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="w-20 h-20 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
+              ${q.distortedUrl ? `<img src="${escapeAttr(q.distortedUrl)}" class="w-full h-full object-cover" />` : `<span class="text-[9px] text-[#1a1a2e]/40 text-center px-1">Verzerrt</span>`}
+            </div>
+            <div class="flex-1">
+              <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Verzerrtes/verpixeltes Bild (wird zuerst gezeigt)</label>
+              <input type="text" value="${escapeAttr(q.distortedUrl || '')}" placeholder="https://..."
+                oninput="updateField(${idx}, 'distortedUrl', this.value)"
+                class="jax-input w-full mt-1 text-sm" />
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="w-20 h-20 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
+              ${q.originalUrl ? `<img src="${escapeAttr(q.originalUrl)}" class="w-full h-full object-cover" />` : `<span class="text-[9px] text-[#1a1a2e]/40 text-center px-1">Original</span>`}
+            </div>
+            <div class="flex-1">
+              <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Original-Bild (wird bei der Auflösung gezeigt)</label>
+              <input type="text" value="${escapeAttr(q.originalUrl || '')}" placeholder="https://..."
+                oninput="updateField(${idx}, 'originalUrl', this.value)"
+                class="jax-input w-full mt-1 text-sm" />
+            </div>
+          </div>
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Titel (richtige Antwort)</label>
+            <input type="text" value="${escapeAttr(q.title || '')}" placeholder="z.B. Counter Strike"
+              oninput="updateField(${idx}, 'title', this.value)"
+              class="jax-input w-full mt-1 text-sm" style="border-color:#7ed957;" />
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
+            <input type="number" value="${q.points ?? 150}" oninput="updateField(${idx}, 'points', parseInt(this.value, 10) || 0)"
               class="jax-input w-24 text-sm" />
           </div>
         </div>
@@ -688,48 +831,6 @@
       `).join('');
     }
 
-    function renderQaList(game) {
-      return items.map((q, idx) => `
-        <div class="jax-card p-5 space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="jax-chip bg-[#7017c9] text-white px-3 py-1 text-xs font-jax font-bold">Frage ${idx + 1}</div>
-            <div class="flex gap-1.5">
-              <button onclick="moveQuestion(${idx}, -1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === 0 ? 'disabled' : ''}>${icon('up', 'w-4 h-4')}</button>
-              <button onclick="moveQuestion(${idx}, 1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === items.length - 1 ? 'disabled' : ''}>${icon('down', 'w-4 h-4')}</button>
-              <button onclick="deleteQuestion(${idx})" class="w-8 h-8 jax-btn bg-[#ff2e93] text-white flex items-center justify-center">${icon('trash', 'w-4 h-4')}</button>
-            </div>
-          </div>
-
-          <div>
-            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Frage</label>
-            <input type="text" value="${escapeAttr(q.question)}" placeholder="Fragetext eingeben..."
-              oninput="updateField(${idx}, 'question', this.value)"
-              class="jax-input w-full mt-1 text-base" />
-          </div>
-
-          <div>
-            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Antwort (nur der Host sieht das zur Kontrolle)</label>
-            <input type="text" value="${escapeAttr(q.answer || '')}" placeholder="Richtige Antwort eingeben..."
-              oninput="updateField(${idx}, 'answer', this.value)"
-              class="jax-input w-full mt-1 text-base" style="border-color:#7ed957;" />
-          </div>
-
-          <div class="flex items-center gap-4">
-            <div class="flex items-center gap-2">
-              <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte (richtig)</label>
-              <input type="number" value="${q.points ?? 100}" oninput="updatePoints(${idx}, this.value)"
-                class="jax-input w-24 text-sm" />
-            </div>
-            <div class="flex items-center gap-2">
-              <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Abzug (falsch)</label>
-              <input type="number" value="${q.penalty ?? 50}" oninput="updatePenalty(${idx}, this.value)"
-                class="jax-input w-24 text-sm" />
-            </div>
-          </div>
-        </div>
-      `).join('');
-    }
-
     function escapeAttr(str) {
       return (str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     }
@@ -749,8 +850,7 @@
         const isActive = key === currentGameKey;
         return `<button onclick="switchGame('${key}')" class="game-tab selectable ${isActive ? 'active' : ''} px-4 py-2 text-xs font-jax font-bold" style="${isActive ? '' : 'background:#ffffff;'}">${GAMES[key].label}</button>`;
       }).join('');
-      const inactiveTabs = COMING_SOON.map(name => `<div class="game-tab inactive px-4 py-2 text-xs font-jax font-bold">${name} (bald)</div>`).join('');
-      wrap.innerHTML = activeTabs + inactiveTabs;
+      wrap.innerHTML = activeTabs;
     }
 
     window.onload = () => {

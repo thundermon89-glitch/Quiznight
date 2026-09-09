@@ -325,11 +325,20 @@
     let lastSeenAnnounceEventId = null;
     let lastSeenResultAnnounceId = null;
 
-    onValue(ref(db, 'game2State'), (snapshot) => {
-      const state = snapshot.val() || { storyIdx: 0, stage: 'waiting' };
+    // Storys aus dem Editor laden, falls dort welche gepflegt wurden - sonst bleiben die
+    // eingebauten Standard-Storys (stories-Array oben) als Rückfallebene aktiv.
+    get(ref(db, 'content/spiel2/stories')).then((snap) => {
+      const custom = snap.val();
+      if (Array.isArray(custom) && custom.length > 0) {
+        stories.length = 0;
+        stories.push(...custom);
+      }
 
-      // Bonus-Storys einmalig lokal anhängen, sobald der Host sie freigeschaltet hat -
-      // läuft bei JEDEM Client gleich ab, damit alle dieselbe erweiterte Story-Liste haben.
+      onValue(ref(db, 'game2State'), (snapshot) => {
+        const state = snapshot.val() || { storyIdx: 0, stage: 'waiting' };
+
+        // Bonus-Storys einmalig lokal anhängen, sobald der Host sie freigeschaltet hat -
+        // läuft bei JEDEM Client gleich ab, damit alle dieselbe erweiterte Story-Liste haben.
       if (state.bonusStoriesActive && !bonusStoriesUsed) {
         bonusStoriesUsed = true;
         stories.push(...bonusStories);
@@ -342,6 +351,7 @@
       maybeShowAnnounceModal(state);
       maybeShowPointsFlyAnimation(state);
       maybeHandleCatRun(state);
+      });
     });
 
     function maybeShowAnnounceModal(state) {

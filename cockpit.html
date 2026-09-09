@@ -1045,24 +1045,6 @@
       </div>
     </div>
 
-    <div class="relative flex-shrink-0 mx-2">
-      <img id="microchip-icon" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/renewable-energy.png"
-        ondblclick="openInvaderGame()" title="Doppelklick für ein kleines Geheimspiel..."
-        class="w-9 h-9 cursor-pointer opacity-70 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
-      <div id="invader-bubble" class="hidden absolute left-1/2 top-full z-50 mt-3" style="transform: translateX(-50%);">
-        <div class="bg-[#0a0e17] border-[3px] border-[#1a1a2e] rounded-2xl p-3 shadow-2xl relative" style="width: 300px;">
-          <button onclick="closeInvaderGame()" class="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[#ff2e93] text-white font-black text-sm flex items-center justify-center border-2 border-[#1a1a2e] z-10">✕</button>
-          <div class="flex items-center justify-between mb-1.5 px-1">
-            <span class="text-[10px] text-[#7ed957] font-jax font-bold" id="invader-lives">❤️❤️❤️</span>
-            <span class="text-[10px] text-[#ffd23f] font-jax font-bold" id="invader-score">0 Pkt.</span>
-          </div>
-          <canvas id="invader-canvas" width="280" height="260" class="w-full rounded-lg" style="background:#000; image-rendering: pixelated;"></canvas>
-          <div class="text-[9px] text-white/40 text-center mt-1.5">← → bewegen · Leertaste schießen</div>
-          <div id="invader-highscore-box" class="mt-2 text-[10px] text-white/70"></div>
-        </div>
-      </div>
-    </div>
-
     <div class="jax-card px-4 py-2 flex items-center space-x-3">
       <div>
         <div id="cockpit-user-name" class="text-sm font-jax font-bold text-[#1a1a2e]">PILOT</div>
@@ -1109,7 +1091,22 @@
       </div>
 
       <div class="w-full my-auto space-y-3">
-        <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/cpu.png" alt="" class="w-14 h-14 mx-auto" onerror="this.style.display='none'">
+        <div class="relative w-14 h-14 mx-auto z-30">
+          <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/cpu.png" alt="" ondblclick="openInvaderGame()" title="Doppelklick für ein kleines Geheimspiel..."
+            class="w-14 h-14 cursor-pointer opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+          <div id="invader-bubble" class="hidden fixed z-[90]" style="left: 50%; top: 50%; transform: translate(-50%, -50%);">
+            <div class="bg-[#0a0e17] border-[3px] border-[#1a1a2e] rounded-2xl p-3 shadow-2xl relative" style="width: 300px;">
+              <button onclick="closeInvaderGame()" class="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[#ff2e93] text-white font-black text-sm flex items-center justify-center border-2 border-[#1a1a2e] z-10">✕</button>
+              <div class="flex items-center justify-between mb-1.5 px-1">
+                <span class="text-[10px] text-[#7ed957] font-jax font-bold" id="invader-lives">❤️❤️❤️</span>
+                <span class="text-[10px] text-[#ffd23f] font-jax font-bold" id="invader-score">0 Pkt.</span>
+              </div>
+              <canvas id="invader-canvas" width="280" height="260" class="w-full rounded-lg" style="background:#000; image-rendering: pixelated;"></canvas>
+              <div class="text-[9px] text-white/40 text-center mt-1.5">← → bewegen · Leertaste schießen</div>
+              <div id="invader-highscore-box" class="mt-2 text-[10px] text-white/70"></div>
+            </div>
+          </div>
+        </div>
         <button id="ready-toggle-btn" onclick="toggleReadyStatus()" class="w-full py-6 bg-[#ff2e93] jax-btn text-white font-jax font-extrabold text-xl flex items-center justify-center gap-2 jax-wiggle">
           <span><svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 0-5 5v3.5c0 .8-.3 1.6-.9 2.2L4 16h16l-2.1-2.3a3 3 0 0 1-.9-2.2V8a5 5 0 0 0-5-5z"/><path d="M9.5 19a2.5 2.5 0 0 0 5 0"/></svg></span> <span>JETZT BEREIT MELDEN!</span>
         </button>

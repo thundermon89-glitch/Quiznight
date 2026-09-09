@@ -275,10 +275,20 @@
       }
     });
 
-    onValue(ref(db, 'game8State'), (snapshot) => {
-      const state = snapshot.val() || { coverIdx: 0, stage: 'waiting' };
-      latestState = state;
-      renderAll(state);
+    // Bilder aus dem Editor laden, falls dort welche gepflegt wurden - sonst bleiben die
+    // eingebauten Standard-Bilder (covers-Array oben) als Rückfallebene aktiv.
+    get(ref(db, 'content/spiel8/covers')).then((snap) => {
+      const custom = snap.val();
+      if (Array.isArray(custom) && custom.length > 0) {
+        covers.length = 0;
+        covers.push(...custom);
+      }
+
+      onValue(ref(db, 'game8State'), (snapshot) => {
+        const state = snapshot.val() || { coverIdx: 0, stage: 'waiting' };
+        latestState = state;
+        renderAll(state);
+      });
     });
 
     onValue(ref(db, 'gameState'), (snapshot) => {
