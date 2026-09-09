@@ -96,19 +96,21 @@
     // Filmtitel vom Nutzer bestätigt, englische Originaltitel als Hauptantwort (IMDb/TMDb-
     // Schreibweise), deutsche/gängige Varianten als Alternativen für robustere Erkennung.
     const movieRounds = [
-      { id: 1, embedUrl: "https://www.youtube-nocookie.com/embed/jXFwXJjoRdg?start=10&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "Bang Boom Bang", altAnswers: ["Bang Boom Bang - Ein todsicheres Ding"] },
-      { id: 2, embedUrl: "https://www.youtube-nocookie.com/embed/2bj7pZEh7xM?start=77&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "Pulp Fiction", altAnswers: [] },
-      { id: 3, embedUrl: "https://www.youtube-nocookie.com/embed/0N02Cgx4EMU?start=8&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "The Truman Show", altAnswers: ["Die Truman Show"] },
-      { id: 4, embedUrl: "https://www.youtube-nocookie.com/embed/TQwGV84SdUM?start=2&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "Trainspotting", altAnswers: [] },
-      { id: 5, embedUrl: "https://www.youtube-nocookie.com/embed/N_XaP6pGs6M?start=1&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "American Beauty", altAnswers: [] },
-      { id: 6, embedUrl: "https://www.youtube-nocookie.com/embed/-dhe4OLRhYM?start=25&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "Dirty Dancing", altAnswers: [] },
-      { id: 7, embedUrl: "https://www.youtube-nocookie.com/embed/rRR3ptbSC1Q?start=2&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "Teenage Mutant Ninja Turtles", altAnswers: ["TMNT", "Ninja Turtles", "Turtles"] },
-      { id: 8, embedUrl: "https://www.youtube-nocookie.com/embed/XZh2RNO6t5s?start=2&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "From Dusk Till Dawn", altAnswers: ["From Dusk to Dawn"] },
-      { id: 9, embedUrl: "https://www.youtube-nocookie.com/embed/ZomgZYByhv4?start=2&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "Gangs of New York", altAnswers: [] },
-      { id: 10, embedUrl: "https://www.youtube-nocookie.com/embed/uApbE5j__fs?start=15&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "Sin City", altAnswers: [] },
-      { id: 11, embedUrl: "https://www.youtube-nocookie.com/embed/kdfU47g1r1E?start=1&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "Bad Boys II", altAnswers: ["Bad Boys 2"] },
-      { id: 12, embedUrl: "https://www.youtube-nocookie.com/embed/CzLFj3vzZ1U?start=13&autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0&fs=0", answer: "The Jackal", altAnswers: ["Der Schakal"] }
-    ];
+      { id: 1, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/91971df2b8f8f33b516e16fc35df8dd9193fd776/01-bang-boom-bang.mp4.webm", videoType: "video/webm", answer: "Bang Boom Bang", altAnswers: ["Bang Boom Bang - Ein todsicheres Ding"] },
+      { id: 2, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/91971df2b8f8f33b516e16fc35df8dd9193fd776/02-pulp-fiction.mp4.mkv", videoType: "video/x-matroska", answer: "Pulp Fiction", altAnswers: [] },
+      { id: 3, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/91971df2b8f8f33b516e16fc35df8dd9193fd776/03-truman-show.mp4.webm", videoType: "video/webm", answer: "The Truman Show", altAnswers: ["Die Truman Show"] },
+      { id: 4, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/91971df2b8f8f33b516e16fc35df8dd9193fd776/04-trainspotting.mp4.mkv", videoType: "video/x-matroska", answer: "Trainspotting", altAnswers: [] },
+      { id: 5, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/05-american-beauty.mp4.mkv", videoType: "video/x-matroska", answer: "American Beauty", altAnswers: [] },
+      { id: 6, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/06-dirty-dancing.mp4.mkv", videoType: "video/x-matroska", answer: "Dirty Dancing", altAnswers: [] },
+      { id: 7, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/07-turtles.mp4.mkv", videoType: "video/x-matroska", answer: "Teenage Mutant Ninja Turtles", altAnswers: ["TMNT", "Ninja Turtles", "Turtles"] },
+      { id: 8, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/08-from-dusk-till-dawn.mp4.webm", videoType: "video/webm", answer: "From Dusk Till Dawn", altAnswers: ["From Dusk to Dawn"] },
+      { id: 9, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/09-gangs-of-new-york.mp4.mkv", videoType: "video/x-matroska", answer: "Gangs of New York", altAnswers: [] },
+      // WARTET NOCH AUF DEN VOLLSTÄNDIGEN LINK - die #10-URL kam abgeschnitten an (mit #12
+      // zusammengerutscht). Bitte den echten Link für "10-sin-city..." nachreichen.
+      { id: 10, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/10-sin-city.mp4.mkv", videoType: "video/x-matroska", answer: "Sin City", altAnswers: [] },
+      { id: 11, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/11-bad-boys-2.mp4.mkv", videoType: "video/x-matroska", answer: "Bad Boys II", altAnswers: ["Bad Boys 2"] },
+      { id: 12, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/12-der-schakal.mp4.mkv", videoType: "video/x-matroska", answer: "The Jackal", altAnswers: ["Der Schakal"] }
+    ].filter(r => r.videoUrl); // Runden ohne (noch fehlende) Video-URL werden übersprungen
 
     function currentMoviePoints(startedAt) {
       const elapsed = Date.now() - startedAt;
@@ -311,6 +313,7 @@
         waitingArea?.classList.remove("hidden");
         if (isHost) hostControlsWaiting?.classList.remove("hidden");
         clearInterval(movieTickInterval);
+        document.getElementById("movie-iframe-wrap")?.replaceChildren();
         mySolved = false;
         return;
       }
@@ -329,13 +332,15 @@
           document.getElementById("hc-solved-count").innerText = solvedCount + " von " + activeIds.length + " haben gelöst";
         }
 
-        const iframe = document.getElementById("movie-iframe");
+        const iframeWrap = document.getElementById("movie-iframe-wrap");
         const guessWrap = document.getElementById("movie-guess-wrap");
         const solvedWrap = document.getElementById("movie-solved-wrap");
         const fuseWrap = document.getElementById("fuse-wrap");
 
         if (iHaveSolved) {
-          if (iframe && iframe.src) iframe.src = "";
+          // Video-Element komplett aus der Seite entfernen (nicht nur pausieren/verstecken) -
+          // das erzwingt garantiert das Beenden der Wiedergabe.
+          if (iframeWrap) iframeWrap.innerHTML = "";
           guessWrap?.classList.add("hidden");
           fuseWrap?.classList.add("hidden");
           solvedWrap?.classList.remove("hidden");
@@ -348,9 +353,33 @@
           solvedWrap?.classList.add("hidden");
           // Am movieStartedAt-Zeitstempel erkennen, nicht nur an der Runden-ID - sonst würde
           // ein Neustart DERSELBEN Runde das Video nicht neu laden, weil die ID gleich bleibt.
-          if (iframe && iframe.dataset.loadedFor !== String(state.movieStartedAt)) {
-            iframe.src = round.embedUrl;
-            iframe.dataset.loadedFor = String(state.movieStartedAt);
+          if (iframeWrap && iframeWrap.dataset.loadedFor !== String(state.movieStartedAt)) {
+            iframeWrap.innerHTML = "";
+            // Lokale Video-Datei statt YouTube-Einbettung - keine Werbung mehr möglich, da
+            // YouTube beim eigentlichen Abspielen gar nicht mehr involviert ist. Die Datei ist
+            // schon vorab auf den gewünschten Ausschnitt zugeschnitten, daher kein "start=..."
+            // mehr nötig - sie startet einfach an ihrem eigenen Anfang.
+            const freshVideo = document.createElement("video");
+            freshVideo.className = "absolute inset-0 w-full h-full object-cover";
+            freshVideo.autoplay = true;
+            freshVideo.playsInline = true;
+            freshVideo.muted = false;
+            freshVideo.controls = false;
+            freshVideo.disablePictureInPicture = true;
+            freshVideo.setAttribute("controlsList", "nodownload noplaybackrate nofullscreen");
+            const source = document.createElement("source");
+            source.src = round.videoUrl;
+            source.type = round.videoType || "video/mp4";
+            freshVideo.appendChild(source);
+            iframeWrap.appendChild(freshVideo);
+            iframeWrap.dataset.loadedFor = String(state.movieStartedAt);
+            // Manche Browser blockieren Autoplay mit Ton ohne direkte Nutzerinteraktion -
+            // im Fehlerfall automatisch stummgeschaltet nochmal versuchen, lieber stumm
+            // laufendes Video als gar keins.
+            freshVideo.play().catch(() => {
+              freshVideo.muted = true;
+              freshVideo.play().catch(() => {});
+            });
           }
           clearInterval(movieTickInterval);
           const tick = () => {
@@ -368,6 +397,9 @@
 
       if (stage === 'movie_result') {
         clearInterval(movieTickInterval);
+        // Auch hier: iframe komplett entfernen, nicht nur den Bereich optisch verstecken -
+        // sonst läuft das Video bei allen, die noch nicht gelöst hatten, im Hintergrund weiter.
+        document.getElementById("movie-iframe-wrap")?.replaceChildren();
         resultArea?.classList.remove("hidden");
         if (isHost) hostControlsResult?.classList.remove("hidden");
         document.getElementById("movie-result-answer").innerText = round.answer;
@@ -476,7 +508,7 @@
       </div>
 
       <div class="relative w-full max-w-md mx-auto" style="aspect-ratio: 16/9;">
-        <iframe id="movie-iframe" class="absolute inset-0 w-full h-full rounded-2xl border-4 border-[#1a1a2e]" src="" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+        <div id="movie-iframe-wrap" class="absolute inset-0 w-full h-full rounded-2xl overflow-hidden border-4 border-[#1a1a2e]"></div>
         <!-- Unsichtbare Klick-Sperre über dem Video: verhindert Pausieren, Rechtsklick-Infos,
              Doppelklick-Vollbild - Spieler haben keinerlei Kontrolle über den Player. -->
         <div class="absolute inset-0 z-10" oncontextmenu="return false;" ondblclick="return false;" style="cursor: default;"></div>
