@@ -12,11 +12,11 @@
        Standard). Dunkelmodus = ein neuer, knalliger "Tech-HUD"-Look mit Neonfarben auf fast
        schwarzem Grund statt gelb/braun/goldener Stimmung. Umschaltbar über [data-theme]. ==== */
     :root {
-      --c-ink: var(--c-ink);
-      --c-pink: var(--c-pink); --c-yellow: var(--c-yellow); --c-green: var(--c-green); --c-purple: var(--c-purple); --c-blue: var(--c-blue); --c-orange: var(--c-orange);
-      --c-card-bg: #ffffff; --c-card-text: var(--c-ink); --c-card-shadow: rgba(0,0,0,0.85);
-      --c-card-dark-bg: var(--c-ink); --c-card-dark-text: #ffffff; --c-card-dark-border: #ffffff;
-      --c-grad-1: #2b0f54; --c-grad-2: var(--c-purple); --c-grad-3: var(--c-pink); --c-grad-4: var(--c-orange);
+      --c-ink: #1a1a2e;
+      --c-pink: #ff2e93; --c-yellow: #ffd23f; --c-green: #7ed957; --c-purple: #7017c9; --c-blue: #3ecbff; --c-orange: #ff8a3d;
+      --c-card-bg: #ffffff; --c-card-text: #1a1a2e; --c-card-shadow: rgba(0,0,0,0.85);
+      --c-card-dark-bg: #1a1a2e; --c-card-dark-text: #ffffff; --c-card-dark-border: #ffffff;
+      --c-grad-1: #2b0f54; --c-grad-2: #7017c9; --c-grad-3: #ff2e93; --c-grad-4: #ff8a3d;
       --c-body-bg: transparent;
     }
     html[data-theme="dark"] {
@@ -37,6 +37,8 @@
       animation: gradientShift 16s ease infinite;
     }
     @keyframes gradientShift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+    .blob { position: absolute; border-radius: 9999px; filter: blur(50px); opacity: 0.45; animation: floaty 11s ease-in-out infinite; }
+    @keyframes floaty { 0%,100% { transform: translate(0,0); } 50% { transform: translate(25px,-35px); } }
     /* Dezentes Tech-Raster im Dunkelmodus, statt der bunten "Blobs" */
     html[data-theme="dark"] .jax-bg {
       background-image:
@@ -93,6 +95,9 @@
 
     @keyframes wiggle { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
     .jax-wiggle { animation: wiggle 0.7s ease-in-out infinite; }
+
+    @keyframes bounceIn { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+    .jax-pop { animation: bounceIn 0.5s cubic-bezier(.34,1.56,.64,1); }
 
     /* Avatar-Bonus: 360° links, schütteln, 360° rechts zurück - alles in einer Animation */
     @keyframes avatarBonusSpin {
