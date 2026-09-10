@@ -212,7 +212,7 @@
     }
     let latestState = null;
     let latestStory = null;
-    let bonusStoriesUsed = false; // true, sobald die 4 Bonus-Storys einmal angehängt wurden
+    let appliedBonusIds = new Set(); // welche Bonus-Storys hier lokal schon angehängt wurden
     let storyImageTimerStoryIdx = null; // welche Story bereits ihren 20s-Bild-Timer bekam
     let storyImageHideTimeout = null;
     let lastRenderedRollId = null;
@@ -346,12 +346,19 @@
       onValue(ref(db, 'game2State'), (snapshot) => {
         const state = snapshot.val() || { storyIdx: 0, stage: 'waiting' };
 
-        // Bonus-Storys einmalig lokal anhängen, sobald der Host sie freigeschaltet hat -
-        // läuft bei JEDEM Client gleich ab, damit alle dieselbe erweiterte Story-Liste haben.
-      if (state.bonusStoriesActive && !bonusStoriesUsed) {
-        bonusStoriesUsed = true;
-        stories.push(...bonusStories);
-      }
+        // Bonus-Storys werden jetzt einzeln und jederzeit vom Host dazugebucht (nicht mehr
+        // alle 4 auf einmal per Einmal-Schalter) - state.addedBonusIds ist die vom Host
+        // freigegebene Liste, läuft bei JEDEM Client gleich ab, damit alle dieselbe
+        // erweiterte Story-Liste in derselben Reihenfolge haben.
+      const addedIds = state.addedBonusIds || [];
+      addedIds.forEach(id => {
+        if (!appliedBonusIds.has(id)) {
+          appliedBonusIds.add(id);
+          const story = bonusStories.find(s => s.id === id);
+          if (story) stories.push(story);
+        }
+      });
+      if (isHost) renderBonusStoryPicker(addedIds);
 
       latestState = state;
       latestStory = stories[state.storyIdx || 0] || stories[0];
@@ -531,25 +538,28 @@
       tick();
     }
 
-    window.hostWantsMoreStories = function() {
-      get(ref(db, 'game2State')).then((snap) => {
-        const s = snap.val() || {};
-        const currentIdx = s.storyIdx || 0;
-        const extendedLength = stories.length + (bonusStoriesUsed ? 0 : bonusStories.length);
-        const nextIdx = (currentIdx + 1) % extendedLength;
-        update(ref(db, 'game2State'), {
-          bonusStoriesActive: true,
-          storyIdx: nextIdx,
-          stage: 'waiting',
-          diceRolls: null,
-          order: null,
-          currentTurnIndex: 0,
-          declaredSolvers: null,
-          lastAnswer: null,
-          winnerId: null,
-          winnerDouble: null,
-          pointsAwarded: null
-        });
+    window.renderBonusStoryPicker = function(addedIds) {
+      const wrap = document.getElementById("bonus-story-picker");
+      if (!wrap) return;
+      const remaining = bonusStories.filter(s => !addedIds.includes(s.id));
+      if (remaining.length === 0) {
+        wrap.innerHTML = `<div class="text-amber-500/60 text-center py-1">Alle Bonus-Storys sind schon dabei.</div>`;
+        return;
+      }
+      wrap.innerHTML = remaining.map(s => `
+        <label class="flex items-start gap-2 bg-black/30 rounded-lg p-2 cursor-pointer hover:bg-black/50">
+          <input type="checkbox" value="${s.id}" class="bonus-story-checkbox mt-0.5">
+          <span class="text-[11px] text-amber-100/90">${s.teaser}</span>
+        </label>
+      `).join('');
+    };
+
+    window.addSelectedBonusStories = function() {
+      const checked = Array.from(document.querySelectorAll(".bonus-story-checkbox:checked")).map(cb => parseInt(cb.value, 10));
+      if (checked.length === 0) return;
+      get(ref(db, 'game2State/addedBonusIds')).then((snap) => {
+        const existing = snap.val() || [];
+        update(ref(db, 'game2State'), { addedBonusIds: [...existing, ...checked] });
       });
     };
 
@@ -1226,10 +1236,6 @@
         </div>
         <div class="text-xs mt-6 max-w-md mx-auto opacity-80 text-center">${gameQuoteHtml()}</div>
         ${isHost ? `
-        ${!bonusStoriesUsed ? `
-        <button onclick="hostWantsMoreStories()" class="w-full mt-6 max-w-md mx-auto block py-4 px-4 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-sm rounded-xl shadow-lg transition active:scale-95">
-          😅 Das ging zu schnell, ich will mehr!
-        </button>` : ''}
         <button onclick="triggerReturnCountdown()" class="w-full mt-3 max-w-md mx-auto block py-4 px-4 bg-amber-700 hover:bg-amber-600 text-white font-black text-sm rounded-xl shadow-lg transition active:scale-95">
           🏁 Spiel beenden & zurück ins Cockpit
         </button>` : `
@@ -1484,6 +1490,16 @@
     <div class="text-xs font-black text-amber-400 tracking-wider uppercase mb-3 flex items-center space-x-2">
       <span>👑 ERZÄHLER-PULT</span>
     </div>
+
+    <!-- Bonus-Runden: jederzeit dazubuchbar, frei wählbar wie viele und welche -->
+    <details class="bg-black/30 border border-emerald-700/40 rounded-xl p-3 mb-3 text-xs">
+      <summary class="text-emerald-400 font-bold cursor-pointer select-none">😅 Bonus-Runden dazubuchen</summary>
+      <div id="bonus-story-picker" class="mt-2 space-y-1.5"></div>
+      <button onclick="addSelectedBonusStories()" class="w-full mt-2 py-2 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded-lg transition active:scale-95">
+        + Ausgewählte hinzufügen
+      </button>
+    </details>
+
     <div id="host-preview-box" class="bg-black/40 border border-amber-700/40 rounded-xl p-3 text-xs mb-3">
       Lade Vorschau...
     </div>

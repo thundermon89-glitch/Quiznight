@@ -8,52 +8,91 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Inter', sans-serif; }
+    /* ==== HELL-/DUNKELMODUS: Hellmodus = die bisherige bunte Party-Optik (unverändert,
+       Standard). Dunkelmodus = ein neuer, knalliger "Tech-HUD"-Look mit Neonfarben auf fast
+       schwarzem Grund statt gelb/braun/goldener Stimmung. Umschaltbar über [data-theme]. ==== */
+    :root {
+      --c-ink: var(--c-ink);
+      --c-pink: var(--c-pink); --c-yellow: var(--c-yellow); --c-green: var(--c-green); --c-purple: var(--c-purple); --c-blue: var(--c-blue); --c-orange: var(--c-orange);
+      --c-card-bg: #ffffff; --c-card-text: var(--c-ink); --c-card-shadow: rgba(0,0,0,0.85);
+      --c-card-dark-bg: var(--c-ink); --c-card-dark-text: #ffffff; --c-card-dark-border: #ffffff;
+      --c-grad-1: #2b0f54; --c-grad-2: var(--c-purple); --c-grad-3: var(--c-pink); --c-grad-4: var(--c-orange);
+      --c-body-bg: transparent;
+    }
+    html[data-theme="dark"] {
+      --c-ink: #00f0ff;
+      --c-pink: #ff2ee0; --c-yellow: #f5ff3d; --c-green: #39ff8c; --c-purple: #b026ff; --c-blue: #00e5ff; --c-orange: #ff6a3d;
+      --c-card-bg: #0d1420; --c-card-text: #d6f6ff; --c-card-shadow: rgba(0,240,255,0.25);
+      --c-card-dark-bg: #060a12; --c-card-dark-text: #d6f6ff; --c-card-dark-border: #ff2ee0;
+      --c-grad-1: #05060f; --c-grad-2: #0a1830; --c-grad-3: #001a2e; --c-grad-4: #08111f;
+      --c-body-bg: #05060a;
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--c-body-bg); transition: background-color .25s ease; }
     .font-jax { font-family: 'Baloo 2', sans-serif; }
+    html[data-theme="dark"] .font-jax { font-family: 'JetBrains Mono', 'Baloo 2', monospace; }
 
     .jax-bg {
-      background: linear-gradient(120deg, #2b0f54, #7017c9, #ff2e93, #ff8a3d);
+      background: linear-gradient(120deg, var(--c-grad-1), var(--c-grad-2), var(--c-grad-3), var(--c-grad-4));
       background-size: 300% 300%;
       animation: gradientShift 16s ease infinite;
     }
     @keyframes gradientShift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
-
-    .blob { position: absolute; border-radius: 9999px; filter: blur(50px); opacity: 0.45; animation: floaty 11s ease-in-out infinite; }
-    @keyframes floaty { 0%,100% { transform: translate(0,0); } 50% { transform: translate(25px,-35px); } }
+    /* Dezentes Tech-Raster im Dunkelmodus, statt der bunten "Blobs" */
+    html[data-theme="dark"] .jax-bg {
+      background-image:
+        linear-gradient(120deg, var(--c-grad-1), var(--c-grad-2), var(--c-grad-3), var(--c-grad-4)),
+        linear-gradient(rgba(0,240,255,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,240,255,0.06) 1px, transparent 1px);
+      background-size: 300% 300%, 34px 34px, 34px 34px;
+    }
+    html[data-theme="dark"] .blob { display: none; }
 
     .jax-card {
-      background: #ffffff;
-      border: 4px solid #1a1a2e;
+      background: var(--c-card-bg);
+      border: 4px solid var(--c-ink);
       border-radius: 26px;
-      box-shadow: 8px 8px 0 rgba(0,0,0,0.85);
+      box-shadow: 8px 8px 0 var(--c-card-shadow);
+      color: var(--c-card-text);
+      transition: background-color .25s ease, color .25s ease, border-color .25s ease, box-shadow .25s ease;
     }
+    html[data-theme="dark"] .jax-card { box-shadow: 0 0 0 1px rgba(0,240,255,0.15), 0 0 22px rgba(0,240,255,0.25); border-radius: 10px; }
     .jax-card-dark {
-      background: #1a1a2e;
-      border: 4px solid #ffffff;
+      background: var(--c-card-dark-bg);
+      border: 4px solid var(--c-card-dark-border);
       border-radius: 26px;
       box-shadow: 8px 8px 0 rgba(0,0,0,0.5);
-      color: #ffffff;
+      color: var(--c-card-dark-text);
+      transition: background-color .25s ease, color .25s ease, border-color .25s ease, box-shadow .25s ease;
     }
+    html[data-theme="dark"] .jax-card-dark { box-shadow: 0 0 0 1px rgba(255,46,224,0.2), 0 0 22px rgba(255,46,224,0.25); border-radius: 10px; }
     .jax-chip {
-      border: 3px solid #1a1a2e;
+      border: 3px solid var(--c-ink);
       border-radius: 9999px;
-      box-shadow: 4px 4px 0 rgba(0,0,0,0.85);
+      box-shadow: 4px 4px 0 var(--c-card-shadow);
     }
     .jax-btn {
       font-family: 'Baloo 2', sans-serif;
-      border: 3px solid #1a1a2e;
+      border: 3px solid var(--c-ink);
       border-radius: 9999px;
-      box-shadow: 5px 5px 0 rgba(0,0,0,0.85);
+      box-shadow: 5px 5px 0 var(--c-card-shadow);
       transition: transform .12s ease, box-shadow .12s ease;
     }
-    .jax-btn:hover { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
-    .jax-btn:active { transform: translate(3px,3px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+    .jax-btn:hover { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 var(--c-card-shadow); }
+    .jax-btn:active { transform: translate(3px,3px); box-shadow: 2px 2px 0 var(--c-card-shadow); }
+    html[data-theme="dark"] .jax-chip, html[data-theme="dark"] .jax-btn { border-radius: 8px; box-shadow: 0 0 12px rgba(0,240,255,0.3); }
+    html[data-theme="dark"] .jax-btn:hover { box-shadow: 0 0 18px rgba(0,240,255,0.5); }
+
+    .theme-toggle-btn {
+      border: 3px solid var(--c-ink); border-radius: 9999px; background: var(--c-card-bg); color: var(--c-card-text);
+      width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+      box-shadow: 3px 3px 0 var(--c-card-shadow); transition: transform .12s ease;
+      font-size: 1.2rem; cursor: pointer; flex-shrink: 0;
+    }
+    html[data-theme="dark"] .theme-toggle-btn { border-radius: 8px; box-shadow: 0 0 14px rgba(0,240,255,0.35); }
+    .theme-toggle-btn:hover { transform: scale(1.08); }
 
     @keyframes wiggle { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
     .jax-wiggle { animation: wiggle 0.7s ease-in-out infinite; }
-
-    @keyframes bounceIn { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
-    .jax-pop { animation: bounceIn 0.5s cubic-bezier(.34,1.56,.64,1); }
 
     /* Avatar-Bonus: 360° links, schütteln, 360° rechts zurück - alles in einer Animation */
     @keyframes avatarBonusSpin {
@@ -112,13 +151,13 @@
 
     .wheel-outer { position: relative; width: 250px; height: 250px; margin: 0 auto; }
     .wheel-pointer { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); z-index: 5; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6)); }
-    .wheel-disc { width: 250px; height: 250px; border-radius: 50%; position: relative; border: 6px solid #1a1a2e; box-shadow: 10px 10px 0 rgba(0,0,0,0.5); }
+    .wheel-disc { width: 250px; height: 250px; border-radius: 50%; position: relative; border: 6px solid var(--c-ink); box-shadow: 10px 10px 0 rgba(0,0,0,0.5); }
     .wheel-label {
       position: absolute; top: 50%; left: 50%; width: 92px; margin-left: -46px; margin-top: -9px;
       text-align: center; font-size: 11px; font-weight: 800; color: white;
       text-shadow: 0 1px 3px rgba(0,0,0,0.9); pointer-events: none; font-family: 'Baloo 2', sans-serif;
     }
-    .wheel-center-dot { position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; margin: -10px; border-radius: 50%; background: #ffd23f; border: 3px solid #1a1a2e; z-index: 4; }
+    .wheel-center-dot { position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; margin: -10px; border-radius: 50%; background: var(--c-yellow); border: 3px solid var(--c-ink); z-index: 4; }
     .spin-on-hover { transition: transform 0.8s ease; }
     .spin-on-hover:hover { transform: rotate(360deg); }
 
@@ -131,8 +170,8 @@
     }
     .wheel-sticker {
       width: 130px; height: 130px; margin: 0 auto;
-      background: radial-gradient(circle at 35% 30%, #ffe680, #ffd23f 60%, #ff9f1c 100%);
-      border: 5px solid #1a1a2e; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #ffe680, var(--c-yellow) 60%, #ff9f1c 100%);
+      border: 5px solid var(--c-ink); border-radius: 50%;
       box-shadow: 6px 6px 0 rgba(0,0,0,0.85), inset 0 0 0 4px rgba(255,255,255,0.5);
       display: flex; align-items: center; justify-content: center;
       animation: stickerPop 0.6s cubic-bezier(.34,1.56,.64,1);
@@ -162,7 +201,7 @@
     }
     .brain-bubble {
       position: fixed; z-index: 40; pointer-events: none;
-      background: white; color: #1a1a2e; border: 2px solid #1a1a2e;
+      background: white; color: var(--c-ink); border: 2px solid var(--c-ink);
       border-radius: 10px; padding: 4px 9px; font-size: 11px; font-weight: 800;
       font-family: 'Baloo 2', sans-serif;
       animation: brainBubblePop 1.4s ease-out forwards;
@@ -208,6 +247,21 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
+
+    // ==== HELL-/DUNKELMODUS: Hell = bisherige bunte Optik (Standard), Dunkel = neuer
+    // knalliger Tech-HUD-Look. Wahl wird in localStorage gemerkt. ====
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      const btn = document.getElementById('theme-toggle-btn');
+      if (btn) btn.innerText = theme === 'dark' ? '☀️' : '🌙';
+    }
+    window.toggleTheme = function() {
+      const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      const next = current === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('quiz_theme', next);
+      applyTheme(next);
+    };
+    applyTheme(localStorage.getItem('quiz_theme') || 'light');
 
     let playerId = localStorage.getItem("quiz_player_id");
     if (!playerId) {
@@ -529,11 +583,11 @@
       }
     });
 
-    // Eigener, dedizierter Listener für den Mal-Chat - läuft unabhängig von "gameState",
+    // Eigener, dedizierter Listener für den IcqDraw - läuft unabhängig von "gameState",
     // damit andere häufige Schreibvorgänge dort das Bild nicht überschreiben, bevor es bei
     // allen ankommt.
     onValue(ref(db, 'paintEvent'), (snapshot) => {
-      console.log('[Mal-Chat] Empfangs-Listener ausgelöst, Daten vorhanden:', !!snapshot.val());
+      console.log('[IcqDraw] Empfangs-Listener ausgelöst, Daten vorhanden:', !!snapshot.val());
       maybeShowPaintFlyby(snapshot.val());
     });
 
@@ -1102,7 +1156,7 @@
       if (e.key === 'ArrowRight') invaderKeys.right = false;
     });
 
-    // ==== MAL-CHAT: kleines Paint-Fenster, gemalte Bilder fliegen über den Bildschirm aller
+    // ==== ICQDRAW: kleines Paint-Fenster, gemalte Bilder fliegen über den Bildschirm aller
     // Mitspieler. Spam-Schutz per Cooldown, damit nicht im Sekundentakt Bilder losfliegen. ====
     const PAINT_COLORS = ['#000000', '#ffffff', '#ff2e93', '#3ecbff', '#ffd23f', '#7ed957', '#7017c9', '#ff8a3d'];
     const PAINT_COOLDOWN_MS = 20000;
@@ -1283,15 +1337,15 @@
       const canvas = document.getElementById("paint-canvas");
       const dataUrl = canvas.toDataURL("image/png");
       const name = (document.getElementById("cockpit-user-name")?.innerText || "Jemand").trim();
-      console.log('[Mal-Chat] Sende Bild, Größe (Zeichen):', dataUrl.length, 'Name:', name);
+      console.log('[IcqDraw] Sende Bild, Größe (Zeichen):', dataUrl.length, 'Name:', name);
 
       localStorage.setItem("quiz_last_paint_sent", String(Date.now()));
       // Eigener, dedizierter Firebase-Pfad statt in "gameState" - das Feld wird von vielen
       // anderen Vorgängen (Bereitschaft-Reset, Countdown, Status-Wechsel) häufig überschrieben,
       // wodurch das Bild bei anderen Spielern teils gar nicht ankam.
       set(ref(db, 'paintEvent'), { id: Date.now(), dataUrl, name })
-        .then(() => console.log('[Mal-Chat] Erfolgreich an Firebase gesendet.'))
-        .catch((err) => console.error('[Mal-Chat] FEHLER beim Senden:', err));
+        .then(() => console.log('[IcqDraw] Erfolgreich an Firebase gesendet.'))
+        .catch((err) => console.error('[IcqDraw] FEHLER beim Senden:', err));
 
       checkPaintEasterEgg();
       window.closePaintWindow();
@@ -1326,12 +1380,12 @@
     let paintFlybyPlaying = false;
 
     function maybeShowPaintFlyby(ev) {
-      console.log('[Mal-Chat] maybeShowPaintFlyby aufgerufen mit:', ev ? { id: ev.id, name: ev.name, hatBild: !!ev.dataUrl } : ev);
-      if (!ev || !ev.id) { console.log('[Mal-Chat] Abbruch: kein Event/keine ID'); return; }
-      if (ev.id === lastSeenPaintEventId) { console.log('[Mal-Chat] Abbruch: schon gesehen (id war bereits', lastSeenPaintEventId, ')'); return; }
+      console.log('[IcqDraw] maybeShowPaintFlyby aufgerufen mit:', ev ? { id: ev.id, name: ev.name, hatBild: !!ev.dataUrl } : ev);
+      if (!ev || !ev.id) { console.log('[IcqDraw] Abbruch: kein Event/keine ID'); return; }
+      if (ev.id === lastSeenPaintEventId) { console.log('[IcqDraw] Abbruch: schon gesehen (id war bereits', lastSeenPaintEventId, ')'); return; }
       lastSeenPaintEventId = ev.id;
-      if (Date.now() - ev.id > 15000) { console.log('[Mal-Chat] Abbruch: zu alt (', Date.now() - ev.id, 'ms)'); return; }
-      console.log('[Mal-Chat] In Warteschlange eingereiht.');
+      if (Date.now() - ev.id > 15000) { console.log('[IcqDraw] Abbruch: zu alt (', Date.now() - ev.id, 'ms)'); return; }
+      console.log('[IcqDraw] In Warteschlange eingereiht.');
       paintFlybyQueue.push(ev);
       processPaintFlybyQueue();
     }
@@ -1340,12 +1394,12 @@
       if (paintFlybyPlaying || paintFlybyQueue.length === 0) return;
       const ev = paintFlybyQueue.shift();
       paintFlybyPlaying = true;
-      console.log('[Mal-Chat] Zeige Bild jetzt an (aus Warteschlange, noch', paintFlybyQueue.length, 'übrig).');
+      console.log('[IcqDraw] Zeige Bild jetzt an (aus Warteschlange, noch', paintFlybyQueue.length, 'übrig).');
 
       const layer = document.getElementById("paint-flyby-layer");
       const img = document.getElementById("paint-flyby-img");
       const nameEl = document.getElementById("paint-flyby-name");
-      if (!layer || !img) { console.log('[Mal-Chat] Abbruch: HTML-Elemente fehlen', !!layer, !!img); paintFlybyPlaying = false; return; }
+      if (!layer || !img) { console.log('[IcqDraw] Abbruch: HTML-Elemente fehlen', !!layer, !!img); paintFlybyPlaying = false; return; }
 
       nameEl.innerText = "🖌️ " + (ev.name || "Jemand") + " hat gemalt:";
       img.src = ev.dataUrl;
@@ -1430,32 +1484,33 @@
 
   <div class="relative z-10 flex justify-between items-center pb-4">
     <div class="flex items-center space-x-3">
-      <button onclick="leaveCockpit()" class="jax-chip bg-white px-3 py-2 flex items-center gap-1.5 text-[#1a1a2e] flex-shrink-0" title="Zurück zur Lobby">
+      <button onclick="leaveCockpit()" class="jax-chip bg-white px-3 py-2 flex items-center gap-1.5 text-[var(--c-ink)] flex-shrink-0" title="Zurück zur Lobby">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/></svg>
         <span class="text-[10px] font-jax font-bold">Lobby</span>
       </button>
-      <div class="w-3 h-3 rounded-full bg-[#7ed957] animate-pulse jax-chip"></div>      <div>
+      <div class="w-3 h-3 rounded-full bg-[var(--c-green)] animate-pulse jax-chip"></div>      <div>
         <h1 class="font-jax text-2xl md:text-3xl font-extrabold text-white drop-shadow-[3px_3px_0_rgba(0,0,0,0.5)]">Cockpit</h1>
         <p class="text-xs text-white/70 font-semibold">Bereit machen für die nächste Runde!</p>
       </div>
     </div>
 
+    <button onclick="toggleTheme()" id="theme-toggle-btn" class="theme-toggle-btn" title="Hell-/Dunkelmodus umschalten">🌙</button>
     <div class="jax-card px-4 py-2 flex items-center space-x-3">
       <div>
-        <div id="cockpit-user-name" class="text-sm font-jax font-bold text-[#1a1a2e]">PILOT</div>
-        <div id="cockpit-user-id" class="text-[10px] text-[#1a1a2e]/50">ID: ---</div>
+        <div id="cockpit-user-name" class="text-sm font-jax font-bold text-[var(--c-ink)]">PILOT</div>
+        <div id="cockpit-user-id" class="text-[10px] text-[var(--c-ink)]/50">ID: ---</div>
       </div>
     </div>
   </div>
 
   <div class="relative z-10 flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 my-6">
-    <div class="jax-card p-4 flex flex-col text-[#1a1a2e]">
-      <div class="jax-chip bg-[#ffd23f] p-2.5 flex-shrink-0 flex items-center gap-2.5">
+    <div class="jax-card p-4 flex flex-col text-[var(--c-ink)]">
+      <div class="jax-chip bg-[var(--c-yellow)] p-2.5 flex-shrink-0 flex items-center gap-2.5">
         <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/renewable-energy.png" alt="" class="w-11 h-11 flex-shrink-0 spin-on-hover" onerror="this.style.display='none'">
         <div class="flex-1 min-w-0">
-          <div id="silly-loader" class="text-[10px] text-[#1a1a2e] font-jax font-bold italic text-center min-h-[1.4rem] transition-opacity duration-300"></div>
-          <div class="w-full h-2 bg-[#1a1a2e]/15 rounded-full overflow-hidden mt-1.5">
-            <div id="silly-loadbar" class="h-full bg-[#7017c9] rounded-full" style="width: 10%; transition: width 1.1s cubic-bezier(.4,0,.2,1);"></div>
+          <div id="silly-loader" class="text-[10px] text-[var(--c-ink)] font-jax font-bold italic text-center min-h-[1.4rem] transition-opacity duration-300"></div>
+          <div class="w-full h-2 bg-[var(--c-ink)]/15 rounded-full overflow-hidden mt-1.5">
+            <div id="silly-loadbar" class="h-full bg-[var(--c-purple)] rounded-full" style="width: 10%; transition: width 1.1s cubic-bezier(.4,0,.2,1);"></div>
           </div>
         </div>
       </div>
@@ -1464,11 +1519,11 @@
 
       <div class="relative flex flex-col items-center justify-center flex-shrink-0">
         <div id="chest-speech-bubble" class="hidden absolute left-1/2 z-20 w-64 max-w-[80vw]" style="bottom: 100%; transform: translateX(-50%); margin-bottom: 10px;">
-          <div class="bg-white border-[3px] border-[#1a1a2e] rounded-2xl p-3 pr-7 shadow-lg relative">
-            <button onclick="closeChestBubble()" class="absolute top-1.5 right-2 text-[#1a1a2e]/40 hover:text-[#1a1a2e] font-black text-sm leading-none">✕</button>
-            <div id="chest-speech-content" class="text-xs text-[#1a1a2e] space-y-1 text-left"></div>
+          <div class="bg-white border-[3px] border-[var(--c-ink)] rounded-2xl p-3 pr-7 shadow-lg relative">
+            <button onclick="closeChestBubble()" class="absolute top-1.5 right-2 text-[var(--c-ink)]/40 hover:text-[var(--c-ink)] font-black text-sm leading-none">✕</button>
+            <div id="chest-speech-content" class="text-xs text-[var(--c-ink)] space-y-1 text-left"></div>
           </div>
-          <div class="w-4 h-4 bg-white border-r-[3px] border-b-[3px] border-[#1a1a2e] rotate-45 mx-auto -mt-2"></div>
+          <div class="w-4 h-4 bg-white border-r-[3px] border-b-[3px] border-[var(--c-ink)] rotate-45 mx-auto -mt-2"></div>
         </div>
         <div id="chest-bonus-popup-layer" class="absolute inset-x-0 top-0 flex justify-center pointer-events-none" style="z-index:5;"></div>
         <div id="chest-fly-layer" class="absolute inset-x-0 bottom-0 h-16 pointer-events-none"></div>
@@ -1476,26 +1531,29 @@
           <img id="chest-img" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/eb7a44a04292d35c253cda591bd191b226fa6aa8/Kistegeschlossen.png" alt="Truhe" class="w-56 h-56 md:w-72 md:h-72 object-contain">
         </div>
       </div>
-      <div class="text-center text-sm mt-2 flex-shrink-0 text-[#1a1a2e]/60 italic">Spiel eine Runde - die Truhe redet mit dir! 🔮</div>
+      <div class="text-center text-sm mt-2 flex-shrink-0 text-[var(--c-ink)]/60 italic">Spiel eine Runde - die Truhe redet mit dir! 🔮</div>
     </div>
 
     <div class="jax-card-dark p-6 flex flex-col items-center justify-between text-center space-y-4">
       <div class="w-full my-auto space-y-3">
         <div class="flex items-center justify-center gap-4">
-          <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/MS_Paint_%281995%29.svg"
-            class="cursor-pointer hover:scale-110 transition-transform drop-shadow-[2px_2px_0_rgba(0,0,0,0.5)]"
-            style="width:72px;height:72px;"
-            onclick="openPaintWindow()" onerror="this.style.display='none'" alt="Mal-Chat">
+          <button onclick="openPaintWindow()" class="flex flex-col items-center gap-1 group">
+            <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/MS_Paint_%281995%29.svg"
+              class="group-hover:scale-110 transition-transform drop-shadow-[2px_2px_0_rgba(0,0,0,0.5)]"
+              style="width:72px;height:72px;"
+              onerror="this.style.display='none'" alt="">
+            <span class="text-[11px] font-jax font-extrabold text-white/90 tracking-wide">IcqDraw</span>
+          </button>
           <div class="relative w-28 h-28 z-30">
           <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/cpu.png" alt="" ondblclick="openInvaderGame()" title="Doppelklick für ein kleines Geheimspiel..."
             class="w-28 h-28 cursor-pointer opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
           <div id="invader-bubble" class="hidden fixed z-[90]" style="left: 50%; top: 50%; transform: translate(-50%, -50%);">
-            <div class="bg-[#0a0e17] border-[3px] border-[#1a1a2e] rounded-2xl p-3 shadow-2xl relative" style="width: 300px;">
-              <button onclick="closeInvaderGame()" class="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[#ff2e93] text-white font-black text-sm flex items-center justify-center border-2 border-[#1a1a2e] z-10">✕</button>
+            <div class="bg-[#0a0e17] border-[3px] border-[var(--c-ink)] rounded-2xl p-3 shadow-2xl relative" style="width: 300px;">
+              <button onclick="closeInvaderGame()" class="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[var(--c-pink)] text-white font-black text-sm flex items-center justify-center border-2 border-[var(--c-ink)] z-10">✕</button>
               <div class="flex items-center justify-between mb-1.5 px-1">
-                <span class="text-[10px] text-[#7ed957] font-jax font-bold" id="invader-lives">❤️❤️❤️</span>
+                <span class="text-[10px] text-[var(--c-green)] font-jax font-bold" id="invader-lives">❤️❤️❤️</span>
                 <span class="text-[10px] text-[#a78bfa] font-jax font-bold" id="invader-level">Level 1</span>
-                <span class="text-[10px] text-[#ffd23f] font-jax font-bold" id="invader-score">0 Pkt.</span>
+                <span class="text-[10px] text-[var(--c-yellow)] font-jax font-bold" id="invader-score">0 Pkt.</span>
               </div>
               <canvas id="invader-canvas" width="280" height="260" class="w-full rounded-lg" style="background:#000; image-rendering: pixelated;"></canvas>
               <div class="text-[9px] text-white/40 text-center mt-1.5">← → bewegen · Leertaste schießen</div>
@@ -1504,15 +1562,15 @@
           </div>
           </div>
         </div>
-        <button id="ready-toggle-btn" onclick="toggleReadyStatus()" class="w-full py-6 bg-[#ff2e93] jax-btn text-white font-jax font-extrabold text-xl flex items-center justify-center gap-2 jax-wiggle">
+        <button id="ready-toggle-btn" onclick="toggleReadyStatus()" class="w-full py-6 bg-[var(--c-pink)] jax-btn text-white font-jax font-extrabold text-xl flex items-center justify-center gap-2 jax-wiggle">
           <span><svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 0-5 5v3.5c0 .8-.3 1.6-.9 2.2L4 16h16l-2.1-2.3a3 3 0 0 1-.9-2.2V8a5 5 0 0 0-5-5z"/><path d="M9.5 19a2.5 2.5 0 0 0 5 0"/></svg></span> <span>JETZT BEREIT MELDEN!</span>
         </button>
         <div id="ready-status-text" class="text-xs font-bold text-white/70">Noch nicht bereit gemeldet</div>
       </div>
     </div>
 
-    <div class="jax-card p-4 flex flex-col text-[#1a1a2e]">
-      <div class="text-xs font-jax font-bold uppercase tracking-wide border-b-2 border-[#1a1a2e]/10 pb-2">Crew Status</div>
+    <div class="jax-card p-4 flex flex-col text-[var(--c-ink)]">
+      <div class="text-xs font-jax font-bold uppercase tracking-wide border-b-2 border-[var(--c-ink)]/10 pb-2">Crew Status</div>
       <div class="flex items-center justify-center my-3 flex-shrink-0">
         <div class="relative flex-shrink-0">
           <div id="avatar-bonus-popup-layer" class="absolute inset-x-0 top-0 flex justify-center pointer-events-none" style="z-index:5;"></div>
@@ -1528,11 +1586,11 @@
 
   <!-- RAD DES WAHNSINNS MODAL -->
   <div id="chaos-card-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="jax-card jax-pop p-8 w-full max-w-sm text-center space-y-3 text-[#1a1a2e]">
-      <div class="font-jax text-lg font-extrabold text-[#7017c9] flex items-center justify-center gap-2">
+    <div class="jax-card jax-pop p-8 w-full max-w-sm text-center space-y-3 text-[var(--c-ink)]">
+      <div class="font-jax text-lg font-extrabold text-[var(--c-purple)] flex items-center justify-center gap-2">
         <span><svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l7.8 3"/></svg></span> Rad des Wahnsinns
       </div>
-      <div class="text-[10px] text-[#1a1a2e]/50 -mt-1">Kleine Dinge geschehen...</div>
+      <div class="text-[10px] text-[var(--c-ink)]/50 -mt-1">Kleine Dinge geschehen...</div>
       <div id="chaos-roll-intro" class="text-sm font-semibold min-h-[2.5rem] flex items-center justify-center"></div>
       <div id="chaos-wheel-container" class="py-2"></div>
       <div id="chaos-card-result" class="hidden"></div>
@@ -1544,10 +1602,10 @@
 
   <!-- VERSCHLAFEN-STRAFE POPUP -->
   <div id="late-penalty-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="jax-card jax-pop p-8 max-w-sm text-center space-y-4 text-[#1a1a2e]">
-      <div class="text-[#ff2e93] flex justify-center"><svg class="w-14 h-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 0-5 5v3.5c0 .8-.3 1.6-.9 2.2L4 16h16l-2.1-2.3a3 3 0 0 1-.9-2.2V8a5 5 0 0 0-5-5z"/><path d="M9.5 19a2.5 2.5 0 0 0 5 0"/></svg></div>
+    <div class="jax-card jax-pop p-8 max-w-sm text-center space-y-4 text-[var(--c-ink)]">
+      <div class="text-[var(--c-pink)] flex justify-center"><svg class="w-14 h-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 0-5 5v3.5c0 .8-.3 1.6-.9 2.2L4 16h16l-2.1-2.3a3 3 0 0 1-.9-2.2V8a5 5 0 0 0-5-5z"/><path d="M9.5 19a2.5 2.5 0 0 0 5 0"/></svg></div>
       <div id="late-penalty-text" class="font-jax font-bold text-lg leading-relaxed"></div>
-      <button onclick="closeLatePenaltyModal()" class="w-full py-3 jax-btn bg-[#ffd23f] text-[#1a1a2e] font-jax font-bold text-sm">Verstanden</button>
+      <button onclick="closeLatePenaltyModal()" class="w-full py-3 jax-btn bg-[var(--c-yellow)] text-[var(--c-ink)] font-jax font-bold text-sm">Verstanden</button>
     </div>
   </div>
 
@@ -1556,12 +1614,12 @@
     onclick="clickBrainLogo()" class="hidden fixed bottom-2 left-2 h-8 md:h-10 w-auto z-30 cursor-pointer transition-transform hover:scale-110"
     onerror="this.style.display='none'" alt="">
 
-  <!-- ==== MAL-CHAT: kleines Paint-Fenster im Win95-Look, gemalte Bilder fliegen über den
+  <!-- ==== ICQDRAW: kleines Paint-Fenster im Win95-Look, gemalte Bilder fliegen über den
        Bildschirm aller Mitspieler. Eigenständiges kleines Extra, keine Original-Assets. ==== -->
   <div id="paint-window" class="hidden fixed inset-0 z-[95] flex items-center justify-center bg-black/50">
     <div class="bg-[#c0c0c0]" style="width: 460px; max-width: 94vw; border: 2px solid #fff; border-right-color:#404040; border-bottom-color:#404040; box-shadow: 2px 2px 0 rgba(0,0,0,0.6);">
       <div class="flex items-center justify-between px-1.5 py-1" style="background: linear-gradient(90deg, #000080, #1084d0);">
-        <span class="text-white text-[11px] font-bold" style="font-family: 'Segoe UI', Tahoma, sans-serif;">🎨 Mal-Chat</span>
+        <span class="text-white text-[11px] font-bold" style="font-family: 'Segoe UI', Tahoma, sans-serif;">🎨 IcqDraw</span>
         <button onclick="closePaintWindow()" class="w-4 h-4 flex items-center justify-center text-[10px] font-bold" style="background:#c0c0c0; border: 1px solid #fff; border-right-color:#404040; border-bottom-color:#404040;">✕</button>
       </div>
       <div class="p-2 space-y-2">
@@ -1576,7 +1634,7 @@
         </div>
         <canvas id="paint-canvas" width="420" height="260" class="cursor-crosshair" style="background:#fff; border: 2px solid #404040; border-right-color:#fff; border-bottom-color:#fff; display:block; margin:0 auto; max-width:100%;"></canvas>
         <div class="flex items-center justify-between gap-2">
-          <div id="paint-cooldown-text" class="text-[10px] text-[#1a1a2e]/60 flex-1"></div>
+          <div id="paint-cooldown-text" class="text-[10px] text-[var(--c-ink)]/60 flex-1"></div>
           <button id="paint-send-btn" onclick="sendPaintDrawing()" class="text-xs px-3 py-1.5 bg-[#c0c0c0] font-bold" style="border: 1px solid #fff; border-right-color:#404040; border-bottom-color:#404040;">Senden 📤</button>
         </div>
       </div>

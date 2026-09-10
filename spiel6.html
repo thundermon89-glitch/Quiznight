@@ -56,6 +56,14 @@
       40%, 80% { transform: translateX(8px); }
     }
     .wrong-guess-shake { animation: wrongGuessShake 0.4s ease-in-out; border-color: #ff2e93 !important; }
+    .movie-suggestion-item { transition: background-color .1s ease; }
+    .movie-suggestion-item:hover { background: #f4f1ff; }
+    .movie-suggestion-active {
+      background: #ffd23f !important;
+      outline: 3px solid #1a1a2e;
+      outline-offset: -3px;
+      font-weight: 800;
+    }
     .points-tick { animation: pointsTick 0.15s ease-out; }
 
     @keyframes leaderRowIn {
@@ -121,7 +129,9 @@
     function currentMoviePoints(startedAt) {
       const elapsed = Date.now() - startedAt;
       const remaining = Math.max(0, MOVIE_DURATION_MS - elapsed);
-      return Math.round(MOVIE_START_POINTS * (remaining / MOVIE_DURATION_MS));
+      // Mindestens 50 Punkte für jeden richtigen Tipp, auch für den langsamsten Rater -
+      // sonst könnte es bei sehr später Antwort auf (fast) 0 Punkte hinauslaufen.
+      return Math.max(50, Math.round(MOVIE_START_POINTS * (remaining / MOVIE_DURATION_MS)));
     }
 
     function normalizeGuess(s) {
@@ -190,15 +200,23 @@
     }
 
     // ================= HOST: RUNDE STARTEN/BEENDEN =================
-    let movieRoundIdx = 0;
     window.hostStartMovieRound = () => {
-      const round = movieRounds[movieRoundIdx % movieRounds.length];
-      movieRoundIdx++;
-      set(ref(db, 'game6State'), {
-        stage: 'movie_playing',
-        movieRoundId: round.id,
-        movieStartedAt: Date.now(),
-        movieGuesses: null
+      get(ref(db, 'game6State/roundsCompleted')).then((snap) => {
+        const completed = snap.val() || 0;
+        if (completed >= movieRounds.length) {
+          // Alle Trailer schon gezeigt - klares Ende statt stillschweigend wieder bei
+          // Trailer 1 anzufangen.
+          set(ref(db, 'game6State'), { stage: 'movie_all_done', roundsCompleted: completed });
+          return;
+        }
+        const round = movieRounds[completed];
+        set(ref(db, 'game6State'), {
+          stage: 'movie_playing',
+          movieRoundId: round.id,
+          movieStartedAt: Date.now(),
+          movieGuesses: null,
+          roundsCompleted: completed // wird erst beim Beenden dieser Runde hochgezählt
+        });
       });
     };
 
@@ -217,13 +235,18 @@
           stage: 'movie_playing',
           movieRoundId: roundId,
           movieStartedAt: Date.now(),
-          movieGuesses: null
+          movieGuesses: null,
+          roundsCompleted: state.roundsCompleted || 0
         });
       });
     };
 
     window.hostEndMovieRound = () => {
-      update(ref(db, 'game6State'), { stage: 'movie_result' });
+      get(ref(db, 'game6State')).then((snap) => {
+        const state = snap.val() || {};
+        const completed = (state.roundsCompleted || 0) + 1;
+        update(ref(db, 'game6State'), { stage: 'movie_result', roundsCompleted: completed });
+      });
     };
 
     window.hostMovieRoundDone = () => {
@@ -236,23 +259,71 @@
     let movieTickInterval = null;
     let movieSuggestDebounce = null;
 
+    let movieSuggestionIndex = -1; // aktuell per Pfeiltasten markierter Vorschlag
+    let movieSuggestionCount = 0;
+
     window.onMovieGuessInput = function(value) {
       clearTimeout(movieSuggestDebounce);
       const box = document.getElementById("movie-suggestions");
+      movieSuggestionIndex = -1;
       if (!value || value.length < 2) { box.classList.add("hidden"); return; }
       movieSuggestDebounce = setTimeout(async () => {
         const suggestions = await searchMovies(value);
+        movieSuggestionCount = suggestions.length;
         if (suggestions.length === 0) { box.classList.add("hidden"); return; }
-        box.innerHTML = suggestions.map(s =>
-          `<div class="p-2.5 hover:bg-[#f4f1ff] cursor-pointer text-sm" onclick="selectMovieSuggestion('${s.replace(/'/g, "\\'")}')">${s}</div>`
+        box.innerHTML = suggestions.map((s, i) =>
+          `<div class="movie-suggestion-item p-2.5 cursor-pointer text-sm" data-idx="${i}" onclick="selectMovieSuggestion('${s.replace(/'/g, "\\'")}')">${s}</div>`
         ).join('');
         box.classList.remove("hidden");
       }, 300);
     };
 
+    // Pfeiltasten wandern durch die Vorschlagsliste, Enter übernimmt die gerade markierte
+    // Zeile (falls eine markiert ist) statt direkt den eingetippten Text abzuschicken.
+    window.onMovieGuessKeydown = function(e) {
+      const box = document.getElementById("movie-suggestions");
+      const visible = box && !box.classList.contains("hidden") && movieSuggestionCount > 0;
+
+      if (visible && e.key === 'ArrowDown') {
+        e.preventDefault();
+        movieSuggestionIndex = Math.min(movieSuggestionCount - 1, movieSuggestionIndex + 1);
+        highlightMovieSuggestion();
+        return;
+      }
+      if (visible && e.key === 'ArrowUp') {
+        e.preventDefault();
+        movieSuggestionIndex = Math.max(0, movieSuggestionIndex - 1);
+        highlightMovieSuggestion();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (visible && movieSuggestionIndex >= 0) {
+          const item = box.querySelector(`.movie-suggestion-item[data-idx="${movieSuggestionIndex}"]`);
+          if (item) { selectMovieSuggestion(item.innerText); return; }
+        }
+        submitMovieGuess(e.target.value);
+      }
+      if (e.key === 'Escape') {
+        box?.classList.add("hidden");
+        movieSuggestionIndex = -1;
+      }
+    };
+
+    function highlightMovieSuggestion() {
+      const box = document.getElementById("movie-suggestions");
+      if (!box) return;
+      box.querySelectorAll(".movie-suggestion-item").forEach(el => {
+        const isActive = parseInt(el.dataset.idx, 10) === movieSuggestionIndex;
+        el.classList.toggle("movie-suggestion-active", isActive);
+        if (isActive) el.scrollIntoView({ block: 'nearest' });
+      });
+    }
+
     window.selectMovieSuggestion = function(text) {
       document.getElementById("movie-guess-input").value = text;
       document.getElementById("movie-suggestions").classList.add("hidden");
+      movieSuggestionIndex = -1;
     };
 
     window.submitMovieGuess = function(guessRaw) {
@@ -358,6 +429,14 @@
       return pts;
     }
 
+    function renderMovieAllDoneScreen(state) {
+      document.getElementById("movie-all-done-area")?.classList.remove("hidden");
+      const hc = document.getElementById("movie-all-done-host-controls");
+      if (hc) hc.classList.toggle("hidden", !isHost);
+      clearInterval(movieTickInterval);
+      document.getElementById("movie-iframe-wrap")?.replaceChildren();
+    }
+
     function renderAll(state) {
       latestState = state;
       const stage = state.stage || 'waiting';
@@ -369,6 +448,7 @@
       const hostControlsResult = document.getElementById("hc-result");
 
       [waitingArea, playingArea, resultArea].forEach(el => el?.classList.add("hidden"));
+      document.getElementById("movie-all-done-area")?.classList.add("hidden");
       if (isHost) [hostControlsWaiting, hostControlsPlaying, hostControlsResult].forEach(el => el?.classList.add("hidden"));
 
       if (isHost) {
@@ -388,6 +468,16 @@
         document.getElementById("movie-iframe-wrap")?.replaceChildren();
         mySolved = false;
         myVideoPlaybackStartedAt = null;
+        // Eingabefeld für die nächste Runde wieder leeren - sonst stand beim nächsten
+        // Trailer noch der alte Tipp von der Runde davor drin.
+        const inputEl = document.getElementById("movie-guess-input");
+        if (inputEl) inputEl.value = "";
+        document.getElementById("movie-suggestions")?.classList.add("hidden");
+        return;
+      }
+
+      if (stage === 'movie_all_done') {
+        renderMovieAllDoneScreen(state);
         return;
       }
 
@@ -623,7 +713,7 @@
         <div class="relative max-w-sm mx-auto">
           <input id="movie-guess-input" type="text" placeholder="Filmtitel eintippen..." autocomplete="off"
             class="w-full p-4 rounded-xl border-3 border-[#1a1a2e] text-lg font-semibold text-center"
-            oninput="onMovieGuessInput(this.value)" onkeydown="if(event.key==='Enter') submitMovieGuess(this.value)">
+            oninput="onMovieGuessInput(this.value)" onkeydown="onMovieGuessKeydown(event)">
           <div id="movie-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border-3 border-[#1a1a2e] rounded-xl overflow-hidden z-20 text-left"></div>
         </div>
         <button onclick="submitMovieGuess(document.getElementById('movie-guess-input').value)" class="jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold px-8 py-3">
@@ -645,6 +735,17 @@
       <div class="text-sm">Der Film war: <b id="movie-result-answer"></b></div>
       <div class="text-xs text-[#1a1a2e]/50">Endstand dieser Runde:</div>
       <div id="movie-leaderboard-final" class="space-y-1.5 max-w-xs mx-auto"></div>
+    </div>
+
+    <div id="movie-all-done-area" class="hidden jax-card p-8 text-[#1a1a2e] text-center space-y-4">
+      <div class="text-5xl">🎬🍿</div>
+      <div class="font-jax font-extrabold text-3xl text-[#ff2e93]">Alle Trailer geschafft!</div>
+      <div class="text-sm text-[#1a1a2e]/70">Das waren alle 12 Filme für diese Runde.</div>
+      <div id="movie-all-done-host-controls" class="hidden pt-2">
+        <button onclick="hostEndGame6()" class="jax-btn bg-[#7017c9] text-white font-jax font-bold px-6 py-3">
+          🏁 Zurück ins Cockpit
+        </button>
+      </div>
     </div>
 
   </main>
