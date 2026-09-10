@@ -216,72 +216,38 @@
         formType: "trueFalse",
         contentPath: "content/spiel7/questions",
         templatesPath: "content/spiel7/templates",
-        blank: () => ({ id: Date.now(), question: "", correct: 1, fact: "", source: "", points: 150 }),
+        blank: () => ({ id: Date.now(), question: "", image: "", correct: 1, fact: "", source: "", points: 150 }),
         defaults: [
-      {
-        id: 1,
-        question: "Napoleon war für seine Zeit außergewöhnlich klein.",
-        correct: false,
-        fact: "Napoleon war mit rund 1,68 m für einen Franzosen seiner Zeit durchschnittlich groß, eher sogar leicht darüber. Der Mythos entstand durch eine Verwechslung von Maßeinheiten (französische Zoll waren länger als englische) sowie durch britische Propaganda-Karikaturen, die ihn absichtlich winzig darstellten.",
-        source: "https://www.watson.ch/wissen/alkohol/760089989-napoleon-war-gar-nicht-klein-und-16-weitere-mythen-die-so-nicht-stimmen",
-        points: 150
-      },
-      {
-        id: 2,
-        question: "Der Mensch nutzt nur etwa 10 % seines Gehirns.",
-        correct: false,
-        fact: "Bildgebende Verfahren zeigen, dass im Laufe eines Tages praktisch jeder Bereich des Gehirns aktiv wird - auch scheinbar 'ruhende' Areale haben wichtige Funktionen. Der Mythos hat keinen wissenschaftlichen Ursprung, hält sich aber hartnäckig in der Popkultur.",
-        source: "https://www.scientificamerican.com/article/do-people-only-use-10-percent-of-their-brains/",
-        points: 150
-      },
-      {
-        id: 3,
-        question: "Goldfische haben ein Gedächtnis von nur wenigen Sekunden.",
-        correct: false,
-        fact: "Studien zeigen, dass Goldfische sich an Dinge über Wochen und sogar Monate erinnern können - sie lassen sich zum Beispiel darauf trainieren, auf bestimmte Signale oder Farben zu reagieren, und behalten das gelernte Verhalten langfristig bei.",
-        source: "https://www.livescience.com/59187-goldfish-memory-myth.html",
-        points: 150
-      },
-      {
-        id: 4,
-        question: "Die Chinesische Mauer ist vom Weltraum aus mit bloßem Auge sichtbar.",
-        correct: false,
-        fact: "Astronauten, darunter mehrere chinesische Taikonauten, haben bestätigt, dass die Mauer aus der Erdumlaufbahn mit bloßem Auge nicht zu erkennen ist - sie ist einfach zu schmal im Verhältnis zur Entfernung. Andere, breitere menschengemachte Strukturen sind dagegen sichtbar.",
-        source: "https://www.scientificamerican.com/article/great-wall-of-china-is-not-visible-from-space/",
-        points: 150
-      },
-      {
-        id: 5,
-        question: "Man verliert die meiste Körperwärme über den Kopf.",
-        correct: false,
-        fact: "Der Mythos stammt aus einer US-Militärstudie der 1950er, bei der Probanden nur am Kopf unbedeckt waren - logischerweise ging dort die meiste Wärme verloren. Tatsächlich verliert man Wärme ungefähr proportional zur unbedeckten Hautfläche, der Kopf ist dabei nicht besonders bevorzugt.",
-        source: "https://www.bbc.com/future/article/20120121-do-we-really-lose-most-heat-through-our-heads",
-        points: 150
-      },
-      {
-        id: 6,
-        question: "Ein Blitz schlägt nie zweimal am selben Ort ein.",
-        correct: false,
-        fact: "Das Gegenteil ist der Fall: Das Empire State Building in New York wird im Durchschnitt 23-mal pro Jahr vom Blitz getroffen. Exponierte, hohe Objekte ziehen Blitze regelmäßig und wiederholt an.",
-        source: "https://www.wetterdienst.de/Deutschlandwetter/Thema_des_Tages/1415/irrtuemer-bei-gewittern",
-        points: 150
-      },
-      {
-        id: 7,
-        question: "Chamäleons wechseln ihre Farbe hauptsächlich, um sich vor Feinden zu tarnen.",
-        correct: false,
-        fact: "Farbwechsel bei Chamäleons dient vor allem der Kommunikation (z. B. Revierverhalten, Balz, Stimmungslage) und der Temperaturregulation, nicht in erster Linie der Tarnung. Manche Arten werden bei Erregung sogar auffälliger statt unauffälliger.",
-        source: "https://www.nationalgeographic.com/animals/article/chameleons-color-change-science",
-        points: 150
-      },
-      {
-        id: 8,
-        question: "Zucker macht Kinder hyperaktiv.",
-        correct: false,
-        fact: "Mehrere doppelblinde, placebokontrollierte Studien konnten keinen Zusammenhang zwischen Zuckerkonsum und hyperaktivem Verhalten bei Kindern nachweisen. Der Eindruck entsteht oft durch Situationen (Partys, Feiern), die ohnehin aufregend sind - unabhängig vom Zucker.",
-        source: "https://pubmed.ncbi.nlm.nih.gov/7563706/",
-        points: 150
-      }
+      { id: 1, question: "Herobrine war ursprünglich ein echter, versteckter NPC in Minecraft.", correct: 2,
+        fact: "Herobrine ist eine erfundene Community-Legende und war nie ein offizieller NPC.", source: "https://minecraft.wiki/w/Herobrine", points: 150 },
+      { id: 2, question: "Wenn man den Truck neben der MS Anne mit Stärke verschiebt, findet man darunter Mew.", correct: 1,
+        fact: "Der Truck existiert tatsächlich, aber Mew befindet sich dort nicht.", source: "https://bulbapedia.bulbagarden.net/wiki/Truck", points: 150 },
+      { id: 3, question: "Auf dem Mount Gordo kann man nachts den Geist einer ermordeten Frau sehen.", correct: 0,
+        fact: "Der Geist von Jolene erscheint tatsächlich zwischen 23:00 und 00:00 Uhr.", source: "https://gta.fandom.com/wiki/Jolene_Cranley-Evans", points: 150 },
+      { id: 4, question: "Ein Riese kann einen Spieler in Skyrim mit einem einzigen Schlag hunderte Meter durch die Luft schleudern.", correct: 0,
+        fact: "Die Physik des Spiels macht diesen legendären \"Skyrim Space Program\"-Effekt tatsächlich möglich.", source: "https://elderscrolls.fandom.com/wiki/Giant_(Skyrim)", points: 150 },
+      { id: 5, question: "Die Musik von Lavandia soll bei japanischen Kindern schwere gesundheitliche Schäden verursacht haben.", correct: 2,
+        fact: "Das sogenannte Lavandia-Syndrom ist eine Internet-Legende. Beweise für die Geschichte gibt es nicht.", source: "https://folklore.usc.edu/lavender-town-syndrome/", points: 150 },
+      { id: 6, question: "Ein geheimnisvoller Arcade-Automat namens Polybius soll Spieler in den 1980ern krank gemacht und sogar Gedächtnisverlust verursacht haben.", correct: 2,
+        fact: "Polybius ist eine berühmte Gaming-Urban-Legend. Für die Geschichte gibt es keine belastbaren Beweise.", source: "https://en.wikipedia.org/wiki/Polybius_(urban_legend)", points: 150 },
+      { id: 7, question: "In Fallout 4 kann man ein Kind finden, das über 200 Jahre in einem Kühlschrank überlebt hat.", correct: 0,
+        fact: "Das sogenannte \"Kid in the Fridge\" ist tatsächlich eine Quest beziehungsweise ein Easter Egg im Spiel.", source: "https://fallout.fandom.com/wiki/Kid_in_a_Fridge", points: 150 },
+      { id: 8, question: "In Cyberpunk 2077 kann man Hideo Kojima als NPC begegnen.", correct: 0,
+        fact: "Der bekannte Spieleentwickler hat tatsächlich einen kurzen Cameo-Auftritt im Spiel.", source: "https://cyberpunk.fandom.com/wiki/Hideo_Kojima", points: 150 },
+      { id: 9, question: "Es gibt eine angeblich verfluchte Sonic-Version, in der Sonic seine Freunde auf brutale Weise verfolgt.", correct: 2,
+        fact: "Sonic.exe ist eine bekannte Horror-Creepypasta und kein offizielles Sonic-Spiel.", source: "https://sonic.fandom.com/de/wiki/Sonic.exe", points: 150 },
+      { id: 10, question: "Die Minecraft-Musikdisc 11 enthält eine mysteriöse Aufnahme, in der scheinbar ein Spieler von etwas verfolgt wird.", correct: 0,
+        fact: "Die unheimliche Aufnahme existiert tatsächlich. Was genau darauf passiert, wurde von Mojang nie vollständig erklärt.", source: "https://minecraft.wiki/w/Music_Disc_11", points: 150 },
+      { id: 11, question: "In Super Mario 64 kann man Luigi durch einen geheimen Trick als spielbaren Charakter freischalten.", correct: 1,
+        fact: "Luigi ist im Originalspiel nicht spielbar. Das Gerücht wurde durch Hinweise wie \"L is real 2401\" berühmt.", source: "https://www.nintendolife.com/news/2019/08/feature_has_a_decades-old_super_mario_64_mystery_finally_been_cleared_up", points: 150 },
+      { id: 12, question: "Wenn man in Resident Evil 4 mehrfach auf den See schießt, greift ein riesiges Monster den Spieler an.", correct: 0,
+        fact: "Schießt man auf den See, erscheint tatsächlich der Del-Lago-Angriff.", source: "https://residentevil.fandom.com/wiki/Del_Lago", points: 150 },
+      { id: 13, question: "In einem Hotel in Pokémon X/Y kann plötzlich ein geisterhaftes Mädchen hinter dem Spieler erscheinen.", correct: 0,
+        fact: "Das sogenannte Ghost Girl ist ein echtes, bis heute ziemlich unheimliches Easter Egg.", source: "https://bulbapedia.bulbagarden.net/wiki/Walkthrough:Pok%C3%A9mon_X_and_Y/Part_8", points: 150 },
+      { id: 14, question: "Eine gebrauchte Kopie von Zelda: Majora's Mask soll den verfluchten Spielstand eines verstorbenen Jungen namens Ben enthalten haben.", correct: 2,
+        fact: "\"Ben Drowned\" ist eine berühmte Zelda-Creepypasta. Die Geschichte wurde von einem Fan erfunden.", source: "https://knowyourmeme.com/sensitive/memes/majoras-mask-creepypasta-ben-drowned", points: 150 },
+      { id: 15, question: "In Silent Hill 2 kann man ein geheimes Ende freischalten, in dem sich herausstellt, dass ein Hund hinter den Ereignissen steckt.", correct: 0,
+        fact: "Das sogenannte Dog Ending existiert tatsächlich und ist eines der bekanntesten geheimen Enden der Serie.", source: "https://www.silenthillmemories.net/sh2/endings_en.htm", points: 150 }
     ],
       },
       spiel4: {
@@ -1221,6 +1187,18 @@
             <input type="text" autocomplete="off" value="${escapeAttr(q.question || '')}" placeholder="z.B. Napoleon war für seine Zeit außergewöhnlich klein."
               oninput="updateField(${idx}, 'question', this.value)"
               class="jax-input w-full mt-1 text-base" />
+          </div>
+
+          <div class="flex items-center gap-4">
+            <div class="w-20 h-20 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
+              ${q.image ? `<img src="${escapeAttr(q.image)}" class="w-full h-full object-cover" />` : `<span class="text-[9px] text-[#1a1a2e]/40 text-center px-1">Kein Bild</span>`}
+            </div>
+            <div class="flex-1">
+              <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Bild zur Frage (optional)</label>
+              <input type="text" autocomplete="off" value="${escapeAttr(q.image || '')}" placeholder="https://..."
+                oninput="updateField(${idx}, 'image', this.value)"
+                class="jax-input w-full mt-1 text-sm" />
+            </div>
           </div>
 
           <div class="flex gap-2">

@@ -41,6 +41,20 @@
       animation: stickerPop 0.6s cubic-bezier(.34,1.56,.64,1);
     }
     .wheel-sticker-emoji { font-size: 64px; line-height: 1; filter: drop-shadow(2px 3px 0 rgba(0,0,0,0.25)); }
+
+    /* ==== MAL-CHAT (Admin-Version): eigenständiges kleines Paint-Fenster im Win95-Look,
+       inkl. Text-Werkzeug, mit dem der Admin Schrift auf das Bild setzen kann. ==== */
+    .jax-input {
+      border: 3px solid #1a1a2e; border-radius: 14px; background: #ffffff; color: #1a1a2e;
+      padding: 0.6rem 0.9rem; font-weight: 600;
+    }
+    .jax-input:focus { outline: none; box-shadow: 0 0 0 3px #ffd23f; }
+    .jax-btn {
+      border: 3px solid #1a1a2e; border-radius: 18px; box-shadow: 5px 5px 0 rgba(0,0,0,0.85);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
   </style>
 
   <script type="module">
@@ -627,6 +641,255 @@
       });
     };
 
+    // ==== MAL-CHAT (ADMIN): eigenes kleines Paint-Fenster, gemalte Bilder fliegen über den
+    // Bildschirm aller Mitspieler - inkl. Text-Werkzeug (nur der Admin hat das), mit dem
+    // Schrift direkt auf das Bild geschrieben werden kann. ====
+    const PAINT_COLORS = ['#000000', '#ffffff', '#ff2e93', '#3ecbff', '#ffd23f', '#7ed957', '#7017c9', '#ff8a3d'];
+    const PAINT_COOLDOWN_MS = 20000;
+    let paintTool = { color: '#000000', mode: 'pen' };
+    let paintDrawing = false;
+    let paintCtx = null;
+    let paintCooldownInterval = null;
+    let lastSeenPaintEventId = null;
+    let paintFlybyQueue = [];
+    let paintFlybyPlaying = false;
+
+    window.openPaintWindow = function() {
+      document.getElementById("paint-window").classList.remove("hidden");
+      initPaintCanvas();
+      updatePaintCooldownUI();
+    };
+    window.closePaintWindow = function() {
+      document.getElementById("paint-window").classList.add("hidden");
+      clearInterval(paintCooldownInterval);
+    };
+
+    function initPaintCanvas() {
+      const canvas = document.getElementById("paint-canvas");
+      if (!paintCtx) {
+        paintCtx = canvas.getContext("2d");
+        paintCtx.fillStyle = "#fff";
+        paintCtx.fillRect(0, 0, canvas.width, canvas.height);
+        paintCtx.lineCap = "round";
+        paintCtx.lineJoin = "round";
+
+        const swatchWrap = document.getElementById("paint-color-swatches");
+        swatchWrap.innerHTML = PAINT_COLORS.map(c =>
+          `<button onclick="setPaintColor('${c}')" class="w-6 h-6 rounded-sm" style="background:${c}; border: 1px solid #404040;" title="${c}"></button>`
+        ).join('');
+
+        let lastX = 0, lastY = 0, snapshotBeforeShape = null;
+        function getPos(e) {
+          const rect = canvas.getBoundingClientRect();
+          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          return { x: (clientX - rect.left) * (canvas.width / rect.width), y: (clientY - rect.top) * (canvas.height / rect.height) };
+        }
+        function startDraw(e) {
+          e.preventDefault();
+          const p = getPos(e);
+
+          if (paintTool.mode === 'text') {
+            // Text-Werkzeug: Text abfragen und direkt an der Klickposition auf das Bild
+            // schreiben - nur der Admin hat dieses Werkzeug zur Verfügung.
+            const txt = prompt("Text eingeben, der aufs Bild geschrieben werden soll:");
+            if (txt) {
+              paintCtx.fillStyle = paintTool.color;
+              paintCtx.font = "bold 20px 'Segoe UI', Tahoma, sans-serif";
+              paintCtx.textBaseline = "middle";
+              paintCtx.fillText(txt, p.x, p.y);
+            }
+            return;
+          }
+
+          paintDrawing = true;
+          lastX = p.x; lastY = p.y;
+
+          if (paintTool.mode === 'bucket') {
+            floodFillPaint(Math.round(p.x), Math.round(p.y), paintTool.color);
+            paintDrawing = false;
+          } else if (paintTool.mode === 'circle') {
+            snapshotBeforeShape = paintCtx.getImageData(0, 0, canvas.width, canvas.height);
+          } else if (paintTool.mode === 'spray') {
+            sprayPaintAt(p.x, p.y);
+          }
+        }
+        function moveDraw(e) {
+          if (!paintDrawing) return;
+          e.preventDefault();
+          const p = getPos(e);
+
+          if (paintTool.mode === 'circle') {
+            paintCtx.putImageData(snapshotBeforeShape, 0, 0);
+            const r = Math.hypot(p.x - lastX, p.y - lastY);
+            paintCtx.strokeStyle = paintTool.color;
+            paintCtx.lineWidth = 3;
+            paintCtx.beginPath();
+            paintCtx.arc(lastX, lastY, r, 0, Math.PI * 2);
+            paintCtx.stroke();
+            return;
+          }
+          if (paintTool.mode === 'spray') {
+            sprayPaintAt(p.x, p.y);
+            return;
+          }
+
+          paintCtx.strokeStyle = paintTool.mode === 'eraser' ? '#ffffff' : paintTool.color;
+          paintCtx.lineWidth = paintTool.mode === 'eraser' ? 14 : 3;
+          paintCtx.beginPath();
+          paintCtx.moveTo(lastX, lastY);
+          paintCtx.lineTo(p.x, p.y);
+          paintCtx.stroke();
+          lastX = p.x; lastY = p.y;
+        }
+        function endDraw() { paintDrawing = false; }
+
+        function sprayPaintAt(x, y) {
+          paintCtx.fillStyle = paintTool.color;
+          for (let i = 0; i < 12; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.random() * 10;
+            paintCtx.fillRect(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, 1.5, 1.5);
+          }
+        }
+
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', moveDraw);
+        window.addEventListener('mouseup', endDraw);
+        canvas.addEventListener('touchstart', startDraw, { passive: false });
+        canvas.addEventListener('touchmove', moveDraw, { passive: false });
+        canvas.addEventListener('touchend', endDraw);
+      }
+    }
+
+    function floodFillPaint(startX, startY, hexColor) {
+      const canvas = document.getElementById("paint-canvas");
+      const W = canvas.width, H = canvas.height;
+      if (startX < 0 || startY < 0 || startX >= W || startY >= H) return;
+      const imgData = paintCtx.getImageData(0, 0, W, H);
+      const data = imgData.data;
+      const r = parseInt(hexColor.slice(1, 3), 16), g = parseInt(hexColor.slice(3, 5), 16), b = parseInt(hexColor.slice(5, 7), 16);
+
+      const idx = (x, y) => (y * W + x) * 4;
+      const startIdx = idx(startX, startY);
+      const startR = data[startIdx], startG = data[startIdx + 1], startB = data[startIdx + 2], startA = data[startIdx + 3];
+      if (startR === r && startG === g && startB === b) return;
+
+      const matches = (i) => data[i] === startR && data[i + 1] === startG && data[i + 2] === startB && data[i + 3] === startA;
+
+      const stack = [[startX, startY]];
+      let guard = 0;
+      while (stack.length > 0 && guard < 200000) {
+        guard++;
+        const [x, y] = stack.pop();
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        const i = idx(x, y);
+        if (!matches(i)) continue;
+        data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
+        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+      }
+      paintCtx.putImageData(imgData, 0, 0);
+    }
+
+    const PAINT_TOOL_BTN_IDS = { pen: 'paint-pen-btn', eraser: 'paint-eraser-btn', bucket: 'paint-bucket-btn', spray: 'paint-spray-btn', circle: 'paint-circle-btn', text: 'paint-text-btn' };
+    window.setPaintColor = function(c) {
+      paintTool.color = c;
+    };
+    window.setPaintTool = function(mode) {
+      paintTool.mode = mode;
+      Object.values(PAINT_TOOL_BTN_IDS).forEach(id => { document.getElementById(id).style.outline = "none"; });
+      document.getElementById(PAINT_TOOL_BTN_IDS[mode]).style.outline = "2px solid #ff2e93";
+    };
+    window.clearPaintCanvas = function() {
+      if (!paintCtx) return;
+      paintCtx.fillStyle = "#fff";
+      paintCtx.fillRect(0, 0, 420, 260);
+    };
+
+    function getPaintCooldownRemaining() {
+      const last = parseInt(localStorage.getItem("quiz_last_paint_sent") || "0", 10);
+      return Math.max(0, PAINT_COOLDOWN_MS - (Date.now() - last));
+    }
+
+    function updatePaintCooldownUI() {
+      clearInterval(paintCooldownInterval);
+      const textEl = document.getElementById("paint-cooldown-text");
+      const btn = document.getElementById("paint-send-btn");
+      function tick() {
+        const remaining = getPaintCooldownRemaining();
+        if (remaining > 0) {
+          textEl.innerText = "⏳ Noch " + Math.ceil(remaining / 1000) + "s bis zum nächsten Bild...";
+          btn.disabled = true;
+          btn.style.opacity = "0.5";
+        } else {
+          textEl.innerText = "";
+          btn.disabled = false;
+          btn.style.opacity = "1";
+          clearInterval(paintCooldownInterval);
+        }
+      }
+      tick();
+      paintCooldownInterval = setInterval(tick, 500);
+    }
+
+    window.sendPaintDrawing = function() {
+      if (getPaintCooldownRemaining() > 0) return;
+      const canvas = document.getElementById("paint-canvas");
+      const dataUrl = canvas.toDataURL("image/png");
+
+      localStorage.setItem("quiz_last_paint_sent", String(Date.now()));
+      set(ref(db, 'paintEvent'), { id: Date.now(), dataUrl, name: "Der Moderator" });
+      window.closePaintWindow();
+    };
+
+    let paintFlybyQueueTimer = null;
+    function maybeShowPaintFlyby(ev) {
+      if (!ev || !ev.id || ev.id === lastSeenPaintEventId) return;
+      lastSeenPaintEventId = ev.id;
+      if (Date.now() - ev.id > 15000) return;
+      paintFlybyQueue.push(ev);
+      processPaintFlybyQueue();
+    }
+
+    function processPaintFlybyQueue() {
+      if (paintFlybyPlaying || paintFlybyQueue.length === 0) return;
+      const ev = paintFlybyQueue.shift();
+      paintFlybyPlaying = true;
+
+      const layer = document.getElementById("paint-flyby-layer");
+      const img = document.getElementById("paint-flyby-img");
+      const nameEl = document.getElementById("paint-flyby-name");
+      if (!layer || !img) { paintFlybyPlaying = false; return; }
+
+      nameEl.innerText = "🖌️ " + (ev.name || "Jemand") + " hat gemalt:";
+      img.src = ev.dataUrl;
+      img.style.left = "-260px";
+      img.style.transition = "none";
+      nameEl.style.left = "-200px";
+      nameEl.style.transition = "none";
+      layer.classList.remove("hidden");
+
+      void img.offsetWidth;
+      void nameEl.offsetWidth;
+
+      requestAnimationFrame(() => {
+        img.style.transition = "left 9s linear";
+        nameEl.style.transition = "left 9s linear";
+        img.style.left = "calc(100vw + 20px)";
+        nameEl.style.left = "calc(100vw + 20px)";
+      });
+
+      setTimeout(() => {
+        layer.classList.add("hidden");
+        paintFlybyPlaying = false;
+        processPaintFlybyQueue();
+      }, 9300);
+    }
+
+    onValue(ref(db, 'paintEvent'), (snapshot) => {
+      maybeShowPaintFlyby(snapshot.val());
+    });
+
     // NAVIGATION: sobald ein Spiel gestartet wird, nimmt es auch den Host/Admin selbst mit,
     // damit er das Spiel von dort aus anleiten kann (jedes Spiel hat sein eigenes Host-Pult).
     let lastGameStateStatus = null;
@@ -888,6 +1151,44 @@
       <div id="chaos-card-result" class="hidden"></div>
       <div id="chaos-modal-continue" class="hidden"></div>
     </div>
+  </div>
+
+  <!-- ==== MAL-CHAT (ADMIN): eigenes kleines Paint-Fenster, gemalte Bilder fliegen über den
+       Bildschirm aller Mitspieler - inkl. Text-Werkzeug, mit dem der Admin Schrift auf das
+       Bild setzen kann. ==== -->
+  <button onclick="openPaintWindow()" class="fixed bottom-4 left-4 z-[80] w-12 h-12 rounded-xl bg-white border-2 border-[#1a1a2e] flex items-center justify-center shadow-[3px_3px_0_rgba(0,0,0,0.6)] hover:scale-110 transition-transform" title="Mal was und schick's rum!">
+    <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/MS_Paint_%281995%29.svg" class="w-8 h-8" onerror="this.style.display='none'" alt="Mal-Chat">
+  </button>
+
+  <div id="paint-window" class="hidden fixed inset-0 z-[95] flex items-center justify-center bg-black/50">
+    <div class="bg-[#c0c0c0]" style="width: 460px; max-width: 94vw; border: 2px solid #fff; border-right-color:#404040; border-bottom-color:#404040; box-shadow: 2px 2px 0 rgba(0,0,0,0.6);">
+      <div class="flex items-center justify-between px-1.5 py-1" style="background: linear-gradient(90deg, #000080, #1084d0);">
+        <span class="text-white text-[11px] font-bold" style="font-family: 'Segoe UI', Tahoma, sans-serif;">🎨 Mal-Chat (Admin)</span>
+        <button onclick="closePaintWindow()" class="w-4 h-4 flex items-center justify-center text-[10px] font-bold" style="background:#c0c0c0; border: 1px solid #fff; border-right-color:#404040; border-bottom-color:#404040;">✕</button>
+      </div>
+      <div class="p-2 space-y-2">
+        <div class="flex gap-1 flex-wrap items-center" style="background:#c0c0c0; border: 1px solid #808080; border-top-color:#404040; border-left-color:#404040; padding: 3px;">
+          <button onclick="setPaintTool('pen')" id="paint-pen-btn" class="w-7 h-7 text-sm bg-white border border-[#404040]" title="Stift">✏️</button>
+          <button onclick="setPaintTool('eraser')" id="paint-eraser-btn" class="w-7 h-7 text-sm bg-white border border-[#404040]" title="Radierer">🧹</button>
+          <button onclick="setPaintTool('bucket')" id="paint-bucket-btn" class="w-7 h-7 text-sm bg-white border border-[#404040]" title="Eimer (Fläche füllen)">🪣</button>
+          <button onclick="setPaintTool('spray')" id="paint-spray-btn" class="w-7 h-7 text-sm bg-white border border-[#404040]" title="Spraydose">🎨</button>
+          <button onclick="setPaintTool('circle')" id="paint-circle-btn" class="w-7 h-7 text-sm bg-white border border-[#404040]" title="Kreis ziehen">⭕</button>
+          <button onclick="setPaintTool('text')" id="paint-text-btn" class="w-7 h-7 text-sm bg-white border border-[#404040]" title="Text auf das Bild schreiben">🔤</button>
+          <button onclick="clearPaintCanvas()" class="text-[10px] px-2 py-1.5 bg-[#c0c0c0]" style="border: 1px solid #fff; border-right-color:#404040; border-bottom-color:#404040;">Neu</button>
+          <div id="paint-color-swatches" class="flex gap-1 ml-auto"></div>
+        </div>
+        <canvas id="paint-canvas" width="420" height="260" class="cursor-crosshair" style="background:#fff; border: 2px solid #404040; border-right-color:#fff; border-bottom-color:#fff; display:block; margin:0 auto; max-width:100%;"></canvas>
+        <div class="flex items-center justify-between gap-2">
+          <div id="paint-cooldown-text" class="text-[10px] text-[#1a1a2e]/60 flex-1"></div>
+          <button id="paint-send-btn" onclick="sendPaintDrawing()" class="text-xs px-3 py-1.5 bg-[#c0c0c0] font-bold" style="border: 1px solid #fff; border-right-color:#404040; border-bottom-color:#404040;">Senden 📤</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="paint-flyby-layer" class="hidden fixed inset-0 z-[94] pointer-events-none overflow-hidden">
+    <div id="paint-flyby-name" class="absolute text-white font-jax font-bold text-xs px-2 py-1 bg-black/60 rounded-full" style="top: 0.5%;"></div>
+    <img id="paint-flyby-img" class="absolute" style="top: 3%; width: 220px; border: 3px solid white; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.5);">
   </div>
 
 </body>

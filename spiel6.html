@@ -125,7 +125,12 @@
     }
 
     function normalizeGuess(s) {
-      return (s || "").trim().toLowerCase().replace(/[^a-z0-9äöüß ]/gi, "");
+      // Jahreszahl in Klammern entfernen, wie sie die TMDb-Vorschläge anzeigen (z.B. "Bang Boom
+      // Bang (1999)") - sonst stimmt die Auswahl eines Vorschlags nie mit der hinterlegten
+      // Antwort überein, obwohl der Filmtitel selbst korrekt war.
+      return (s || "").trim().toLowerCase()
+        .replace(/\s*\(\d{4}\)\s*$/, "")
+        .replace(/[^a-z0-9äöüß ]/gi, "");
     }
 
     function getActivePlayerIds() {

@@ -414,7 +414,7 @@
       const box = document.getElementById("host-preview-box");
       if (!box) return;
       const correctLabel = q.correct ? "WAHR" : "FALSCH";
-      box.innerHTML = `<div class="text-[#7017c9] font-jax font-bold mb-2 flex items-center justify-center gap-1">${icon('book','w-4 h-4')} Vorschau (nur du siehst das):</div><div class="font-jax font-extrabold text-[#1a1a2e] text-xl md:text-2xl mb-3">${q.question}</div><div class="text-[#7ed957] font-black text-lg">Richtig ist: ${correctLabel}</div><div class="text-[#1a1a2e]/70 text-sm mt-2 text-left">${q.fact || ''}</div>${q.source ? `<div class="mt-2 text-[10px] text-[#1a1a2e]/40 break-all">🔗 ${q.source}</div>` : ''}`;
+      box.innerHTML = `<div class="text-[#7017c9] font-jax font-bold mb-2 flex items-center justify-center gap-1">${icon('book','w-4 h-4')} Vorschau (nur du siehst das):</div><div class="font-jax font-extrabold text-[#1a1a2e] text-xl md:text-2xl mb-3">${q.question}</div>${q.image ? `<img src="${q.image}" class="max-w-xs max-h-48 mx-auto rounded-xl border-2 border-[#1a1a2e] mb-3 object-contain" alt="Frage-Bild">` : ''}<div class="text-[#7ed957] font-black text-lg">Richtig ist: ${correctLabel}</div><div class="text-[#1a1a2e]/70 text-sm mt-2 text-left">${q.fact || ''}</div>${q.source ? `<div class="mt-2 text-[10px] text-[#1a1a2e]/40 break-all">🔗 ${q.source}</div>` : ''}`;
     }
 
     // NAVIGATION: sobald der Host das Spiel-Ende einläutet (gameState != 'in_game'), zurück ins Cockpit
@@ -841,6 +841,11 @@
       }
 
       qTitle.innerText = q.question;
+      const qImg = document.getElementById("question-image");
+      if (qImg) {
+        if (q.image) { qImg.src = q.image; qImg.classList.remove("hidden"); }
+        else { qImg.classList.add("hidden"); qImg.removeAttribute("src"); }
+      }
 
       if (state.stage === 'question_shown') {
         statusBadge.innerText = "FRAGE FREIGEGEBEN - ANTWORTEN GESPERRT";
@@ -1218,6 +1223,7 @@
         <h2 id="question-title" class="font-jax text-3xl md:text-5xl font-extrabold leading-relaxed text-[#1a1a2e]">
           Warten auf Start der nächsten Frage durch den Host...
         </h2>
+        <img id="question-image" class="hidden max-w-sm max-h-64 w-full mx-auto rounded-xl border-3 border-[#1a1a2e] mt-4 object-contain shadow-lg" alt="Frage-Bild">
       </div>
 
       <!-- TIMER (nur während 'Antworten Freigeben') -->
