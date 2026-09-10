@@ -277,7 +277,16 @@
 
     // Bilder aus dem Editor laden, falls dort welche gepflegt wurden - sonst bleiben die
     // eingebauten Standard-Bilder (covers-Array oben) als Rückfallebene aktiv.
-    get(ref(db, 'content/spiel8/covers')).then((snap) => {
+    get(ref(db, 'content/spiel8/activeSource')).then((sourceSnap) => {
+      const source = sourceSnap.val() || 'default';
+      function loadWithSource() {
+        if (source.indexOf('template:') === 0) {
+          const templateName = source.slice('template:'.length);
+          return get(ref(db, 'content/spiel8/templates/' + templateName));
+        }
+        return Promise.resolve({ val: () => null });
+      }
+      loadWithSource().then((snap) => {
       const custom = snap.val();
       if (Array.isArray(custom) && custom.length > 0) {
         covers.length = 0;
@@ -289,6 +298,7 @@
         latestState = state;
         renderAll(state);
       });
+    });
     });
 
     onValue(ref(db, 'gameState'), (snapshot) => {

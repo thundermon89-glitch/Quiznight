@@ -480,19 +480,17 @@
 
     // ==== FRAGENKATALOG-QUELLE: für Spiele mit Editor (1, 3, 7) kann der Host vor dem
     // Start wählen, welcher Fragen-Pool genutzt wird. ====
-    const EDITOR_GAMES = [1, 3, 5, 7];
+    const EDITOR_GAMES = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
     function populateSourceSelect(gameNumber) {
       const select = document.getElementById('source-select-' + gameNumber);
       if (!select) return;
       get(ref(db, 'content/spiel' + gameNumber + '/templates')).then((snap) => {
         const templates = snap.val() || {};
-        let html = '<option value="custom">Eigene (aktueller Stand)</option>';
-        html += '<option value="default">Vorgefertigt (Standard)</option>';
-        html += '<option value="mix">Mix (alles zusammen)</option>';
+        let html = '<option value="default">Standard-Vorlage</option>';
         const names = Object.keys(templates);
         if (names.length > 0) {
-          html += '<optgroup label="Feste Vorlage">';
+          html += '<optgroup label="Eigene Vorlagen">';
           html += names.map(n => `<option value="template:${n}">${n}</option>`).join('');
           html += '</optgroup>';
         }
@@ -569,6 +567,9 @@
     };
 
     window.launchMovieGame = function() {
+      const select = document.getElementById('source-select-6');
+      const source = select ? select.value : 'default';
+      set(ref(db, 'content/spiel6/activeSource'), source).then(() => {
       get(ref(db, 'players/')).then((snap) => {
         const players = snap.val() || {};
         const activeIds = getActiveIds(players);
@@ -589,6 +590,7 @@
             document.getElementById("admin-game-select-modal").classList.add("hidden");
           });
         });
+      });
       });
     };
 
@@ -1102,7 +1104,13 @@
           </div>
         </div>
 
-        <button onclick="launchGame(2)" class="w-full py-3 px-4 bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-500 text-white text-left font-bold text-xs rounded-lg transition">🎮 Spiel 2: Rätselfeuer</button>
+        <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
+          <div class="text-white text-xs font-bold">🎮 Spiel 2: Rätselfeuer</div>
+          <div class="flex gap-2">
+            <select id="source-select-2" class="flex-1 px-2 py-1.5 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
+            <button onclick="launchGameWithSource(2)" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded">Starten</button>
+          </div>
+        </div>
 
         <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
           <div class="text-white text-xs font-bold">🐑🐺 Spiel 3: Schaf oder Wolf?</div>
@@ -1112,7 +1120,13 @@
           </div>
         </div>
 
-        <button onclick="launchGame(4)" class="w-full py-3 px-4 bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-500 text-white text-left font-bold text-xs rounded-lg transition">👾 Spiel 4: Pi mal Daumen</button>
+        <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
+          <div class="text-white text-xs font-bold">👾 Spiel 4: Pi mal Daumen</div>
+          <div class="flex gap-2">
+            <select id="source-select-4" class="flex-1 px-2 py-1.5 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
+            <button onclick="launchGameWithSource(4)" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded">Starten</button>
+          </div>
+        </div>
 
         <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
           <div class="text-white text-xs font-bold">🏆 Spiel 5: Verpixelt!</div>
@@ -1122,7 +1136,13 @@
           </div>
         </div>
 
-        <button onclick="launchMovieGame()" class="w-full py-3 px-4 bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-500 text-white text-left font-bold text-xs rounded-lg transition">🎬 Spiel 6: Film-Zündschnur</button>
+        <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
+          <div class="text-white text-xs font-bold">🎬 Spiel 6: Film-Zündschnur</div>
+          <div class="flex gap-2">
+            <select id="source-select-6" class="flex-1 px-2 py-1.5 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
+            <button onclick="launchMovieGame()" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded">Starten</button>
+          </div>
+        </div>
 
         <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
           <div class="text-white text-xs font-bold">🔮 Spiel 7: Mythos-Check</div>
@@ -1132,8 +1152,21 @@
           </div>
         </div>
 
-        <button onclick="launchGame(8)" class="w-full py-3 px-4 bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-500 text-white text-left font-bold text-xs rounded-lg transition">🔤 Spiel 8: Schriftzug-Salat</button>
-        <button onclick="launchGame(9)" class="w-full py-3 px-4 bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-500 text-white text-left font-bold text-xs rounded-lg transition">🕰️ Spiel 9: Zeitreise</button>
+        <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
+          <div class="text-white text-xs font-bold">🔤 Spiel 8: Schriftzug-Salat</div>
+          <div class="flex gap-2">
+            <select id="source-select-8" class="flex-1 px-2 py-1.5 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
+            <button onclick="launchGameWithSource(8)" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded">Starten</button>
+          </div>
+        </div>
+
+        <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
+          <div class="text-white text-xs font-bold">🕰️ Spiel 9: Zeitreise</div>
+          <div class="flex gap-2">
+            <select id="source-select-9" class="flex-1 px-2 py-1.5 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
+            <button onclick="launchGameWithSource(9)" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded">Starten</button>
+          </div>
+        </div>
       </div>
       <div class="flex justify-end">
         <button onclick="closeGameSelectModal()" class="px-4 py-1 bg-slate-700 text-white font-bold text-xs rounded">Abbrechen</button>
