@@ -857,9 +857,36 @@
       markDirty();
     };
 
+    const IMAGE_FIELDS = ['imageUrl', 'distortedUrl', 'originalUrl', 'image'];
     window.updateField = function(idx, field, value) {
+      if (IMAGE_FIELDS.includes(field)) value = normalizeImageUrl(value);
       items[idx][field] = value;
       markDirty();
+
+      // Bild-Vorschau sofort live aktualisieren, statt erst nach Tab-Wechsel - vorher wirkte
+      // es so, als würde ein eingetragenes Bild "nicht angezeigt", obwohl es korrekt
+      // gespeichert wurde.
+      if (IMAGE_FIELDS.includes(field)) {
+        const game = GAMES[currentGameKey];
+        const suffix = (game.formType === 'trueFalse' && field === 'image') ? '-image-tf' : '';
+        const previewId = `img-preview-${idx}-${field}${suffix}`;
+        const el = document.getElementById(previewId);
+        if (el) {
+          if (value) {
+            const img = document.createElement('img');
+            img.id = previewId;
+            img.src = value;
+            img.className = 'w-full h-full object-cover';
+            el.replaceWith(img);
+          } else {
+            const span = document.createElement('span');
+            span.id = previewId;
+            span.className = 'text-[10px] text-[#1a1a2e]/40 text-center px-1 flex items-center justify-center w-full h-full';
+            span.innerText = field === 'distortedUrl' ? 'Verzerrt' : field === 'originalUrl' ? 'Original' : 'Kein Bild';
+            el.replaceWith(span);
+          }
+        }
+      }
     };
 
     window.updateOption = function(idx, optIdx, value) {
@@ -967,8 +994,8 @@
           <div class="flex items-center gap-4">
             <div class="w-24 h-24 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
               ${q.imageUrl
-                ? `<img src="${escapeAttr(q.imageUrl)}" class="w-full h-full object-cover" />`
-                : `<span class="text-[10px] text-[#1a1a2e]/40 text-center px-1">Kein Bild</span>`
+                ? `<img id="img-preview-${idx}-imageUrl" src="${escapeAttr(q.imageUrl)}" class="w-full h-full object-cover" />`
+                : `<span id="img-preview-${idx}-imageUrl" class="text-[10px] text-[#1a1a2e]/40 text-center px-1 flex items-center justify-center w-full h-full">Kein Bild</span>`
               }
             </div>
             <div class="flex-1 space-y-1">
@@ -1135,7 +1162,7 @@
           </div>
           <div class="flex items-center gap-4">
             <div class="w-20 h-20 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
-              ${q.distortedUrl ? `<img src="${escapeAttr(q.distortedUrl)}" class="w-full h-full object-cover" />` : `<span class="text-[9px] text-[#1a1a2e]/40 text-center px-1">Verzerrt</span>`}
+              ${q.distortedUrl ? `<img id="img-preview-${idx}-distortedUrl" src="${escapeAttr(q.distortedUrl)}" class="w-full h-full object-cover" />` : `<span id="img-preview-${idx}-distortedUrl" class="text-[9px] text-[#1a1a2e]/40 text-center px-1 flex items-center justify-center w-full h-full">Verzerrt</span>`}
             </div>
             <div class="flex-1">
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Verzerrtes/verpixeltes Bild (wird zuerst gezeigt)</label>
@@ -1146,7 +1173,7 @@
           </div>
           <div class="flex items-center gap-4">
             <div class="w-20 h-20 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
-              ${q.originalUrl ? `<img src="${escapeAttr(q.originalUrl)}" class="w-full h-full object-cover" />` : `<span class="text-[9px] text-[#1a1a2e]/40 text-center px-1">Original</span>`}
+              ${q.originalUrl ? `<img id="img-preview-${idx}-originalUrl" src="${escapeAttr(q.originalUrl)}" class="w-full h-full object-cover" />` : `<span id="img-preview-${idx}-originalUrl" class="text-[9px] text-[#1a1a2e]/40 text-center px-1 flex items-center justify-center w-full h-full">Original</span>`}
             </div>
             <div class="flex-1">
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Original-Bild (wird bei der Auflösung gezeigt)</label>
@@ -1191,7 +1218,7 @@
 
           <div class="flex items-center gap-4">
             <div class="w-20 h-20 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
-              ${q.image ? `<img src="${escapeAttr(q.image)}" class="w-full h-full object-cover" />` : `<span class="text-[9px] text-[#1a1a2e]/40 text-center px-1">Kein Bild</span>`}
+              ${q.image ? `<img id="img-preview-${idx}-image" src="${escapeAttr(q.image)}" class="w-full h-full object-cover" />` : `<span id="img-preview-${idx}-image" class="text-[9px] text-[#1a1a2e]/40 text-center px-1 flex items-center justify-center w-full h-full">Kein Bild</span>`}
             </div>
             <div class="flex-1">
               <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Bild zur Frage (optional)</label>
@@ -1343,8 +1370,8 @@
           <div class="flex items-center gap-4">
             <div class="w-24 h-24 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
               ${q.image
-                ? `<img src="${escapeAttr(q.image)}" class="w-full h-full object-cover" />`
-                : `<span class="text-[10px] text-[#1a1a2e]/40 text-center px-1">Kein Bild</span>`
+                ? `<img id="img-preview-${idx}-image-tf" src="${escapeAttr(q.image)}" class="w-full h-full object-cover" />`
+                : `<span id="img-preview-${idx}-image-tf" class="text-[10px] text-[#1a1a2e]/40 text-center px-1 flex items-center justify-center w-full h-full">Kein Bild</span>`
               }
             </div>
             <div class="flex-1">
@@ -1405,6 +1432,17 @@
           </div>
         </div>
       `).join('');
+    }
+
+    // Wandelt GitHub-"blob"-Ansichtslinks (die Vorschauseite, kein echtes Bild) automatisch in
+    // echte Rohbild-Links um - der häufigste Grund, warum eingefügte Bilder nirgends laden.
+    function normalizeImageUrl(url) {
+      if (!url) return url;
+      const m = url.match(/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/(.+)$/);
+      if (m) {
+        return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}`;
+      }
+      return url;
     }
 
     function escapeAttr(str) {

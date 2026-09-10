@@ -111,8 +111,8 @@
       100% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
     }
     .vote-head-img {
-      width: 228px; height: 228px; object-fit: contain; display: inline-block;
-      margin: 0 3px 3px 0; vertical-align: middle;
+      width: 44px; height: 44px; object-fit: contain; display: inline-block;
+      margin: 0 2px 2px 0; vertical-align: middle;
     }
     .vote-head-img-new { animation: voteHeadRollIn 0.65s cubic-bezier(.34,1.15,.64,1) forwards; }
 
@@ -321,8 +321,18 @@
       const source = sourceSnap.val() || 'custom';
       const defaultQuestions = questions; // die eingebauten Standard-Fragen als Basis für "mix"
 
+      // Wandelt GitHub-"blob"-Ansichtslinks automatisch in echte Rohbild-Links um - sonst
+      // laden per Editor eingefügte Bilder gar nicht.
+      function normalizeImageUrl(url) {
+        if (!url) return url;
+        const m = url.match(/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/(.+)$/);
+        if (m) return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}`;
+        return url;
+      }
+
       function withResolvedQuestions(resolved) {
         if (Array.isArray(resolved) && resolved.length > 0) {
+          resolved.forEach(q => { if (q.image) q.image = normalizeImageUrl(q.image); });
           questions = resolved;
         }
         startListeningWithQuestions();
@@ -626,39 +636,28 @@
     // (kein kurzer Popup mehr) und wird alle 5 Sekunden ruckartig (kein sanftes Wachsen)
     // größer. Verschwindet erst exakt bei 0.
     const TIME_TICKING_START_MS_updateTimerUI = 45000;
-    let timeTickingEl_updateTimerUI = null;
     let timeTickingStep_updateTimerUI = -1;
     function maybeShowTimeTicking_updateTimerUI(remaining) {
+      const img = document.getElementById("time-ticking-img");
+      if (!img) return;
+
       if (remaining > TIME_TICKING_START_MS_updateTimerUI || remaining <= 0) {
-        if (timeTickingEl_updateTimerUI) { timeTickingEl_updateTimerUI.remove(); timeTickingEl_updateTimerUI = null; }
+        img.classList.add("hidden");
+        img.style.transform = "scale(1)";
         timeTickingStep_updateTimerUI = -1;
         return;
       }
-      const anchor = document.getElementById("timer-seconds");
-      if (!anchor) return;
 
-      if (!timeTickingEl_updateTimerUI) {
-        const rect = anchor.getBoundingClientRect();
-        const img = document.createElement("img");
-        img.src = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/timeistickingGames.png";
-        img.className = "time-ticking-popup";
-        img.style.position = "fixed";
-        img.style.left = (rect.left - 54) + "px"; // links NEBEN der Uhr, nicht darüber
-        img.style.top = (rect.top + rect.height / 2 - 20) + "px";
-        img.style.width = "40px";
-        img.style.zIndex = "55";
-        img.style.pointerEvents = "none";
-        img.style.transformOrigin = "right center"; // wächst nach links weg von der Uhr, nicht drüber
-        img.style.transition = "transform 0.15s ease-out";
-        document.body.appendChild(img);
-        timeTickingEl_updateTimerUI = img;
-      }
+      // Als normales Element direkt links neben der Uhr im Layout verankert (nicht mehr
+      // manuell per JS-Pixelkoordinaten positioniert) - bleibt dadurch auch bei
+      // Fenstergrößenänderungen oder kleinerem Start zuverlässig an Ort und Stelle.
+      img.classList.remove("hidden");
 
       // Alle 5 Sek. ein ruckartiger Wachstumsschritt (25-21s = Stufe 0, 20-16s = Stufe 1, ...)
       const step = Math.min(4, Math.floor((TIME_TICKING_START_MS_updateTimerUI - remaining) / 5000));
       if (step !== timeTickingStep_updateTimerUI) {
         timeTickingStep_updateTimerUI = step;
-        timeTickingEl_updateTimerUI.style.transform = "scale(" + (1 + step * 0.75) + ")";
+        img.style.transform = "scale(" + (1 + step * 0.75) + ")";
       }
     }
 
@@ -1207,14 +1206,9 @@
       </div>
       <div id="clippy-bubble" class="hidden bg-white rounded-2xl shadow-lg p-5 text-left relative max-w-xl mx-auto">
         <p class="text-sm md:text-base leading-relaxed">
-          Ein Mythos wird vorgestellt - eine Behauptung, die <b>WAHR</b>, <b>FALSCH</b> oder eine erfundene
-          <b>CREEPYPASTA</b> (Internet-Gruselgeschichte) ist. Jeder entscheidet für sich, du hast dafür
-          <b>1 Minute</b> Zeit. Einmal geklickt ist deine Antwort eingeloggt und lässt sich nicht mehr ändern -
-          was die anderen getippt haben, siehst du erst bei der Auflösung.
+          <b>WAHR</b>, <b>FALSCH</b> oder <b>CREEPYPASTA</b>? Einmal geklickt ist die Antwort
+          eingeloggt - keine Änderung mehr. <b>1 Minute</b> Zeit, dann Auflösung mit Quelle.
         </p>
-        <div class="bg-[#f4f1ff] rounded-xl p-4 text-sm md:text-base mt-3">
-          Sobald alle eingeloggt haben oder die Zeit um ist, löst sich die Runde automatisch auf - mit Lösungstext, Hintergrundwissen samt Quellenlink, und wer was getippt hat.
-        </div>
       </div>
     </div>
 
@@ -1228,6 +1222,8 @@
 
       <!-- TIMER (nur während 'Antworten Freigeben') -->
       <div id="timer-display" class="hidden flex items-center gap-3 jax-card px-4 py-3 my-4 text-[#1a1a2e]">
+        <img id="time-ticking-img" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/timeistickingGames.png"
+          class="hidden w-8 h-8 flex-shrink-0" style="transform-origin: right center;" alt="">
         <span class="text-[#7017c9]"><svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
         <span id="timer-seconds" class="text-2xl font-jax font-extrabold text-[#7ed957] tabular-nums">60s</span>
         <div class="flex-1 h-3 bg-[#1a1a2e]/10 rounded-full overflow-hidden">
@@ -1237,27 +1233,27 @@
 
       <!-- WAHR / FALSCH / CREEPYPASTA BUTTONS -->
       <div class="text-[#1a1a2e]/60 text-xs font-semibold -mb-2">Tippe deine Antwort an - einmal geklickt ist sie eingeloggt und lässt sich nicht mehr ändern!</div>
-      <div class="grid grid-cols-1 gap-4">
-        <div class="flex items-center gap-2">
-          <div id="opt-votes-0" class="flex flex-wrap items-center justify-end gap-1 min-h-[228px]"></div>
-          <button id="opt-btn-0" onclick="toggleOption(0)" class="flex-1 p-8 jax-btn font-jax font-extrabold text-3xl flex items-center justify-center space-x-4 bg-[#7ed957] text-[#1a1a2e] opacity-40" disabled>
-            <span class="text-4xl">✅</span>
+      <div class="grid grid-cols-3 gap-3">
+        <div class="flex flex-col items-center gap-2">
+          <div id="opt-votes-0" class="flex flex-wrap items-center justify-center gap-1 min-h-[60px]"></div>
+          <button id="opt-btn-0" onclick="toggleOption(0)" class="w-full p-5 jax-btn font-jax font-extrabold text-lg md:text-2xl flex flex-col items-center justify-center gap-1 bg-[#7ed957] text-[#1a1a2e] opacity-40" disabled>
+            <span class="text-3xl md:text-4xl">✅</span>
             <span class="opt-text">WAHR</span>
           </button>
         </div>
 
-        <div class="flex items-center gap-2">
-          <button id="opt-btn-1" onclick="toggleOption(1)" class="flex-1 p-8 jax-btn font-jax font-extrabold text-3xl flex items-center justify-center space-x-4 bg-[#ff2e93] text-white opacity-40" disabled>
-            <span class="text-4xl">❌</span>
+        <div class="flex flex-col items-center gap-2">
+          <div id="opt-votes-1" class="flex flex-wrap items-center justify-center gap-1 min-h-[60px]"></div>
+          <button id="opt-btn-1" onclick="toggleOption(1)" class="w-full p-5 jax-btn font-jax font-extrabold text-lg md:text-2xl flex flex-col items-center justify-center gap-1 bg-[#ff2e93] text-white opacity-40" disabled>
+            <span class="text-3xl md:text-4xl">❌</span>
             <span class="opt-text">FALSCH</span>
           </button>
-          <div id="opt-votes-1" class="flex flex-wrap items-center gap-1 min-h-[228px]"></div>
         </div>
 
-        <div class="flex items-center gap-2">
-          <div id="opt-votes-2" class="flex flex-wrap items-center justify-end gap-1 min-h-[228px]"></div>
-          <button id="opt-btn-2" onclick="toggleOption(2)" class="flex-1 p-8 jax-btn font-jax font-extrabold text-3xl flex items-center justify-center space-x-4 bg-[#7017c9] text-white opacity-40" disabled>
-            <span class="text-4xl">👻</span>
+        <div class="flex flex-col items-center gap-2">
+          <div id="opt-votes-2" class="flex flex-wrap items-center justify-center gap-1 min-h-[60px]"></div>
+          <button id="opt-btn-2" onclick="toggleOption(2)" class="w-full p-5 jax-btn font-jax font-extrabold text-lg md:text-2xl flex flex-col items-center justify-center gap-1 bg-[#7017c9] text-white opacity-40" disabled>
+            <span class="text-3xl md:text-4xl">👻</span>
             <span class="opt-text">CREEPYPASTA</span>
           </button>
         </div>

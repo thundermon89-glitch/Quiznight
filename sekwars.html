@@ -222,10 +222,25 @@
 
     // Fragen aus dem Editor laden, falls dort welche gepflegt wurden - sonst bleiben die
     // eingebauten Standard-Fragen (rounds-Array oben) als Rückfallebene aktiv.
+        // Wandelt GitHub-"blob"-Ansichtslinks automatisch in echte Rohbild-Links um - sonst
+    // laden per Editor eingefügte Bilder gar nicht.
+    function normalizeImageUrl(url) {
+      if (!url) return url;
+      const m = url.match(/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/(.+)$/);
+      if (m) return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}`;
+      return url;
+    }
+
     get(ref(db, 'content/sekwars/questions')).then((snap) => {
       const custom = snap.val();
       if (Array.isArray(custom) && custom.length > 0) {
         rounds.length = 0;
+        // GitHub-"blob"-Ansichtslinks (falls im Editor versehentlich eingefügt) automatisch
+        // in echte Rohbild-Links umwandeln, sonst laden Bilder gar nicht.
+        custom.forEach(r => {
+          if (r.image) r.image = normalizeImageUrl(r.image);
+          if (Array.isArray(r.events)) r.events.forEach(ev => { if (ev.image) ev.image = normalizeImageUrl(ev.image); });
+        });
         rounds.push(...custom);
       }
 
