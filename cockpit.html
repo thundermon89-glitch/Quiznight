@@ -92,12 +92,15 @@
     .theme-toggle-btn:hover { transform: scale(1.08); }
     #darkmode-icon-img {
       /* Dicke schwarze Kontur direkt am (transparenten) Icon, statt eines Rahmens drumherum -
-         mehrere versetzte Schlagschatten übereinander ergeben eine durchgehende Kontur. */
+         mehrere versetzte Schlagschatten übereinander ergeben eine durchgehende Kontur.
+         Der letzte Schlagschatten ist der übliche nach-unten-rechts-Schatten wie bei allen
+         anderen Elementen (jax-card/jax-chip/jax-btn) auch. */
       filter:
         drop-shadow(1.5px 0 0 #000) drop-shadow(-1.5px 0 0 #000)
         drop-shadow(0 1.5px 0 #000) drop-shadow(0 -1.5px 0 #000)
         drop-shadow(1.1px 1.1px 0 #000) drop-shadow(-1.1px 1.1px 0 #000)
-        drop-shadow(1.1px -1.1px 0 #000) drop-shadow(-1.1px -1.1px 0 #000);
+        drop-shadow(1.1px -1.1px 0 #000) drop-shadow(-1.1px -1.1px 0 #000)
+        drop-shadow(3px 3px 0 rgba(0,0,0,0.85));
     }
 
     @keyframes wiggle { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
@@ -300,6 +303,12 @@
 
       const GROW_MS = 7000; // etwas langsameres Wachstum als zuvor
 
+      // Der Punkteabzug wird jetzt als eigener, unabhängiger Timer ganz am Anfang der
+      // Sequenz angestoßen - komplett getrennt von der optischen Kette (Riss-Animation,
+      // Ton, Absturzbildschirm). Selbst wenn dort irgendwo ein Fehler die Kette unterbricht,
+      // wird trotzdem garantiert abgezogen.
+      setTimeout(finishDarkEgg, GROW_MS + 2000);
+
       // Zurücksetzen für den Fall, dass irgendwas von einem vorherigen Zustand übrig wäre
       gif.style.transition = 'none';
       gif.style.width = '4px'; gif.style.height = '4px';
@@ -353,7 +362,6 @@
 
       setTimeout(() => {
         bsod.classList.add('hidden');
-        finishDarkEgg();
       }, GROW_MS + 2000); // 2 Sekunden Absturz-Bildschirm danach
     }
 
@@ -565,7 +573,7 @@
             <span class="wheel-sticker-emoji">${effect.icon || '🎲'}</span>
           </div>
           <div class="text-xl font-jax font-extrabold mb-2 mt-3" style="color:${typeColor};">${effect.title}</div>
-          <div class="text-sm text-[#1a1a2e]/80">${ws.description || ''}</div>
+          <div class="text-sm text-white/80">${ws.description || ''}</div>
         ` : '';
         continueBox.classList.remove("hidden");
         continueBox.innerHTML = finalContinueButtonHtml();
@@ -1672,15 +1680,17 @@
       </div>
     </div>
 
-    <div class="jax-card px-4 py-2 flex items-center space-x-3">
-      <div>
-        <div id="cockpit-user-name" class="text-sm font-jax font-bold text-[var(--c-ink)]">PILOT</div>
-        <div id="cockpit-user-id" class="text-[10px] text-[var(--c-ink)]/50">ID: ---</div>
+    <div class="flex items-center gap-2">
+      <button onclick="toggleTheme()" id="theme-toggle-btn" class="theme-toggle-btn" title="Hell-/Dunkelmodus umschalten">
+        <img id="darkmode-icon-img" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/ef27eb7437b4c75b65eb938a3f5d0b8f548798ce/Darkmodeicon.png" class="w-11 h-11" alt="" onerror="this.parentElement.innerText='🌙'">
+      </button>
+      <div class="jax-card px-4 py-2 flex items-center space-x-3">
+        <div>
+          <div id="cockpit-user-name" class="text-sm font-jax font-bold text-[var(--c-ink)]">PILOT</div>
+          <div id="cockpit-user-id" class="text-[10px] text-[var(--c-ink)]/50">ID: ---</div>
+        </div>
       </div>
     </div>
-    <button onclick="toggleTheme()" id="theme-toggle-btn" class="theme-toggle-btn" title="Hell-/Dunkelmodus umschalten">
-      <img id="darkmode-icon-img" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/ef27eb7437b4c75b65eb938a3f5d0b8f548798ce/Darkmodeicon.png" class="w-11 h-11" alt="" onerror="this.parentElement.innerText='🌙'">
-    </button>
   </div>
 
   <div class="relative z-10 flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 my-6">
@@ -1766,17 +1776,28 @@
 
   <!-- RAD DES WAHNSINNS MODAL -->
   <div id="chaos-card-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="jax-card jax-pop p-8 w-full max-w-sm text-center space-y-3 text-[var(--c-ink)]">
-      <div class="font-black text-xl tracking-wide" style="font-family: 'Comic Sans MS', 'Baloo 2', cursive;">
+    <div class="jax-pop p-8 w-full max-w-sm text-center space-y-3 relative overflow-hidden" style="background: radial-gradient(ellipse at top, #2b0f45 0%, #14081f 70%, #0a0413 100%); border: 4px solid #ff2e93; border-radius: 26px; box-shadow: 8px 8px 0 rgba(0,0,0,0.6), 0 0 30px rgba(255,46,224,0.25); color: #f4e9ff;">
+      <!-- Deko: Clowns und absurde Symbole, an den Rändern verteilt, stören den Text nicht -->
+      <div class="pointer-events-none absolute inset-0 text-2xl opacity-70" aria-hidden="true">
+        <span class="absolute" style="top:4px; left:6px; transform:rotate(180deg);">🤡</span>
+        <span class="absolute" style="top:6px; right:8px;">🎪</span>
+        <span class="absolute" style="bottom:6px; left:10px;">🃏</span>
+        <span class="absolute" style="bottom:4px; right:6px; transform:rotate(180deg);">🤡</span>
+        <span class="absolute text-lg" style="top:38px; left:-2px; transform:rotate(-25deg);">❓</span>
+        <span class="absolute text-lg" style="top:34px; right:-2px; transform:rotate(160deg);">✨</span>
+        <span class="absolute text-lg" style="bottom:36px; left:2px;">🌀</span>
+        <span class="absolute text-lg" style="bottom:32px; right:0px; transform:rotate(180deg);">⚡</span>
+      </div>
+      <div class="font-black text-xl tracking-wide relative" style="font-family: 'Comic Sans MS', 'Baloo 2', cursive;">
         <span style="color:#ff2e93;">R</span><span style="color:#ffd23f;">a</span><span style="color:#7ed957;">d</span>
         <span style="color:#3ecbff;">d</span><span style="color:#b026ff;">e</span><span style="color:#ff6a3d;">s</span>
         <span style="color:#ff2e93;">W</span><span style="color:#39ff8c;">a</span><span style="display:inline-block; transform: rotate(180deg); color:#00e5ff;">h</span><span style="color:#f5ff3d;">n</span><span style="color:#ff2ee0;">s</span><span style="color:#7ed957;">i</span><span style="color:#3ecbff;">n</span><span style="color:#ff8a3d;">n</span><span style="font-size:1.5em; color:#ff2e93; text-decoration: underline wavy #ff2e93 2px; text-underline-offset: 4px;">S</span>
       </div>
-      <div class="text-[10px] text-[var(--c-ink)]/50 -mt-1">Kleine Dinge geschehen...</div>
-      <div id="chaos-roll-intro" class="text-sm font-semibold min-h-[2.5rem] flex items-center justify-center"></div>
-      <div id="chaos-wheel-container" class="py-2"></div>
-      <div id="chaos-card-result" class="hidden"></div>
-      <div id="chaos-modal-continue" class="hidden"></div>
+      <div class="text-[10px] text-white/50 -mt-1 relative">Kleine Dinge geschehen...</div>
+      <div id="chaos-roll-intro" class="text-sm font-semibold min-h-[2.5rem] flex items-center justify-center relative"></div>
+      <div id="chaos-wheel-container" class="py-2 relative"></div>
+      <div id="chaos-card-result" class="hidden relative"></div>
+      <div id="chaos-modal-continue" class="hidden relative"></div>
     </div>
   </div>
 
