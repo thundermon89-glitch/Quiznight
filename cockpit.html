@@ -693,23 +693,29 @@
     // Rad des Wahnsinns von selbst, danach beginnt der Zähler wieder bei 0.
     window.clickGlucksradIcon = function(evt) {
       const btn = document.getElementById('glucksrad-icon-btn');
+      console.log('[Glücksrad] Klick registriert, playerId:', playerId);
       get(ref(db, 'players/' + playerId + '/glucksradClicked')).then((snap) => {
-        if (snap.val()) return; // schon geklickt - keine Funktion mehr
+        console.log('[Glücksrad] Bereits geklickt laut Firebase:', snap.val());
+        if (snap.val()) { console.log('[Glücksrad] Abbruch - schon geklickt.'); return; }
 
-        update(ref(db, 'players/' + playerId), { glucksradClicked: true });
+        update(ref(db, 'players/' + playerId), { glucksradClicked: true })
+          .then(() => console.log('[Glücksrad] "glucksradClicked" erfolgreich gesetzt.'))
+          .catch((err) => console.error('[Glücksrad] FEHLER beim Setzen:', err));
         btn.classList.add('icon-gif-clicked');
         spawnDustPoof(evt.clientX, evt.clientY);
 
         runTransaction(ref(db, 'gameState/glucksradClickCount'), (current) => (current || 0) + 1)
           .then((result) => {
             const newCount = result.snapshot.val() || 0;
+            console.log('[Glücksrad] Zähler jetzt bei:', newCount, '| Transaktion committed:', result.committed);
             if (newCount >= 3) {
               set(ref(db, 'gameState/glucksradClickCount'), 0); // Zähler beginnt wieder von vorne
               resetAllPlayersFlag('glucksradClicked'); // grüner Rahmen für alle wieder weg
               spinGlucksradWheel();
             }
-          });
-      });
+          })
+          .catch((err) => console.error('[Glücksrad] FEHLER bei der Zähler-Transaktion:', err));
+      }).catch((err) => console.error('[Glücksrad] FEHLER beim Prüfen des Status:', err));
     };
 
     // Setzt ein bestimmtes Merkmal (z.B. "schon geklickt") bei ALLEN aktiven Spielern zurück -
@@ -724,6 +730,14 @@
         update(ref(db), updates);
       });
     }
+
+    // Notfall-Hilfsmittel für die Fehlersuche: in der Browser-Konsole eintippen, um den
+    // eigenen "schon geklickt"-Status sofort zurückzusetzen, falls er aus einem früheren Test
+    // feststeckt.
+    window.debugResetMyIconFlags = function() {
+      update(ref(db, 'players/' + playerId), { glucksradClicked: false, battleIconClicked: false })
+        .then(() => console.log('[Debug] Eigene Icon-Flags zurückgesetzt. Seite neu laden oder nochmal klicken.'));
+    };
 
     function spawnDustPoof(x, y) {
       const dust = document.createElement('div');
@@ -757,22 +771,28 @@
 
     window.clickBattleIcon = function(evt) {
       const btn = document.getElementById('battle-icon-btn');
+      console.log('[Schlachtruf] Klick registriert, playerId:', playerId);
       get(ref(db, 'players/' + playerId + '/battleIconClicked')).then((snap) => {
-        if (snap.val()) return; // schon geklickt - keine Funktion mehr
+        console.log('[Schlachtruf] Bereits geklickt laut Firebase:', snap.val());
+        if (snap.val()) { console.log('[Schlachtruf] Abbruch - schon geklickt.'); return; }
 
-        update(ref(db, 'players/' + playerId), { battleIconClicked: true });
+        update(ref(db, 'players/' + playerId), { battleIconClicked: true })
+          .then(() => console.log('[Schlachtruf] "battleIconClicked" erfolgreich gesetzt.'))
+          .catch((err) => console.error('[Schlachtruf] FEHLER beim Setzen:', err));
         btn.classList.add('icon-gif-clicked');
         spawnDustPoof(evt.clientX, evt.clientY);
 
         runTransaction(ref(db, 'gameState/battleClickCount'), (current) => (current || 0) + 1)
           .then((result) => {
             const newCount = result.snapshot.val() || 0;
+            console.log('[Schlachtruf] Zähler jetzt bei:', newCount, '| Transaktion committed:', result.committed);
             if (newCount >= 3) {
               set(ref(db, 'gameState/battleClickCount'), 0); // Zähler beginnt wieder von vorne
               startBattleSelection();
             }
-          });
-      });
+          })
+          .catch((err) => console.error('[Schlachtruf] FEHLER bei der Zähler-Transaktion:', err));
+      }).catch((err) => console.error('[Schlachtruf] FEHLER beim Prüfen des Status:', err));
     };
 
     onValue(ref(db, 'gameState/battleClickCount'), (snapshot) => {
@@ -2085,12 +2105,12 @@
       <div class="w-full my-auto space-y-3">
         <div class="grid grid-cols-2 gap-4 justify-items-center max-w-[220px] mx-auto">
           <button onclick="openPaintWindow()" class="icon-gif-box" title="IcqDraw öffnen">
-            <span class="icon-gif-placeholder">🖌️</span>
+            <span class="icon-gif-placeholder">💬</span>
             <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/1b42781ed36285d696daa226a1314dac03171ea8/creative-thinking_19034744.gif" class="icon-gif-img" alt="" onerror="this.style.display='none'">
           </button>
 
           <div class="relative">
-            <button class="icon-gif-box" ondblclick="openInvaderGame()" title="Doppelklick für ein kleines Geheimspiel...">
+            <button class="icon-gif-box" onclick="openInvaderGame()" title="Klicken für ein kleines Geheimspiel...">
               <span class="icon-gif-placeholder">🚀</span>
               <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/1b42781ed36285d696daa226a1314dac03171ea8/rocket_15557778.gif" class="icon-gif-img" alt="" onerror="this.style.display='none'">
             </button>
