@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Ochs vorm Berg</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Baloo 2', sans-serif; }
+    .arena-bg { background: radial-gradient(ellipse at top, #2a1830 0%, #0a0610 70%); }
+    .jax-card {
+      background: #ffffff; border: 4px solid #1a1a2e; border-radius: 22px;
+      box-shadow: 7px 7px 0 rgba(0,0,0,0.85);
+    }
+    .jax-btn {
+      font-family: 'Baloo 2', sans-serif; border: 3px solid #1a1a2e; border-radius: 18px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85); transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+    #ochs-canvas { border: 4px solid #1a1a2e; border-radius: 14px; touch-action: none; }
+    @keyframes countdownPop {
+      0% { transform: scale(0.3); opacity: 0; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .countdown-pop { animation: countdownPop 0.5s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes titlePop {
+      0% { transform: scale(0.3); opacity: 0; }
+      60% { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .title-pop { animation: titlePop 0.6s cubic-bezier(.34,1.56,.64,1); }
+    #light-banner {
+      transition: background-color .25s ease, box-shadow .25s ease;
+    }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, get, set, update, remove, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let playerId = localStorage.getItem("quiz_player_id");
+    if (!playerId) { window.location.href = "index.html"; }
+    let isHost = false;
+    let myName = "Spieler";
+    let allPlayers = {};
+
+    // ==== SPIELFELD ====
+    const ARENA_W = 700, ARENA_H = 820;
+    const PLAYER_SIZE = 34;
+    const MOVE_SPEED = 3;
+    const FINISH_Y = 118; // darüber = Ziel erreicht
+    const DOLL_Y = 60;
+    const START_Y = 740;
+    const MOVE_TOLERANCE = 1.5; // minimale Bewegung, die bei Rotlicht noch als "erwischt" zählt
+
+    // Mauern zum Verstecken: wer sich zur Rotlicht-Phase unterhalb (aus Sicht der Puppe
+    // dahinter liegend) einer Mauer aufhält, wird nicht erwischt, selbst wenn er sich bewegt.
+    const WALLS = [
+      { x: 90, y: 430, w: 160, h: 26 },
+      { x: 450, y: 430, w: 160, h: 26 },
+      { x: 270, y: 260, w: 160, h: 26 }
+    ];
+
+    function getAllParticipantIds() {
+      return Object.keys(allPlayers).filter(id => allPlayers[id] && allPlayers[id].name);
+    }
+
+    onValue(ref(db, 'gameState'), (snap) => {
+      const gs = snap.val();
+      if (gs && gs.status && gs.status !== 'in_game') {
+        window.location.href = gs.status === 'waiting' ? "index.html" : "cockpit.html";
+      }
+    });
+
+    window.hostEndOchs = function() {
+      if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
+      set(ref(db, 'ochsState'), null);
+      update(ref(db, 'gameState'), { status: 'cockpit' });
+    };
+
+    // ==== GRÜN-/ROTLICHT-ZEITPLAN: rein zeitbasiert und für jeden Client gleich berechenbar,
+    // kein "Host muss aktiv steuern" nötig - jede grüne Phase wird kürzer (= schneller), die
+    // rote Phase bleibt konstant kurz. ====
+    const PHASE_SCHEDULE = [
+      { phase: 'green', ms: 4200 }, { phase: 'red', ms: 1700 },
+      { phase: 'green', ms: 3500 }, { phase: 'red', ms: 1600 },
+      { phase: 'green', ms: 2900 }, { phase: 'red', ms: 1500 },
+      { phase: 'green', ms: 2400 }, { phase: 'red', ms: 1500 },
+      { phase: 'green', ms: 2000 }, { phase: 'red', ms: 1400 },
+      { phase: 'green', ms: 1700 }, { phase: 'red', ms: 1400 },
+      { phase: 'green', ms: 1500 }, { phase: 'red', ms: 1300 }
+    ];
+    let roundStartedAt = null;
+
+    function getCurrentPhaseInfo(now) {
+      if (!roundStartedAt) return { phase: 'green', elapsedInPhase: 0, phaseMs: 4200, cycleIndex: 0 };
+      let elapsed = now - roundStartedAt;
+      let i = 0;
+      while (i < PHASE_SCHEDULE.length) {
+        const seg = PHASE_SCHEDULE[i % PHASE_SCHEDULE.length];
+        if (elapsed < seg.ms) return { phase: seg.phase, elapsedInPhase: elapsed, phaseMs: seg.ms, cycleIndex: i };
+        elapsed -= seg.ms;
+        i++;
+      }
+      // Zeitplan durchgelaufen: ab hier dauerhaft im schnellsten Rhythmus weiter
+      const last2 = PHASE_SCHEDULE.slice(-2);
+      const loopLen = last2[0].ms + last2[1].ms;
+      const loopElapsed = elapsed % loopLen;
+      if (loopElapsed < last2[0].ms) return { phase: 'green', elapsedInPhase: loopElapsed, phaseMs: last2[0].ms, cycleIndex: 99 };
+      return { phase: 'red', elapsedInPhase: loopElapsed - last2[0].ms, phaseMs: last2[1].ms, cycleIndex: 99 };
+    }
+
+    // ==== MELODIE: eine kurze, sich wiederholende Tonfolge, die mit jeder grünen Phase
+    // schneller wird und beim Wechsel zu Rot abrupt abbricht - das ist das Signal zum
+    // Erstarren. ====
+    let audioCtx = null;
+    let melodyTimeouts = [];
+    function stopMelody() {
+      melodyTimeouts.forEach(t => clearTimeout(t));
+      melodyTimeouts = [];
+    }
+    function playMelodyForPhase(phaseMs) {
+      stopMelody();
+      if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
+      const notes = [440, 523.25, 587.33, 659.25]; // kurze, eingängige 4-Ton-Folge
+      const noteCount = Math.max(4, Math.floor(phaseMs / 260));
+      const noteDur = phaseMs / noteCount / 1000;
+      for (let i = 0; i < noteCount; i++) {
+        const t = melodyTimeouts.length;
+        const to = setTimeout(() => {
+          if (!audioCtx) return;
+          const osc = audioCtx.createOscillator();
+          osc.type = 'square';
+          osc.frequency.value = notes[i % notes.length];
+          const gain = audioCtx.createGain();
+          const now = audioCtx.currentTime;
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.linearRampToValueAtTime(0.12, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + noteDur * 0.9);
+          osc.connect(gain); gain.connect(audioCtx.destination);
+          osc.start(now); osc.stop(now + noteDur);
+        }, i * noteDur * 1000);
+        melodyTimeouts.push(to);
+      }
+    }
+
+    // ==== EIGENE FIGUR ====
+    let my = null; // { x, y, eliminated, won }
+    let keys = { up: false, down: false, left: false, right: false };
+    let gameRunning = false;
+    let resultShown = false;
+    let posAtRedStart = null;
+    let lastPhaseSeen = null;
+
+    function initMyPlayer() {
+      const activeIds = getAllParticipantIds().sort();
+      const myIndex = Math.max(0, activeIds.indexOf(playerId));
+      const spreadW = ARENA_W - 80;
+      const x = 40 + (spreadW / Math.max(1, activeIds.length)) * myIndex + (spreadW / Math.max(1, activeIds.length) - PLAYER_SIZE) / 2;
+      my = { x: Math.max(10, x), y: START_Y, eliminated: false, won: false };
+      writeMyPlayer();
+    }
+
+    function writeMyPlayer() {
+      update(ref(db, 'ochsState/players/' + playerId), {
+        x: my.x, y: my.y, eliminated: my.eliminated, won: my.won, name: myName
+      });
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (!gameRunning || my.eliminated || my.won) return;
+      const k = e.key.toLowerCase();
+      if (e.key === 'ArrowUp' || k === 'w') { keys.up = true; e.preventDefault(); }
+      if (e.key === 'ArrowDown' || k === 's') { keys.down = true; e.preventDefault(); }
+      if (e.key === 'ArrowLeft' || k === 'a') { keys.left = true; e.preventDefault(); }
+      if (e.key === 'ArrowRight' || k === 'd') { keys.right = true; e.preventDefault(); }
+    });
+    window.addEventListener('keyup', (e) => {
+      const k = e.key.toLowerCase();
+      if (e.key === 'ArrowUp' || k === 'w') keys.up = false;
+      if (e.key === 'ArrowDown' || k === 's') keys.down = false;
+      if (e.key === 'ArrowLeft' || k === 'a') keys.left = false;
+      if (e.key === 'ArrowRight' || k === 'd') keys.right = false;
+    });
+
+    function isHiddenBehindWall(px, py) {
+      // "Hinter der Mauer" = unterhalb (näher am Start, von der Puppe oben aus gesehen
+      // dahinter liegend) UND horizontal im Schatten der Mauer.
+      for (const w of WALLS) {
+        if (px + PLAYER_SIZE > w.x && px < w.x + w.w && py > w.y && py < w.y + 90) return true;
+      }
+      return false;
+    }
+    function overlapsAnyWall(x, y) {
+      for (const w of WALLS) {
+        if (x < w.x + w.w && x + PLAYER_SIZE > w.x && y < w.y + w.h && y + PLAYER_SIZE > w.y) return true;
+      }
+      return false;
+    }
+
+    function tickMyMovement() {
+      if (!gameRunning || my.eliminated || my.won) return;
+      let dx = 0, dy = 0;
+      if (keys.up) dy -= 1;
+      if (keys.down) dy += 1;
+      if (keys.left) dx -= 1;
+      if (keys.right) dx += 1;
+      if (dx === 0 && dy === 0) return;
+      const len = Math.hypot(dx, dy);
+      dx = (dx / len) * MOVE_SPEED;
+      dy = (dy / len) * MOVE_SPEED;
+
+      let nx = Math.max(0, Math.min(ARENA_W - PLAYER_SIZE, my.x + dx));
+      let ny = Math.max(0, Math.min(ARENA_H - PLAYER_SIZE, my.y + dy));
+      if (overlapsAnyWall(nx, ny)) { nx = my.x; ny = my.y; }
+
+      my.x = nx; my.y = ny;
+      if (my.y <= FINISH_Y) {
+        my.won = true;
+        writeMyPlayer();
+        return;
+      }
+      writeMyPlayer();
+    }
+
+    // ==== PHASEN-STEUERUNG (für jeden Client gleich, rein zeitbasiert) ====
+    function phaseTick() {
+      if (!gameRunning) return;
+      const now = Date.now();
+      const info = getCurrentPhaseInfo(now);
+      const banner = document.getElementById("light-banner");
+      const dollEl = document.getElementById("doll-figure");
+
+      if (info.phase !== lastPhaseSeen) {
+        if (info.phase === 'red') {
+          posAtRedStart = my && !my.eliminated && !my.won ? { x: my.x, y: my.y } : null;
+          stopMelody();
+          dollEl.style.transform = "translateX(-50%) scaleX(-1)"; // dreht sich zu den Spielern um
+          banner.style.background = 'linear-gradient(90deg,#ff2e2e,#ff6a3d)';
+          banner.style.boxShadow = '0 0 25px rgba(255,46,46,0.6)';
+          document.getElementById("light-label").innerText = "🔴 ROTLICHT - ERSTARREN!";
+        } else {
+          dollEl.style.transform = "translateX(-50%) scaleX(1)"; // dreht sich weg
+          banner.style.background = 'linear-gradient(90deg,#39ff8c,#22c55e)';
+          banner.style.boxShadow = '0 0 25px rgba(57,255,140,0.6)';
+          document.getElementById("light-label").innerText = "🟢 GRÜNLICHT - LOS!";
+          playMelodyForPhase(info.phaseMs);
+        }
+        lastPhaseSeen = info.phase;
+      }
+
+      // Während Rotlicht: kurz vor Ende der Phase prüfen, ob ich mich bewegt habe
+      if (info.phase === 'red' && posAtRedStart && my && !my.eliminated && !my.won) {
+        const moved = Math.hypot(my.x - posAtRedStart.x, my.y - posAtRedStart.y) > MOVE_TOLERANCE;
+        if (moved && !isHiddenBehindWall(my.x, my.y)) {
+          my.eliminated = true;
+          writeMyPlayer();
+          spawnCaughtEffect(my.x + PLAYER_SIZE / 2, my.y + PLAYER_SIZE / 2);
+          posAtRedStart = null;
+        }
+      }
+
+      requestAnimationFrame(phaseTick);
+    }
+
+    function spawnCaughtEffect(x, y) {
+      const layer = document.getElementById("effect-layer");
+      const el = document.createElement('div');
+      el.style.position = 'absolute';
+      el.style.left = ((x / ARENA_W) * 100) + '%';
+      el.style.top = ((y / ARENA_H) * 100) + '%';
+      el.style.transform = 'translate(-50%,-50%)';
+      el.style.fontSize = '2.2rem';
+      el.innerText = '💥';
+      el.style.pointerEvents = 'none';
+      layer.appendChild(el);
+      setTimeout(() => el.remove(), 700);
+    }
+
+    // ==== ALLE SPIELER (aus Firebase) ====
+    let allOchsPlayers = {};
+    onValue(ref(db, 'ochsState/players'), (snap) => { allOchsPlayers = snap.val() || {}; });
+    onValue(ref(db, 'ochsState/roundStartedAt'), (snap) => { roundStartedAt = snap.val() || null; });
+
+    // ==== RENDERN ====
+    const canvas = document.getElementById("ochs-canvas");
+    const ctx = canvas.getContext("2d");
+
+    function renderFrame() {
+      ctx.fillStyle = '#7a9e4f';
+      ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+      // dezentes Gras-Raster
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      for (let gy = 0; gy < ARENA_H; gy += 34) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(ARENA_W, gy); ctx.stroke(); }
+
+      // Ziellinie
+      ctx.strokeStyle = '#ffd23f';
+      ctx.setLineDash([12, 8]);
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(0, FINISH_Y); ctx.lineTo(ARENA_W, FINISH_Y); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Mauern
+      ctx.fillStyle = '#8a6f4a';
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 2;
+      WALLS.forEach(w => { ctx.fillRect(w.x, w.y, w.w, w.h); ctx.strokeRect(w.x, w.y, w.w, w.h); });
+
+      // Spieler
+      for (const pid in allOchsPlayers) {
+        const p = allOchsPlayers[pid];
+        if (!p) continue;
+        ctx.globalAlpha = p.eliminated ? 0.3 : 1;
+        ctx.fillStyle = p.won ? '#ffd23f' : (pid === playerId ? '#3ecbff' : '#ff2e93');
+        ctx.beginPath();
+        ctx.arc(p.x + PLAYER_SIZE / 2, p.y + PLAYER_SIZE / 2, PLAYER_SIZE / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        if (!p.eliminated) {
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 10px Baloo 2, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.shadowColor = '#000'; ctx.shadowBlur = 3;
+          ctx.fillText(p.name || '', p.x + PLAYER_SIZE / 2, p.y - 6);
+          ctx.shadowBlur = 0;
+        } else {
+          ctx.font = '16px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('💀', p.x + PLAYER_SIZE / 2, p.y + PLAYER_SIZE / 2 + 6);
+        }
+      }
+    }
+
+    function gameLoop() {
+      tickMyMovement();
+      renderFrame();
+      maybeCheckGameOver();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ==== SPIELENDE ====
+    let gameOverTriggered = false;
+    function maybeCheckGameOver() {
+      if (!gameRunning || gameOverTriggered) return;
+      const activeIds = getAllParticipantIds();
+      if (activeIds.length < 1) return;
+      const winnerId = activeIds.find(id => allOchsPlayers[id] && allOchsPlayers[id].won);
+      if (winnerId) {
+        gameOverTriggered = true;
+        finishRound(winnerId, false);
+        return;
+      }
+      const stillPlaying = activeIds.filter(id => allOchsPlayers[id] && !allOchsPlayers[id].eliminated && !allOchsPlayers[id].won);
+      if (stillPlaying.length === 0 && activeIds.length > 0) {
+        gameOverTriggered = true;
+        finishRound(null, true); // alle erwischt
+      }
+    }
+
+    function finishRound(winnerId, allEliminated) {
+      if (isHost) {
+        get(ref(db, 'players/')).then((snap) => {
+          const players = snap.val() || {};
+          const updates = { 'ochsState/finished': true, 'ochsState/winnerId': winnerId || null, 'ochsState/allEliminated': !!allEliminated };
+          if (winnerId && players[winnerId]) {
+            updates['players/' + winnerId + '/score'] = (players[winnerId].score || 0) + 200;
+          }
+          if (allEliminated) {
+            getAllParticipantIds().forEach(id => {
+              if (players[id]) updates['players/' + id + '/score'] = Math.max(0, (players[id].score || 0) - 50);
+            });
+          }
+          update(ref(db), updates);
+        });
+      }
+    }
+
+    onValue(ref(db, 'ochsState/finished'), (snap) => {
+      if (snap.val() && !resultShown) {
+        resultShown = true;
+        gameRunning = false;
+        stopMelody();
+        showResultScreen();
+      }
+    });
+
+    function showResultScreen() {
+      get(ref(db, 'ochsState')).then((snap) => {
+        const st = snap.val() || {};
+        const winnerName = st.winnerId ? ((allPlayers[st.winnerId] || {}).name || 'Jemand') : null;
+        document.getElementById("play-area").classList.add("hidden");
+        const resultArea = document.getElementById("result-area");
+        resultArea.classList.remove("hidden");
+        document.getElementById("result-text").innerText = st.allEliminated
+          ? '💀 Alle wurden erwischt! Jeder verliert 50 Punkte.'
+          : '🏆 ' + winnerName + ' hat die Ziellinie erreicht und bekommt +200 Punkte!';
+        document.getElementById("my-status-text").innerText =
+          my && my.won ? '🎉 Du hast es geschafft!' : (my && my.eliminated ? '💀 Du wurdest erwischt!' : '');
+      });
+    }
+
+    // ==== START ====
+    function startCountdownThenPlay() {
+      const overlay = document.getElementById("countdown-overlay");
+      const numberEl = document.getElementById("countdown-number");
+      overlay.classList.remove("hidden");
+      let n = 3;
+      numberEl.innerText = n;
+      const iv = setInterval(() => {
+        n--;
+        if (n > 0) {
+          numberEl.innerText = n;
+          numberEl.classList.remove("countdown-pop"); void numberEl.offsetWidth; numberEl.classList.add("countdown-pop");
+        } else {
+          clearInterval(iv);
+          overlay.classList.add("hidden");
+          gameRunning = true;
+          lastPhaseSeen = null;
+          if (isHost) {
+            const startAt = Date.now();
+            set(ref(db, 'ochsState/roundStartedAt'), startAt).then(() => { roundStartedAt = startAt; });
+          }
+          requestAnimationFrame(gameLoop);
+          requestAnimationFrame(phaseTick);
+        }
+      }, 700);
+    }
+
+    window.onload = function() {
+      if (!playerId) return;
+      get(ref(db, 'players/')).then((allSnap) => {
+        allPlayers = allSnap.val() || {};
+        const data = allPlayers[playerId];
+        myName = (data && data.name) || 'Spieler';
+        if (data && data.name && (data.name.includes("Host") || data.name.includes("Admin"))) {
+          isHost = true;
+          document.getElementById("host-end-btn")?.classList.remove("hidden");
+        }
+        document.getElementById("player-info-name").innerText = myName;
+
+        initMyPlayer();
+        startCountdownThenPlay();
+      });
+    };
+  </script>
+</head>
+<body class="arena-bg text-white min-h-screen flex flex-col items-center justify-center p-4 overflow-hidden relative select-none">
+
+  <button id="host-end-btn" onclick="hostEndOchs()" class="hidden fixed bottom-4 right-4 z-30 py-3 px-4 jax-btn bg-[#ff2e93] text-white font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/></svg> Spiel beenden & zurück ins Cockpit
+  </button>
+
+  <div id="countdown-overlay" class="hidden fixed inset-0 bg-black/85 z-[90] flex flex-col items-center justify-center">
+    <div id="countdown-number" class="countdown-pop font-jax text-9xl font-extrabold text-[#39ff8c]" style="text-shadow: 4px 4px 0 #08150a, -4px -4px 0 #08150a, 4px -4px 0 #08150a, -4px 4px 0 #08150a;">3</div>
+    <div class="text-sm text-white/60 mt-4">Ochs vorm Berg, fertig machen!</div>
+  </div>
+
+  <div id="play-area" class="relative z-10 text-center w-full max-w-3xl">
+    <h1 class="font-jax text-2xl md:text-4xl font-extrabold text-[#39ff8c] title-pop mb-1" style="text-shadow: 3px 3px 0 #08150a, -3px -3px 0 #08150a, 3px -3px 0 #08150a, -3px 3px 0 #08150a;">
+      🧍 Ochs vorm Berg 🧍
+    </h1>
+    <p class="text-xs text-white/60 mb-2">Pfeiltasten/WASD zum Bewegen · bei Rotlicht sofort erstarren oder hinter einer Mauer verstecken!</p>
+
+    <div id="light-banner" class="rounded-xl py-2 mb-2 font-jax font-extrabold text-lg" style="background: linear-gradient(90deg,#39ff8c,#22c55e);">
+      <span id="light-label">🟢 GRÜNLICHT - LOS!</span>
+    </div>
+
+    <div class="relative inline-block" style="width: 100%; max-width: 560px;">
+      <div id="doll-figure" class="absolute z-20" style="left: 50%; top: -34px; transform: translateX(-50%); transition: transform .35s ease;">
+        <div style="width: 26px; height: 26px; border-radius: 50%; background: #ffe0c2; margin: 0 auto; border: 2px solid #1a1a2e;"></div>
+        <div style="width: 46px; height: 54px; background: #ff2e93; border: 2px solid #1a1a2e; border-radius: 8px 8px 0 0; margin-top: -2px;"></div>
+      </div>
+      <canvas id="ochs-canvas" width="700" height="820" class="w-full h-auto block rounded-lg"></canvas>
+      <div id="effect-layer" class="absolute inset-0 pointer-events-none"></div>
+    </div>
+
+    <div class="text-xs text-white/50 mt-2">Du bist: <span id="player-info-name" class="font-bold text-[#39ff8c]">...</span></div>
+  </div>
+
+  <div id="result-area" class="hidden relative z-10 jax-card p-8 max-w-sm text-center space-y-4 text-[#1a1a2e]">
+    <div class="text-5xl">🧍</div>
+    <p id="result-text" class="text-sm font-bold"></p>
+    <p id="my-status-text" class="text-sm"></p>
+    <div class="text-xs text-[#1a1a2e]/50">Der Moderator bringt euch gleich zurück ins Cockpit...</div>
+  </div>
+
+</body>
+</html>
