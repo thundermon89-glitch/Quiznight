@@ -91,16 +91,9 @@
     }
     .theme-toggle-btn:hover { transform: scale(1.08); }
     #darkmode-icon-img {
-      /* Dicke schwarze Kontur direkt am (transparenten) Icon, statt eines Rahmens drumherum -
-         mehrere versetzte Schlagschatten übereinander ergeben eine durchgehende Kontur.
-         Der letzte Schlagschatten ist der übliche nach-unten-rechts-Schatten wie bei allen
-         anderen Elementen (jax-card/jax-chip/jax-btn) auch. */
-      filter:
-        drop-shadow(1.5px 0 0 #000) drop-shadow(-1.5px 0 0 #000)
-        drop-shadow(0 1.5px 0 #000) drop-shadow(0 -1.5px 0 #000)
-        drop-shadow(1.1px 1.1px 0 #000) drop-shadow(-1.1px 1.1px 0 #000)
-        drop-shadow(1.1px -1.1px 0 #000) drop-shadow(-1.1px -1.1px 0 #000)
-        drop-shadow(3px 3px 0 rgba(0,0,0,0.85));
+      /* Kein Rahmen/Kontur mehr ums Icon - nur noch der übliche nach-unten-rechts-Schatten
+         wie bei allen anderen Elementen (jax-card/jax-chip/jax-btn) auch. */
+      filter: drop-shadow(3px 3px 0 rgba(0,0,0,0.85));
     }
 
     @keyframes wiggle { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
@@ -111,6 +104,40 @@
     .crack-path {
       stroke-dasharray: 220; stroke-dashoffset: 220;
       filter: drop-shadow(0 0 1.5px currentColor);
+    }
+
+    /* ==== Einheitliche quadratische Icon-Kacheln mit runden Ecken (IcqDraw, Space Invaders,
+       Glücksrad) - das GIF selbst ist standardmäßig unsichtbar und wird erst bei Hover
+       eingeblendet. ==== */
+    .icon-gif-box {
+      width: 84px; height: 84px; border-radius: 20px; border: 4px solid var(--c-ink);
+      background: rgba(0,0,0,0.18); overflow: hidden; cursor: pointer; position: relative;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.5); transition: transform .12s ease, border-color .2s ease;
+      flex-shrink: 0;
+    }
+    .icon-gif-box:hover { transform: translate(-2px,-2px); }
+    .icon-gif-box.icon-gif-clicked { border-color: #22c55e; }
+    .icon-gif-img {
+      width: 100%; height: 100%; object-fit: cover;
+      opacity: 0; transition: opacity .2s ease;
+    }
+    .icon-gif-box:hover .icon-gif-img { opacity: 1; }
+    .icon-gif-placeholder {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      font-size: 2rem; opacity: 0.6; pointer-events: none; transition: opacity .2s ease;
+    }
+    .icon-gif-box:hover .icon-gif-placeholder { opacity: 0; }
+
+    /* Kleine Staubwolke, die beim Klick aufs Glücksrad-Icon verpufft */
+    @keyframes dustPoof {
+      0% { transform: scale(0.3); opacity: 0.9; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+    .dust-poof {
+      position: fixed; width: 60px; height: 60px; margin-left: -30px; margin-top: -30px;
+      border-radius: 50%; pointer-events: none; z-index: 200;
+      background: radial-gradient(circle, rgba(200,200,200,0.9) 0%, rgba(200,200,200,0.4) 60%, transparent 100%);
+      animation: dustPoof 0.5s ease-out forwards;
     }
 
     @keyframes bounceIn { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
@@ -237,7 +264,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, set, update, onValue, get, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getDatabase, ref, set, update, onValue, get, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     // ==== EIGENES ICON-SET (keine Emojis - schlichte, dicke Outline-SVGs) ====
     const ICONS = {
@@ -545,6 +572,317 @@
       modal.classList.remove('hidden');
     }
     window.closeLatePenaltyModal = () => document.getElementById('late-penalty-modal')?.classList.add('hidden');
+
+    // ==== Portiert aus dem Admin-Cockpit, damit auch von hier aus (Glücksrad-Icon, 3-Klick-
+    // Mechanik) tatsächlich am Rad gedreht und die Punkte verteilt werden können. ====
+    function generateClues(pid, sortedIds, players) {
+      const rank = sortedIds.indexOf(pid) + 1;
+      const n = sortedIds.length;
+      const pool = [];
+      if (rank > 1) pool.push('Du bist nicht Erster.');
+      if (rank < n) pool.push('Du bist nicht Letzter.');
+      if (rank > 1) pool.push('Du liegst hinter ' + players[sortedIds[rank - 2]].name + '.');
+      if (rank < n) pool.push('Du liegst vor ' + players[sortedIds[rank]].name + '.');
+      if (rank > 2) pool.push('Mindestens zwei Personen liegen vor dir.');
+      if (rank < n - 1) pool.push('Mindestens zwei Personen liegen hinter dir.');
+      if (pool.length === 0) pool.push('Die Truhe ist ratlos - du bist ganz allein im Rennen.');
+      return shuffle(pool).slice(0, Math.min(2, pool.length));
+    }
+
+    function computeWheelEffect(effect, activeIds, players) {
+      const score = (id) => (players[id] && players[id].score) || 0;
+      const nameOf = (id) => (players[id] || {}).name || 'Jemand';
+      const updates = {};
+      let description = '';
+
+      if (effect.id === 'e1') {
+        activeIds.forEach(id => { updates['players/' + id + '/score'] = score(id) + 50; });
+        description = 'Alle bekommen +50 Punkte!';
+      } else if (effect.id === 'e2') {
+        const sorted = [...activeIds].sort((a, b) => score(b) - score(a));
+        const leader = sorted[0], last = sorted[sorted.length - 1];
+        if (leader && last && leader !== last) {
+          const amount = Math.min(100, score(leader));
+          updates['players/' + leader + '/score'] = score(leader) - amount;
+          updates['players/' + last + '/score'] = score(last) + amount;
+          description = nameOf(leader) + ' gibt ' + amount + ' Punkte an ' + nameOf(last) + ' ab!';
+        } else description = 'Niemand zum Umverteilen da...';
+      } else if (effect.id === 'e4') {
+        const lucky = pickRandom(activeIds);
+        updates['players/' + lucky + '/score'] = score(lucky) + 150;
+        description = nameOf(lucky) + ' bekommt +150 Punkte!';
+      } else if (effect.id === 'e5') {
+        const unlucky = pickRandom(activeIds);
+        updates['players/' + unlucky + '/score'] = Math.max(0, score(unlucky) - 80);
+        description = nameOf(unlucky) + ' verliert 80 Punkte!';
+      } else if (effect.id === 'e7') {
+        if (activeIds.length >= 2) {
+          const [thief, victim] = shuffle(activeIds);
+          const amount = 20 + Math.floor(Math.random() * 41);
+          updates['players/' + thief + '/score'] = score(thief) + amount;
+          updates['players/' + victim + '/score'] = Math.max(0, score(victim) - amount);
+          description = nameOf(thief) + ' klaut ' + amount + ' Punkte von ' + nameOf(victim) + '!';
+        } else description = 'Niemand zum Bestehlen da...';
+      } else if (effect.id === 'e8') {
+        description = 'Fehlalarm! Nichts passiert... diesmal.';
+      } else if (effect.id === 'e9') {
+        const sorted = [...activeIds].sort((a, b) => score(b) - score(a));
+        description = sorted.map((id, i) => (i + 1) + '. ' + nameOf(id) + ' (' + score(id) + ' Pkt.)').join('  ·  ');
+      } else if (effect.id === 'e10') {
+        const victim = pickRandom(activeIds);
+        updates['players/' + victim + '/score'] = Math.max(0, score(victim) - 472);
+        description = 'Großer Einbruch! 472 Punkte wurden bei ' + nameOf(victim) + ' geklaut!';
+      } else if (effect.id === 'e11') {
+        if (activeIds.length >= 2) {
+          const [thief, victim] = shuffle(activeIds);
+          updates['players/' + thief + '/score'] = score(thief) + 45;
+          updates['players/' + victim + '/score'] = Math.max(0, score(victim) - 45);
+          description = 'Taschendiebstahl! Das Schlitzohr ' + nameOf(thief) + ' hat ' + nameOf(victim) + ' 45 Punkte mitgehen lassen!';
+        } else description = 'Niemand zum Bestehlen da...';
+      } else if (effect.id === 'e12') {
+        const winner = pickRandom(activeIds);
+        updates['players/' + winner + '/score'] = score(winner) + 200;
+        description = 'Schönheitswettbewerb gewonnen! 200 Punkte gehen an ' + nameOf(winner) + '!';
+      } else if (effect.id === 'e13') {
+        const winner = pickRandom(activeIds);
+        updates['players/' + winner + '/score'] = score(winner) + 100;
+        description = 'IP mit Port korrekt abgeschrieben! 100 Punkte gehen an ' + nameOf(winner) + '!';
+      } else if (effect.id === 'e14') {
+        const unlucky = pickRandom(activeIds);
+        updates['players/' + unlucky + '/score'] = Math.max(0, score(unlucky) - 80);
+        description = 'G-Taste statt F-Taste gedrückt! ' + nameOf(unlucky) + ' verliert 80 Punkte!';
+      } else if (effect.id === 'e15') {
+        const unlucky = pickRandom(activeIds);
+        updates['players/' + unlucky + '/score'] = Math.max(0, score(unlucky) - 150);
+        description = 'Widerworte gegen den Admin! ' + nameOf(unlucky) + ' verliert 150 Punkte!';
+      } else if (effect.id === 'e16') {
+        description = 'Vergessen, die Zähne zu putzen! Zum Glück ohne Folgen für den Punktestand...';
+      }
+      return { updates, description };
+    }
+
+    // Wird ausgelöst, sobald drei Spieler auf das Glücksrad-Icon geklickt haben - dreht das
+    // echte Rad des Wahnsinns, genau wie beim Admin, nur eben von Spielerseite losgetreten.
+    function spinGlucksradWheel() {
+      get(ref(db, 'players/')).then((playersSnap) => {
+        const players = playersSnap.val() || {};
+        const activeIds = getActiveIds(players);
+        if (activeIds.length === 0) return;
+
+        const effect = pickRandom(WHEEL_EFFECTS);
+        const { updates, description } = computeWheelEffect(effect, activeIds, players);
+
+        const afterScores = { ...players };
+        Object.keys(updates).forEach(path => {
+          const [, pid] = path.split('/');
+          afterScores[pid] = { ...afterScores[pid], score: updates[path] };
+        });
+        const rankedIds = [...activeIds].sort((a, b) => (afterScores[b].score || 0) - (afterScores[a].score || 0));
+        activeIds.forEach(id => {
+          updates['players/' + id + '/riddleClues'] = generateClues(id, rankedIds, afterScores);
+        });
+
+        update(ref(db), updates).then(() => {
+          set(ref(db, 'wheelState'), { effectId: effect.id, description, rolledAt: Date.now() });
+        });
+      });
+    }
+
+    // Klick aufs Glücksrad-Icon: einmalig pro Spieler, danach dauerhaft grün umrandet und
+    // ohne weitere Funktion. Bei drei Klicks unterschiedlicher Spieler dreht sich das echte
+    // Rad des Wahnsinns von selbst, danach beginnt der Zähler wieder bei 0.
+    window.clickGlucksradIcon = function(evt) {
+      const btn = document.getElementById('glucksrad-icon-btn');
+      get(ref(db, 'players/' + playerId + '/glucksradClicked')).then((snap) => {
+        if (snap.val()) return; // schon geklickt - keine Funktion mehr
+
+        update(ref(db, 'players/' + playerId), { glucksradClicked: true });
+        btn.classList.add('icon-gif-clicked');
+        spawnDustPoof(evt.clientX, evt.clientY);
+
+        runTransaction(ref(db, 'gameState/glucksradClickCount'), (current) => (current || 0) + 1)
+          .then((result) => {
+            const newCount = result.snapshot.val() || 0;
+            if (newCount >= 3) {
+              set(ref(db, 'gameState/glucksradClickCount'), 0); // Zähler beginnt wieder von vorne
+              spinGlucksradWheel();
+            }
+          });
+      });
+    };
+
+    function spawnDustPoof(x, y) {
+      const dust = document.createElement('div');
+      dust.className = 'dust-poof';
+      dust.style.left = x + 'px';
+      dust.style.top = y + 'px';
+      document.body.appendChild(dust);
+      setTimeout(() => dust.remove(), 550);
+    }
+
+    // Live-Anzeige des Zählers für alle Spieler, und eigenen grünen Rahmen beim Neuladen
+    // wiederherstellen, falls schon geklickt wurde.
+    onValue(ref(db, 'gameState/glucksradClickCount'), (snapshot) => {
+      const label = document.getElementById('glucksrad-count-label');
+      if (label) label.innerText = (snapshot.val() || 0) + '/3';
+    });
+    get(ref(db, 'players/' + playerId + '/glucksradClicked')).then((snap) => {
+      if (snap.val()) {
+        const btn = document.getElementById('glucksrad-icon-btn');
+        if (btn) btn.classList.add('icon-gif-clicked');
+      }
+    });
+
+    // ==== SCHLACHT-ICON: drei Klicks lösen eines der drei Minispiele aus (zufällig, max. 3x
+    // pro Spiel insgesamt), mit gemeinsamer "Alle bereit?"-Vorbereitung davor. ====
+    const BATTLE_GAMES = {
+      connect4: { label: 'Vier Gewinnt', activeGame: 'vier-gewinnt.html', stateKey: 'connect4State', resetVal: null },
+      snake: { label: 'Snake', activeGame: 'snake.html', stateKey: 'snakeState', resetVal: { status: 'active', startedAt: 0, scores: null, finished: null } },
+      goldregen: { label: 'Goldregen', activeGame: 'goldregenState_placeholder', stateKey: 'goldregenState', resetVal: { status: 'active', startedAt: 0, coins: null, tally: null } }
+    };
+    BATTLE_GAMES.goldregen.activeGame = 'goldregen.html';
+
+    window.clickBattleIcon = function(evt) {
+      const btn = document.getElementById('battle-icon-btn');
+      get(ref(db, 'players/' + playerId + '/battleIconClicked')).then((snap) => {
+        if (snap.val()) return; // schon geklickt - keine Funktion mehr
+
+        update(ref(db, 'players/' + playerId), { battleIconClicked: true });
+        btn.classList.add('icon-gif-clicked');
+        spawnDustPoof(evt.clientX, evt.clientY);
+
+        runTransaction(ref(db, 'gameState/battleClickCount'), (current) => (current || 0) + 1)
+          .then((result) => {
+            const newCount = result.snapshot.val() || 0;
+            if (newCount >= 3) {
+              set(ref(db, 'gameState/battleClickCount'), 0); // Zähler beginnt wieder von vorne
+              startBattleSelection();
+            }
+          });
+      });
+    };
+
+    onValue(ref(db, 'gameState/battleClickCount'), (snapshot) => {
+      const label = document.getElementById('battle-count-label');
+      if (label) label.innerText = (snapshot.val() || 0) + '/3';
+    });
+    get(ref(db, 'players/' + playerId + '/battleIconClicked')).then((snap) => {
+      if (snap.val()) {
+        const btn = document.getElementById('battle-icon-btn');
+        if (btn) btn.classList.add('icon-gif-clicked');
+      }
+    });
+
+    // Wählt eines der Minispiele, die noch nicht 3x gespielt wurden, zufällig aus - oder
+    // zeigt die Spaß-Meldung, falls schon alle ihr Kontingent aufgebraucht haben.
+    function startBattleSelection() {
+      get(ref(db, 'gameState/minigamePlayCounts')).then((snap) => {
+        const counts = snap.val() || {};
+        const available = Object.keys(BATTLE_GAMES).filter(k => (counts[k] || 0) < 3);
+
+        if (available.length === 0) {
+          const myName = (document.getElementById('cockpit-user-name')?.innerText || 'Jemand').trim();
+          set(ref(db, 'gameState/battleNoGamesEvent'), { playerName: myName, at: Date.now() });
+          return;
+        }
+
+        const chosenKey = available[Math.floor(Math.random() * available.length)];
+        set(ref(db, 'gameState/battlePrepEvent'), { gameKey: chosenKey, chosenAt: Date.now(), readyPlayers: {} });
+      });
+    }
+
+    let lastSeenBattlePrepAt = null;
+    onValue(ref(db, 'gameState/battlePrepEvent'), (snapshot) => {
+      const ev = snapshot.val();
+      const modal = document.getElementById('battle-prep-modal');
+      if (!ev || !ev.gameKey) { modal.classList.add('hidden'); lastSeenBattlePrepAt = null; return; }
+
+      const readyPlayers = ev.readyPlayers || {};
+      const readyCount = Object.keys(readyPlayers).length;
+
+      document.getElementById('battle-prep-gamename').innerText = '🎲 Ausgelost: ' + (BATTLE_GAMES[ev.gameKey]?.label || ev.gameKey);
+      document.getElementById('battle-prep-ready-count').innerText = readyCount + ' bereit...';
+
+      const iAmReady = !!readyPlayers[playerId];
+      const readyBtn = document.getElementById('battle-prep-ready-btn');
+      readyBtn.disabled = iAmReady;
+      readyBtn.style.opacity = iAmReady ? '0.5' : '1';
+      readyBtn.innerText = iAmReady ? '⏳ Warte auf die anderen...' : '⚔️ Bereit!';
+
+      modal.classList.remove('hidden');
+
+      // Sobald wirklich alle aktiven Spieler bereit sind, startet EIN Client (deterministisch
+      // der mit der "kleinsten" Spieler-ID) das eigentliche Minispiel - verhindert, dass
+      // mehrere Clients gleichzeitig versuchen zu starten.
+      if (ev.chosenAt !== lastSeenBattlePrepAt) lastSeenBattlePrepAt = ev.chosenAt;
+      get(ref(db, 'players/')).then((playersSnap) => {
+        const players = playersSnap.val() || {};
+        const activeIds = getActiveIds(players);
+        const allReady = activeIds.length > 0 && activeIds.every(id => readyPlayers[id]);
+        if (!allReady) return;
+        const lowestId = [...activeIds].sort()[0];
+        if (playerId !== lowestId) return; // nur EIN Client führt den eigentlichen Start aus
+        launchBattleGame(ev.gameKey);
+      });
+    });
+
+    window.clickBattleReady = function() {
+      update(ref(db, 'gameState/battlePrepEvent/readyPlayers'), { [playerId]: true });
+    };
+
+    function launchBattleGame(gameKey) {
+      const game = BATTLE_GAMES[gameKey];
+      if (!game) return;
+      set(ref(db, 'gameState/battlePrepEvent'), null); // Vorbereitungs-Fenster für alle schließen
+
+      set(ref(db, game.stateKey), game.resetVal).then(() => {
+        set(ref(db, 'gameState'), {
+          status: 'in_game',
+          activeGame: game.activeGame,
+          startTime: Date.now()
+        }).then(() => {
+          runTransaction(ref(db, 'gameState/minigamePlayCounts/' + gameKey), (current) => (current || 0) + 1)
+            .then(() => {
+              maybeAwardMinigameCompletionBonus();
+            });
+        });
+      });
+    }
+
+    // Wenn danach ALLE drei Minispiele ihr 3x-Kontingent erreicht haben, bekommt jeder
+    // Spieler einmalig 300 Bonuspunkte.
+    function maybeAwardMinigameCompletionBonus() {
+      get(ref(db, 'gameState')).then((snap) => {
+        const gs = snap.val() || {};
+        if (gs.minigameBonusGiven) return;
+        const counts = gs.minigamePlayCounts || {};
+        const allMaxed = Object.keys(BATTLE_GAMES).every(k => (counts[k] || 0) >= 3);
+        if (!allMaxed) return;
+
+        update(ref(db, 'gameState'), { minigameBonusGiven: true });
+        get(ref(db, 'players/')).then((playersSnap) => {
+          const players = playersSnap.val() || {};
+          const activeIds = getActiveIds(players);
+          const updates = {};
+          activeIds.forEach(id => {
+            updates['players/' + id + '/score'] = (players[id].score || 0) + 300;
+          });
+          update(ref(db), updates);
+        });
+      });
+    }
+
+    // "Kein Spiel mehr übrig"-Spaßmeldung für alle anzeigen
+    let lastSeenBattleNoGamesAt = null;
+    onValue(ref(db, 'gameState/battleNoGamesEvent'), (snapshot) => {
+      const ev = snapshot.val();
+      if (!ev || !ev.at || ev.at === lastSeenBattleNoGamesAt) return;
+      if (Date.now() - ev.at > 20000) return; // nur wirklich frische Meldungen anzeigen
+      lastSeenBattleNoGamesAt = ev.at;
+      document.getElementById('battle-nogames-text').innerText =
+        'Spieler ' + ev.playerName + ' möchte bitte aus dem Spieleparadies - Jürgens Gebrauchtwagenmarkt, aus der Altölabteilung - abgeholt werden.';
+      document.getElementById('battle-nogames-modal').classList.remove('hidden');
+    });
 
     function showWheelSpin(ws) {
       const modal = document.getElementById("chaos-card-modal");
@@ -1727,31 +2065,51 @@
     <div class="jax-card-dark p-6 flex flex-col items-center justify-between text-center space-y-4">
       <div class="w-full my-auto space-y-3">
         <div class="flex items-center justify-center gap-4">
-          <button onclick="openPaintWindow()" class="flex flex-col items-center gap-1 group">
-            <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/MS_Paint_%281995%29.svg"
-              class="group-hover:scale-110 transition-transform drop-shadow-[2px_2px_0_rgba(0,0,0,0.5)]"
-              style="width:72px;height:72px;"
-              onerror="this.style.display='none'" alt="">
+          <div class="flex flex-col items-center gap-1">
+            <button onclick="openPaintWindow()" class="icon-gif-box" title="IcqDraw öffnen">
+              <span class="icon-gif-placeholder">🖌️</span>
+              <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/1b42781ed36285d696daa226a1314dac03171ea8/creative-thinking_19034744.gif" class="icon-gif-img" alt="" onerror="this.style.display='none'">
+            </button>
             <span class="text-[11px] font-jax font-extrabold text-white/90 tracking-wide">IcqDraw</span>
-          </button>
-          <div class="relative w-28 h-28 z-30">
-          <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/cpu.png" alt="" ondblclick="openInvaderGame()" title="Doppelklick für ein kleines Geheimspiel..."
-            class="w-28 h-28 cursor-pointer opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
-          <div id="invader-bubble" class="hidden fixed z-[90]" style="left: 50%; top: 50%; transform: translate(-50%, -50%);">
-            <div class="bg-[#0a0e17] border-[3px] border-[var(--c-ink)] rounded-2xl p-3 shadow-2xl relative" style="width: 300px;">
-              <button onclick="closeInvaderGame()" class="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[var(--c-pink)] text-white font-black text-sm flex items-center justify-center border-2 border-[var(--c-ink)] z-10">✕</button>
-              <div class="flex items-center justify-between mb-1.5 px-1">
-                <span class="text-[10px] text-[var(--c-green)] font-jax font-bold" id="invader-lives">❤️❤️❤️</span>
-                <span class="text-[10px] text-[#a78bfa] font-jax font-bold" id="invader-level">Level 1</span>
-                <span class="text-[10px] text-[var(--c-yellow)] font-jax font-bold" id="invader-score">0 Pkt.</span>
+          </div>
+
+          <div class="relative">
+            <button class="icon-gif-box" ondblclick="openInvaderGame()" title="Doppelklick für ein kleines Geheimspiel...">
+              <span class="icon-gif-placeholder">🚀</span>
+              <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/1b42781ed36285d696daa226a1314dac03171ea8/rocket_15557778.gif" class="icon-gif-img" alt="" onerror="this.style.display='none'">
+            </button>
+            <div id="invader-bubble" class="hidden fixed z-[90]" style="left: 50%; top: 50%; transform: translate(-50%, -50%);">
+              <div class="bg-[#0a0e17] border-[3px] border-[var(--c-ink)] rounded-2xl p-3 shadow-2xl relative" style="width: 300px;">
+                <button onclick="closeInvaderGame()" class="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[var(--c-pink)] text-white font-black text-sm flex items-center justify-center border-2 border-[var(--c-ink)] z-10">✕</button>
+                <div class="flex items-center justify-between mb-1.5 px-1">
+                  <span class="text-[10px] text-[var(--c-green)] font-jax font-bold" id="invader-lives">❤️❤️❤️</span>
+                  <span class="text-[10px] text-[#a78bfa] font-jax font-bold" id="invader-level">Level 1</span>
+                  <span class="text-[10px] text-[var(--c-yellow)] font-jax font-bold" id="invader-score">0 Pkt.</span>
+                </div>
+                <canvas id="invader-canvas" width="280" height="260" class="w-full rounded-lg" style="background:#000; image-rendering: pixelated;"></canvas>
+                <div class="text-[9px] text-white/40 text-center mt-1.5">← → bewegen · Leertaste schießen</div>
+                <div id="invader-highscore-box" class="mt-2 text-[10px] text-white/70"></div>
               </div>
-              <canvas id="invader-canvas" width="280" height="260" class="w-full rounded-lg" style="background:#000; image-rendering: pixelated;"></canvas>
-              <div class="text-[9px] text-white/40 text-center mt-1.5">← → bewegen · Leertaste schießen</div>
-              <div id="invader-highscore-box" class="mt-2 text-[10px] text-white/70"></div>
             </div>
           </div>
+
+          <div class="flex flex-col items-center gap-1">
+            <button id="glucksrad-icon-btn" onclick="clickGlucksradIcon(event)" class="icon-gif-box" title="Gemeinsam mit anderen das Glücksrad in Bewegung bringen...">
+              <span class="icon-gif-placeholder">🎡</span>
+              <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/1b42781ed36285d696daa226a1314dac03171ea8/glucksrad.gif" class="icon-gif-img" alt="" onerror="this.style.display='none'">
+            </button>
+            <span id="glucksrad-count-label" class="text-[11px] font-jax font-extrabold text-white/90 tracking-wide">0/3</span>
+          </div>
+
+          <div class="flex flex-col items-center gap-1">
+            <button id="battle-icon-btn" onclick="clickBattleIcon(event)" class="icon-gif-box" title="Gemeinsam mit anderen ein Minispiel heraufbeschwören...">
+              <span class="icon-gif-placeholder">⚔️</span>
+              <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/7e38b6e0668d2b94433c547cf72f898fd620634d/adventure-game.gif" class="icon-gif-img" alt="" onerror="this.style.display='none'">
+            </button>
+            <span id="battle-count-label" class="text-[11px] font-jax font-extrabold text-white/90 tracking-wide">0/3</span>
           </div>
         </div>
+
         <button id="ready-toggle-btn" onclick="toggleReadyStatus()" class="w-full py-6 bg-[var(--c-pink)] jax-btn text-white font-jax font-extrabold text-xl flex items-center justify-center gap-2 jax-wiggle">
           <span><svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 0-5 5v3.5c0 .8-.3 1.6-.9 2.2L4 16h16l-2.1-2.3a3 3 0 0 1-.9-2.2V8a5 5 0 0 0-5-5z"/><path d="M9.5 19a2.5 2.5 0 0 0 5 0"/></svg></span> <span>JETZT BEREIT MELDEN!</span>
         </button>
@@ -1889,6 +2247,26 @@
       <div class="font-jax font-extrabold text-2xl">Was war das?!</div>
       <p class="text-sm">Und warum fehlen dir jetzt auf einmal <b>50 Punkte</b>?</p>
       <button onclick="closeDarkEggPopup()" class="jax-btn bg-[var(--c-pink)] text-white font-jax font-bold px-6 py-3 w-full">Na gut...</button>
+    </div>
+  </div>
+
+  <!-- "Rüstung anlegen"-Vorbereitung, bevor das per drei Klicks ausgeloste Minispiel startet -->
+  <div id="battle-prep-modal" class="hidden fixed inset-0 z-[999] flex items-center justify-center bg-black/80">
+    <div class="jax-card jax-pop p-8 max-w-sm text-center space-y-4 text-[var(--c-ink)]">
+      <div class="text-5xl">⚔️</div>
+      <div class="font-jax font-extrabold text-xl">Zieh deine Rüstung an, schärfe dein Schwert, lade deine Uzi und vergiss deine Fliegenklatsche nicht!</div>
+      <div id="battle-prep-gamename" class="text-sm font-bold text-[var(--c-purple)]"></div>
+      <div id="battle-prep-ready-count" class="text-xs text-[var(--c-ink)]/60"></div>
+      <button id="battle-prep-ready-btn" onclick="clickBattleReady()" class="jax-btn bg-[var(--c-green)] text-[var(--c-ink)] font-jax font-bold px-6 py-3 w-full">⚔️ Bereit!</button>
+    </div>
+  </div>
+
+  <!-- Meldung, falls schon alle Minispiele ihr 3x-Kontingent aufgebraucht haben -->
+  <div id="battle-nogames-modal" class="hidden fixed inset-0 z-[999] flex items-center justify-center bg-black/80">
+    <div class="jax-card jax-pop p-8 max-w-sm text-center space-y-4 text-[var(--c-ink)]">
+      <div class="text-5xl">🚗💨</div>
+      <p id="battle-nogames-text" class="text-sm font-semibold"></p>
+      <button onclick="document.getElementById('battle-nogames-modal').classList.add('hidden')" class="jax-btn bg-[var(--c-yellow)] text-[var(--c-ink)] font-jax font-bold px-6 py-3 w-full">Alles klar</button>
     </div>
   </div>
 </body>
