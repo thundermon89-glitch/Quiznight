@@ -709,6 +709,19 @@
       });
     };
 
+    window.launchPanzer = function() {
+      if (!confirm("Panzerschlacht starten? Alle Spieler werden mitgenommen und steuern je einen Panzer.")) return;
+      set(ref(db, 'panzerState'), null).then(() => {
+        set(ref(db, 'gameState'), {
+          status: 'in_game',
+          activeGame: 'panzer.html',
+          startTime: Date.now()
+        }).then(() => {
+          logEvent('🎖️ Panzerschlacht gestartet');
+        });
+      });
+    };
+
     window.launchSiegerehrung = function() {
       if (!confirm("Zur Siegerehrung wechseln? Alle Spieler werden jetzt dorthin mitgenommen.")) return;
       set(ref(db, 'gameState'), {
@@ -1167,6 +1180,7 @@
           <button onclick="launchConnect4()" class="mini-launch-btn" style="background:linear-gradient(135deg,#ec4899,#ef4444);">🔴 Vier Gewinnt</button>
           <button onclick="launchSnake()" class="mini-launch-btn" style="background:linear-gradient(135deg,#22c55e,#34d399);">🐍 Snake</button>
           <button onclick="launchGoldregen()" class="mini-launch-btn" style="background:linear-gradient(135deg,#eab308,#fde047);">🪙 Goldregen</button>
+          <button onclick="launchPanzer()" class="mini-launch-btn" style="background:linear-gradient(135deg,#4d5f2f,#7a8f4a);">🎖️ Panzerschlacht</button>
         </div>
 
         <button onclick="launchSiegerehrung()" class="admin-btn admin-btn-gold" style="background:linear-gradient(135deg,#d97706,#fbbf24);">

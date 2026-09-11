@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hirnschmalz-Arena - Panzerschlacht</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Baloo 2', sans-serif; }
+    .arena-bg { background: radial-gradient(ellipse at top, #2b3a1f 0%, #0a0d06 70%); }
+    .jax-card {
+      background: #ffffff; border: 4px solid #1a1a2e; border-radius: 22px;
+      box-shadow: 7px 7px 0 rgba(0,0,0,0.85);
+    }
+    .jax-btn {
+      font-family: 'Baloo 2', sans-serif; border: 3px solid #1a1a2e; border-radius: 18px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85); transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+    #panzer-canvas { background: #3d5a2c; border: 4px solid #1a1a2e; border-radius: 14px; touch-action: none; }
+    @keyframes countdownPop {
+      0% { transform: scale(0.3); opacity: 0; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .countdown-pop { animation: countdownPop 0.5s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes titlePop {
+      0% { transform: scale(0.3); opacity: 0; }
+      60% { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .title-pop { animation: titlePop 0.6s cubic-bezier(.34,1.56,.64,1); }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, get, set, update, remove, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let playerId = localStorage.getItem("quiz_player_id");
+    if (!playerId) { window.location.href = "index.html"; }
+    let isHost = false;
+    let myName = "Spieler";
+    let allPlayers = {};
+
+    // ==== ARENA-MASSE ====
+    const ARENA_W = 900, ARENA_H = 540;
+    const TANK_SIZE = 42;
+    const WALL_W = 260, WALL_H = 260; // "soll schon groß sein, sodass die Panzer drum rum fahren müssen"
+    const WALL_X = ARENA_W / 2 - WALL_W / 2, WALL_Y = ARENA_H / 2 - WALL_H / 2;
+    const MOVE_SPEED = 3.2;
+    const BULLET_SPEED = 9;
+    const BULLET_LIFETIME_MS = 1800;
+    const SHOOT_COOLDOWN_MS = 500;
+
+    // Feste Startpunkte an den Rändern, möglichst weit auseinander und von der Wand entfernt
+    const SPAWN_POINTS = [
+      { x: 50, y: 50, angle: 45 },
+      { x: ARENA_W - 90, y: 50, angle: 135 },
+      { x: 50, y: ARENA_H - 90, angle: -45 },
+      { x: ARENA_W - 90, y: ARENA_H - 90, angle: -135 },
+      { x: ARENA_W / 2 - 20, y: 20, angle: 90 },
+      { x: ARENA_W / 2 - 20, y: ARENA_H - 60, angle: -90 }
+    ];
+
+    const PANZER_IMG_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/74c358da0a62eaf05646fc02faed88d16369ffa9/Panzer.png";
+    const WALL_IMG_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/74c358da0a62eaf05646fc02faed88d16369ffa9/peace-graffiti-.png";
+
+    const panzerImg = new Image(); panzerImg.src = PANZER_IMG_URL;
+    const wallImg = new Image(); wallImg.src = WALL_IMG_URL;
+
+    onValue(ref(db, 'players/'), (snap) => { allPlayers = snap.val() || {}; });
+
+    // NAVIGATION: sobald der Host alle zurückholt, folgen alle automatisch
+    onValue(ref(db, 'gameState'), (snap) => {
+      const gs = snap.val();
+      if (gs && gs.status && gs.status !== 'in_game') {
+        window.location.href = gs.status === 'waiting' ? "index.html" : "cockpit.html";
+      }
+    });
+
+    window.hostEndPanzer = function() {
+      if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
+      set(ref(db, 'panzerState'), null);
+      update(ref(db, 'gameState'), { status: 'cockpit' });
+    };
+
+    function getActivePlayerIds() {
+      return Object.keys(allPlayers).filter(id => {
+        const n = allPlayers[id] && allPlayers[id].name;
+        return n && !n.includes("Host") && !n.includes("Admin");
+      });
+    }
+
+    function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+      return ax < bx + bw && ax + aw > bx && ay < by + ah && ay + ah > by;
+    }
+    function overlapsWall(x, y, size) {
+      return rectsOverlap(x, y, size, size, WALL_X, WALL_Y, WALL_W, WALL_H);
+    }
+
+    // ==== EIGENER PANZER (lokal gesteuert, regelmäßig nach Firebase geschrieben) ====
+    let my = null; // { x, y, angle, alive }
+    let keys = { up: false, down: false, left: false, right: false };
+    let lastShotAt = 0;
+    let myBulletCounter = 0;
+    let gameRunning = false;
+    let iAmDead = false;
+    let resultShown = false;
+
+    function initMyTank() {
+      const activeIds = getActivePlayerIds().sort(); // feste, für alle gleiche Reihenfolge
+      const myIndex = Math.max(0, activeIds.indexOf(playerId));
+      const spawn = SPAWN_POINTS[myIndex % SPAWN_POINTS.length];
+      my = { x: spawn.x, y: spawn.y, angle: spawn.angle, alive: true };
+      iAmDead = false;
+      resultShown = false;
+      writeMyTank();
+    }
+
+    function writeMyTank() {
+      update(ref(db, 'panzerState/tanks/' + playerId), {
+        x: my.x, y: my.y, angle: my.angle, alive: my.alive, name: myName
+      });
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (!gameRunning || iAmDead) return;
+      if (e.key === 'ArrowUp') { keys.up = true; e.preventDefault(); }
+      if (e.key === 'ArrowDown') { keys.down = true; e.preventDefault(); }
+      if (e.key === 'ArrowLeft') { keys.left = true; e.preventDefault(); }
+      if (e.key === 'ArrowRight') { keys.right = true; e.preventDefault(); }
+      if (e.code === 'Space') { e.preventDefault(); tryShoot(); }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowUp') keys.up = false;
+      if (e.key === 'ArrowDown') keys.down = false;
+      if (e.key === 'ArrowLeft') keys.left = false;
+      if (e.key === 'ArrowRight') keys.right = false;
+    });
+
+    function tryShoot() {
+      const now = Date.now();
+      if (now - lastShotAt < SHOOT_COOLDOWN_MS) return;
+      lastShotAt = now;
+      myBulletCounter++;
+      const bulletId = playerId + '_b' + myBulletCounter;
+      const rad = my.angle * Math.PI / 180;
+      set(ref(db, 'panzerState/bullets/' + bulletId), {
+        x: my.x + TANK_SIZE / 2, y: my.y + TANK_SIZE / 2,
+        angle: my.angle, ownerId: playerId, ownerName: myName, firedAt: now
+      });
+      // Eigenes Geschoss nach Ablauf seiner Lebenszeit selbst wieder aufräumen
+      setTimeout(() => remove(ref(db, 'panzerState/bullets/' + bulletId)), BULLET_LIFETIME_MS + 200);
+    }
+
+    function tickMyMovement() {
+      if (!gameRunning || iAmDead || !my) return;
+      let dx = 0, dy = 0, newAngle = my.angle;
+      if (keys.up) { dy = -MOVE_SPEED; newAngle = 0; }
+      else if (keys.down) { dy = MOVE_SPEED; newAngle = 180; }
+      else if (keys.left) { dx = -MOVE_SPEED; newAngle = -90; }
+      else if (keys.right) { dx = MOVE_SPEED; newAngle = 90; }
+      if (dx === 0 && dy === 0) return;
+
+      let nx = Math.max(0, Math.min(ARENA_W - TANK_SIZE, my.x + dx));
+      let ny = Math.max(0, Math.min(ARENA_H - TANK_SIZE, my.y + dy));
+      // Wand blockiert Bewegung wie eine feste Mauer - kein Durchfahren möglich
+      if (overlapsWall(nx, ny, TANK_SIZE)) { nx = my.x; ny = my.y; }
+
+      my.x = nx; my.y = ny; my.angle = newAngle;
+      writeMyTank();
+    }
+
+    // ==== ALLE PANZER & GESCHOSSE (aus Firebase gelesen, fürs Zeichnen und für die eigene
+    // Treffer-Prüfung - jeder Client prüft nur, ob ER SELBST von einem fremden Geschoss
+    // getroffen wird, das hält es einfach und robust). ====
+    let allTanks = {};
+    let allBullets = {};
+    onValue(ref(db, 'panzerState/tanks'), (snap) => { allTanks = snap.val() || {}; });
+    onValue(ref(db, 'panzerState/bullets'), (snap) => { allBullets = snap.val() || {}; });
+
+    function checkIfImHit() {
+      if (!gameRunning || iAmDead || !my) return;
+      const now = Date.now();
+      for (const bid in allBullets) {
+        const b = allBullets[bid];
+        if (!b || b.ownerId === playerId) continue;
+        const age = now - b.firedAt;
+        if (age < 0 || age > BULLET_LIFETIME_MS) continue;
+        const dist = age / 1000 * BULLET_SPEED * 60; // Strecke, die das Geschoss seit dem Abschuss zurückgelegt hat
+        const rad = b.angle * Math.PI / 180;
+        const bx = b.x + Math.sin(rad) * dist;
+        const by = b.y - Math.cos(rad) * dist;
+        if (overlapsWall(bx - 3, by - 3, 6)) continue; // Geschoss steckt in der Wand fest
+        const hit = bx > my.x && bx < my.x + TANK_SIZE && by > my.y && by < my.y + TANK_SIZE;
+        if (hit) {
+          iAmDead = true;
+          my.alive = false;
+          writeMyTank();
+          runTransaction(ref(db, 'panzerState/kills/' + b.ownerId), (c) => (c || 0) + 1);
+          break;
+        }
+      }
+    }
+
+    // ==== RENDERN ====
+    const canvas = document.getElementById("panzer-canvas");
+    const ctx = canvas.getContext("2d");
+
+    function drawTank(t, isMe) {
+      ctx.save();
+      ctx.translate(t.x + TANK_SIZE / 2, t.y + TANK_SIZE / 2);
+      ctx.rotate(t.angle * Math.PI / 180);
+      if (!t.alive) ctx.globalAlpha = 0.25;
+      if (panzerImg.complete && panzerImg.naturalWidth > 0) {
+        ctx.drawImage(panzerImg, -TANK_SIZE / 2, -TANK_SIZE / 2, TANK_SIZE, TANK_SIZE);
+      } else {
+        ctx.fillStyle = isMe ? '#7ed957' : '#ff2e93';
+        ctx.fillRect(-TANK_SIZE / 2, -TANK_SIZE / 2, TANK_SIZE, TANK_SIZE);
+      }
+      ctx.restore();
+      if (t.alive) {
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px Baloo 2, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 3;
+        ctx.fillText(t.name || '', t.x + TANK_SIZE / 2, t.y - 6);
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    function renderFrame() {
+      ctx.clearRect(0, 0, ARENA_W, ARENA_H);
+      // Boden-Textur (dezentes Gitter)
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      for (let gx = 0; gx < ARENA_W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, ARENA_H); ctx.stroke(); }
+      for (let gy = 0; gy < ARENA_H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(ARENA_W, gy); ctx.stroke(); }
+
+      // Wand in der Mitte
+      if (wallImg.complete && wallImg.naturalWidth > 0) {
+        ctx.drawImage(wallImg, WALL_X, WALL_Y, WALL_W, WALL_H);
+      } else {
+        ctx.fillStyle = '#8a8a8a';
+        ctx.fillRect(WALL_X, WALL_Y, WALL_W, WALL_H);
+      }
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(WALL_X, WALL_Y, WALL_W, WALL_H);
+
+      // Alle Panzer
+      for (const pid in allTanks) {
+        if (pid === playerId) continue;
+        drawTank(allTanks[pid], false);
+      }
+      if (my) drawTank({ ...my, name: myName }, true);
+
+      // Geschosse
+      const now = Date.now();
+      ctx.fillStyle = '#ffd23f';
+      for (const bid in allBullets) {
+        const b = allBullets[bid];
+        if (!b) continue;
+        const age = now - b.firedAt;
+        if (age < 0 || age > BULLET_LIFETIME_MS) continue;
+        const dist = age / 1000 * BULLET_SPEED * 60;
+        const rad = b.angle * Math.PI / 180;
+        const bx = b.x + Math.sin(rad) * dist;
+        const by = b.y - Math.cos(rad) * dist;
+        if (overlapsWall(bx - 3, by - 3, 6)) continue;
+        ctx.beginPath();
+        ctx.arc(bx, by, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function gameLoop() {
+      tickMyMovement();
+      checkIfImHit();
+      renderFrame();
+      maybeCheckGameOver();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ==== SPIELENDE: sobald nur noch ein (oder gar kein) Panzer übrig ist ====
+    let gameOverTriggered = false;
+    function maybeCheckGameOver() {
+      if (!gameRunning || gameOverTriggered) return;
+      const activeIds = getActivePlayerIds();
+      if (activeIds.length < 2) return; // Solospiel macht hier keinen Sinn geprüft
+      const aliveIds = activeIds.filter(id => allTanks[id] && allTanks[id].alive !== false);
+      if (aliveIds.length <= 1) {
+        gameOverTriggered = true;
+        finishRound(aliveIds[0] || null);
+      }
+    }
+
+    function finishRound(winnerId) {
+      if (isHost) {
+        get(ref(db, 'players/')).then((snap) => {
+          const players = snap.val() || {};
+          const updates = { 'panzerState/finished': true, 'panzerState/winnerId': winnerId || null };
+          if (winnerId && players[winnerId]) {
+            updates['players/' + winnerId + '/score'] = (players[winnerId].score || 0) + 150;
+          }
+          update(ref(db), updates);
+        });
+      }
+    }
+
+    onValue(ref(db, 'panzerState/finished'), (snap) => {
+      if (snap.val() && !resultShown) {
+        resultShown = true;
+        gameRunning = false;
+        showResultScreen();
+      }
+    });
+
+    function showResultScreen() {
+      get(ref(db, 'panzerState/winnerId')).then((snap) => {
+        const winnerId = snap.val();
+        const winnerName = winnerId ? ((allPlayers[winnerId] || {}).name || 'Jemand') : null;
+        document.getElementById("play-area").classList.add("hidden");
+        const resultArea = document.getElementById("result-area");
+        resultArea.classList.remove("hidden");
+        document.getElementById("result-text").innerText = winnerName
+          ? '🏆 ' + winnerName + ' hat als letzter Panzer überlebt und bekommt +150 Punkte!'
+          : 'Alle Panzer wurden zerstört - unentschieden!';
+        document.getElementById("my-status-text").innerText = iAmDead ? '💥 Du wurdest getroffen!' : (winnerId === playerId ? '🎉 Du hast gewonnen!' : '');
+      });
+    }
+
+    // ==== START DER RUNDE (Countdown, dann Bewegung freigeben) ====
+    function startCountdownThenPlay() {
+      const overlay = document.getElementById("countdown-overlay");
+      const numberEl = document.getElementById("countdown-number");
+      overlay.classList.remove("hidden");
+      let n = 3;
+      numberEl.innerText = n;
+      const iv = setInterval(() => {
+        n--;
+        if (n > 0) {
+          numberEl.innerText = n;
+          numberEl.classList.remove("countdown-pop"); void numberEl.offsetWidth; numberEl.classList.add("countdown-pop");
+        } else {
+          clearInterval(iv);
+          overlay.classList.add("hidden");
+          gameRunning = true;
+          requestAnimationFrame(gameLoop);
+        }
+      }, 700);
+    }
+
+    window.onload = function() {
+      if (!playerId) return;
+      get(ref(db, 'players/' + playerId)).then((snap) => {
+        const data = snap.val();
+        myName = (data && data.name) || 'Panzer-Pilot';
+        if (data && data.name && (data.name.includes("Host") || data.name.includes("Admin"))) {
+          isHost = true;
+          document.getElementById("host-end-btn")?.classList.remove("hidden");
+        }
+        document.getElementById("player-info-name").innerText = myName;
+
+        initMyTank();
+        startCountdownThenPlay();
+      });
+    };
+  </script>
+</head>
+<body class="arena-bg text-white min-h-screen flex flex-col items-center justify-center p-4 overflow-hidden relative select-none">
+
+  <button id="host-end-btn" onclick="hostEndPanzer()" class="hidden fixed bottom-4 right-4 z-30 py-3 px-4 jax-btn bg-[#ff2e93] text-white font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/></svg> Spiel beenden & zurück ins Cockpit
+  </button>
+
+  <div id="countdown-overlay" class="hidden fixed inset-0 bg-black/85 z-[90] flex flex-col items-center justify-center">
+    <div id="countdown-number" class="countdown-pop font-jax text-9xl font-extrabold text-[#7ed957]" style="text-shadow: 4px 4px 0 #08150a, -4px -4px 0 #08150a, 4px -4px 0 #08150a, -4px 4px 0 #08150a;">3</div>
+    <div class="text-sm text-white/60 mt-4">Panzer, fertig machen!</div>
+  </div>
+
+  <div id="play-area" class="relative z-10 text-center w-full max-w-4xl">
+    <h1 class="font-jax text-2xl md:text-4xl font-extrabold text-[#7ed957] title-pop mb-1" style="text-shadow: 3px 3px 0 #08150a, -3px -3px 0 #08150a, 3px -3px 0 #08150a, -3px 3px 0 #08150a;">
+      🎖️ Panzerschlacht 🎖️
+    </h1>
+    <p class="text-xs text-white/60 mb-3">Pfeiltasten zum Fahren · Leertaste zum Schießen · ein Leben, keine zweite Chance!</p>
+    <canvas id="panzer-canvas" width="900" height="540" class="w-full h-auto max-w-full mx-auto block"></canvas>
+    <div class="text-xs text-white/50 mt-2">Du bist: <span id="player-info-name" class="font-bold text-[#7ed957]">...</span></div>
+  </div>
+
+  <div id="result-area" class="hidden relative z-10 jax-card p-8 max-w-sm text-center space-y-4 text-[#1a1a2e]">
+    <div class="text-5xl">🎖️</div>
+    <p id="result-text" class="text-sm font-bold"></p>
+    <p id="my-status-text" class="text-sm"></p>
+    <div class="text-xs text-[#1a1a2e]/50">Der Moderator bringt euch gleich zurück ins Cockpit...</div>
+  </div>
+
+</body>
+</html>
