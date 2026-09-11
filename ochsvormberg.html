@@ -69,14 +69,14 @@
     // Acht kleinere, bruchstückhaft über das Feld verteilte Mauerstücke statt weniger großer -
     // jedes bietet nur ein bis zwei Spielern wirklich Deckung.
     const WALLS = [
-      { x: 30, y: 630, w: 100, h: 24 },
-      { x: 540, y: 600, w: 100, h: 24 },
-      { x: 230, y: 570, w: 100, h: 24 },
-      { x: 420, y: 490, w: 100, h: 24 },
-      { x: 70, y: 440, w: 100, h: 24 },
-      { x: 300, y: 370, w: 100, h: 24 },
-      { x: 500, y: 300, w: 100, h: 24 },
-      { x: 120, y: 240, w: 100, h: 24 }
+      { x: 30, y: 630, w: 68, h: 24 },
+      { x: 540, y: 600, w: 68, h: 24 },
+      { x: 230, y: 570, w: 68, h: 24 },
+      { x: 420, y: 490, w: 68, h: 24 },
+      { x: 70, y: 440, w: 68, h: 24 },
+      { x: 300, y: 370, w: 68, h: 24 },
+      { x: 500, y: 300, w: 68, h: 24 },
+      { x: 120, y: 240, w: 68, h: 24 }
     ];
 
     function getAllParticipantIds() {
@@ -104,11 +104,22 @@
       const schedule = [];
       const rounds = 16;
       for (let i = 0; i < rounds; i++) {
-        const progress = i / (rounds - 1); // 0 (Anfang) bis 1 (Ende) - Tendenz schneller
-        const greenMin = 900 + (1 - progress) * 1600;
-        const greenMax = 2000 + (1 - progress) * 2600;
-        const greenMs = Math.round(greenMin + Math.random() * (greenMax - greenMin));
-        const redMs = Math.round(1200 + Math.random() * 700);
+        const progress = i / (rounds - 1); // 0 (Anfang) bis 1 (Ende) - nur eine leichte Tendenz
+
+        // Breite Basis-Spanne für ALLE Runden (nicht nur am Anfang) - mal länger, mal kürzer,
+        // nicht nur ein stures "immer schneller". Der Fortschritt verschiebt die Mitte der
+        // Spanne nur sanft nach unten, statt sie hart einzuengen.
+        const center = 2600 - progress * 1300;
+        let greenMs = Math.round(center + (Math.random() - 0.5) * 2400);
+        greenMs = Math.max(700, greenMs);
+
+        // Hin und wieder eine echte Überraschungsrunde: auffällig lang ODER auffällig kurz,
+        // unabhängig davon, wie weit die Runde schon fortgeschritten ist.
+        if (Math.random() < 0.22) {
+          greenMs = Math.random() < 0.5 ? Math.round(600 + Math.random() * 500) : Math.round(3600 + Math.random() * 1800);
+        }
+
+        const redMs = Math.round(1000 + Math.random() * 1400); // deutlich mehr Streuung als vorher
         schedule.push({ phase: 'green', ms: greenMs });
         schedule.push({ phase: 'red', ms: redMs });
       }
@@ -241,6 +252,21 @@
       return false;
     }
 
+    // Andere Spieler blockieren jetzt wie kleine Hindernisse - genau das sorgt dafür, dass an
+    // einer schmalen Mauer wirklich nur Platz für zwei ist: steht einer mittig, bleibt für den
+    // zweiten kein Raum mehr übrig.
+    function overlapsAnyOtherPlayer(x, y) {
+      const myCenterX = x + PLAYER_SIZE / 2, myCenterY = y + PLAYER_SIZE / 2;
+      for (const pid in allOchsPlayers) {
+        if (pid === playerId) continue;
+        const p = allOchsPlayers[pid];
+        if (!p || p.eliminated || p.won) continue;
+        const dist = Math.hypot(myCenterX - (p.x + PLAYER_SIZE / 2), myCenterY - (p.y + PLAYER_SIZE / 2));
+        if (dist < PLAYER_SIZE * 0.85) return true;
+      }
+      return false;
+    }
+
     function tickMyMovement() {
       if (!gameRunning || my.eliminated || my.won) return;
       let dx = 0, dy = 0;
@@ -256,6 +282,7 @@
       let nx = Math.max(0, Math.min(ARENA_W - PLAYER_SIZE, my.x + dx));
       let ny = Math.max(0, Math.min(ARENA_H - PLAYER_SIZE, my.y + dy));
       if (overlapsAnyWall(nx, ny)) { nx = my.x; ny = my.y; }
+      if (overlapsAnyOtherPlayer(nx, ny)) { nx = my.x; ny = my.y; }
 
       my.x = nx; my.y = ny;
       if (my.y <= FINISH_Y) {
@@ -306,18 +333,43 @@
       requestAnimationFrame(phaseTick);
     }
 
+    const EXPLOSION_IMG_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/abf15658d4cff651ecd9ba993c5426a8d1033571/kevin-altman-explosion-boss-port.gif";
+
     function spawnCaughtEffect(x, y) {
       const layer = document.getElementById("effect-layer");
-      const el = document.createElement('div');
-      el.style.position = 'absolute';
-      el.style.left = ((x / ARENA_W) * 100) + '%';
-      el.style.top = ((y / ARENA_H) * 100) + '%';
-      el.style.transform = 'translate(-50%,-50%)';
-      el.style.fontSize = '2.2rem';
-      el.innerText = '💥';
-      el.style.pointerEvents = 'none';
-      layer.appendChild(el);
-      setTimeout(() => el.remove(), 700);
+      const img = document.createElement('img');
+      img.src = EXPLOSION_IMG_URL;
+      img.style.position = 'absolute';
+      img.style.left = ((x / ARENA_W) * 100) + '%';
+      img.style.top = ((y / ARENA_H) * 100) + '%';
+      img.style.width = '14%';
+      img.style.transform = 'translate(-50%,-50%)';
+      img.style.pointerEvents = 'none';
+      layer.appendChild(img);
+      setTimeout(() => img.remove(), 700);
+      playChildLaughSound();
+    }
+
+    // Ein bisschen unheimliches, mechanisches Kinderkichern beim Erwischtwerden - passend zur
+    // gruseligen Puppen-Stimmung, komplett selbst synthetisiert statt einer echten Audiodatei.
+    function playChildLaughSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const gigglePitches = [780, 900, 820, 980, 860, 1050];
+        gigglePitches.forEach((freq, i) => {
+          const startAt = ctx.currentTime + i * 0.11;
+          const osc = ctx.createOscillator();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, startAt);
+          osc.frequency.exponentialRampToValueAtTime(freq * 1.3, startAt + 0.07);
+          const gain = ctx.createGain();
+          gain.gain.setValueAtTime(0.0001, startAt);
+          gain.gain.linearRampToValueAtTime(0.13, startAt + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.1);
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.start(startAt); osc.stop(startAt + 0.12);
+        });
+      } catch (e) {}
     }
 
     // ==== ALLE SPIELER (aus Firebase) ====
@@ -550,7 +602,7 @@
     </div>
 
     <div class="relative inline-block" style="width: 100%; max-width: 560px;">
-      <div id="doll-figure" class="absolute z-20" style="left: 50%; top: -40px; transform: translateX(-50%); transition: transform .35s ease; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));">
+      <div id="doll-figure" class="absolute z-20" style="left: 50%; top: 8%; transform: translateX(-50%); transition: transform .35s ease; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));">
         <div style="position: relative; width: 30px; margin: 0 auto;">
           <div style="position:absolute; left:-9px; top:6px; width:12px; height:16px; border-radius:50%; background:#ffe0c2; border:2px solid #1a1a2e;"></div>
           <div style="position:absolute; right:-9px; top:6px; width:12px; height:16px; border-radius:50%; background:#ffe0c2; border:2px solid #1a1a2e;"></div>
