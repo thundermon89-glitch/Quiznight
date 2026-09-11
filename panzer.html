@@ -53,10 +53,15 @@
 
     // ==== ARENA-MASSE ====
     const ARENA_W = 900, ARENA_H = 540;
-    const TANK_SIZE = 42;
-    const WALL_SIZE = 380; // Durchmesser der kreisförmigen Wand, so groß wie das Bild
-    const WALL_RADIUS = WALL_SIZE / 2;
-    const WALL_CX = ARENA_W / 2, WALL_CY = ARENA_H / 2; // Kreis-Mittelpunkt
+    const TANK_SIZE = 42; // Kollisions-Fußabdruck bleibt quadratisch (einfacher & fair)
+    const TANK_DRAW_W = 40, TANK_DRAW_LEN = 58; // das Bild selbst wird sichtbar in die Länge gezogen
+    // Statt einer einzelnen großen Wand jetzt drei kleinere, diagonal über den Bildschirm
+    // verteilte Wände mit Lücken dazwischen, durch die ein Panzer hindurchfahren kann.
+    const WALLS = [
+      { cx: 260, cy: 150, r: 62, glow: '#00e5ff' },
+      { cx: 450, cy: 270, r: 62, glow: '#ff2ee0' },
+      { cx: 640, cy: 390, r: 62, glow: '#39ff8c' }
+    ];
     const MOVE_SPEED = 3.2;
     const BULLET_SPEED = 6.5;
     const BULLET_MAX_BOUNCES = 3;
@@ -111,21 +116,34 @@
       });
     }
 
+    // Für die Panzerschlacht gilt bewusst: JEDER spielt mit, auch der Admin/Host - anders als
+    // bei den Quiz-Runden gibt's hier keinen Grund, warum er nur zuschauen sollte.
+    function getAllParticipantIds() {
+      return Object.keys(allPlayers).filter(id => allPlayers[id] && allPlayers[id].name);
+    }
+
     function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
       return ax < bx + bw && ax + aw > bx && ay < by + ah && ay + ah > by;
     }
     // Wand ist jetzt ein Kreis (Durchmesser = Bildgröße) statt eines Vierecks - Kollision über
     // den nächstgelegenen Punkt des Quadrats (Panzer) zum Kreismittelpunkt.
     function overlapsWall(x, y, size) {
-      const closestX = Math.max(x, Math.min(WALL_CX, x + size));
-      const closestY = Math.max(y, Math.min(WALL_CY, y + size));
-      const dx = WALL_CX - closestX, dy = WALL_CY - closestY;
-      return (dx * dx + dy * dy) < (WALL_RADIUS * WALL_RADIUS);
+      for (const w of WALLS) {
+        const closestX = Math.max(x, Math.min(w.cx, x + size));
+        const closestY = Math.max(y, Math.min(w.cy, y + size));
+        const dx = w.cx - closestX, dy = w.cy - closestY;
+        if ((dx * dx + dy * dy) < (w.r * w.r)) return true;
+      }
+      return false;
     }
-    // Für Geschosse (Punkt statt Quadrat): direkter Abstand zum Kreismittelpunkt
-    function pointInWall(px, py) {
-      const dx = px - WALL_CX, dy = py - WALL_CY;
-      return (dx * dx + dy * dy) < (WALL_RADIUS * WALL_RADIUS);
+    // Für Geschosse (Punkt statt Quadrat): direkter Abstand zum jeweiligen Kreismittelpunkt.
+    // Gibt die getroffene Wand zurück (für die Abprall-Richtung) oder null, falls keine.
+    function findWallAtPoint(px, py) {
+      for (const w of WALLS) {
+        const dx = px - w.cx, dy = py - w.cy;
+        if ((dx * dx + dy * dy) < (w.r * w.r)) return w;
+      }
+      return null;
     }
 
     // ==== EIGENER PANZER (lokal gesteuert, regelmäßig nach Firebase geschrieben) ====
@@ -138,7 +156,7 @@
     let resultShown = false;
 
     function initMyTank() {
-      const activeIds = getActivePlayerIds().sort(); // feste, für alle gleiche Reihenfolge
+      const activeIds = getAllParticipantIds().sort(); // feste, für alle gleiche Reihenfolge - Admin spielt hier mit
       const myIndex = Math.max(0, activeIds.indexOf(playerId));
       const spawn = SPAWN_POINTS[myIndex % SPAWN_POINTS.length];
       my = { x: spawn.x, y: spawn.y, angle: spawn.angle, alive: true, lives: START_LIVES };
@@ -203,8 +221,9 @@
     // (v' = v - 2*(v·n)*n) - das ergibt einen realistischen, winkeltreuen Abprall statt nur
     // grob geschätzt "die nächstgelegene Kante".
     function bounceOffWallIfNeeded(bl) {
-      if (!pointInWall(bl.x, bl.y)) return false;
-      let nx = bl.x - WALL_CX, ny = bl.y - WALL_CY;
+      const w = findWallAtPoint(bl.x, bl.y);
+      if (!w) return false;
+      let nx = bl.x - w.cx, ny = bl.y - w.cy;
       const len = Math.hypot(nx, ny) || 1;
       nx /= len; ny /= len;
 
@@ -214,8 +233,8 @@
 
       // Kugel exakt auf den Kreisrand (plus etwas Puffer) zurücksetzen, damit sie nicht
       // sofort wieder als "drin" erkannt wird und mehrfach hintereinander abprallt
-      bl.x = WALL_CX + nx * (WALL_RADIUS + 4);
-      bl.y = WALL_CY + ny * (WALL_RADIUS + 4);
+      bl.x = w.cx + nx * (w.r + 4);
+      bl.y = w.cy + ny * (w.r + 4);
       return true;
     }
 
@@ -327,6 +346,7 @@
         const hit = b.x > my.x && b.x < my.x + TANK_SIZE && b.y > my.y && b.y < my.y + TANK_SIZE;
         if (hit) {
           remove(ref(db, 'panzerState/bullets/' + bid)); // Geschoss ist nach dem Treffer weg
+          spawnExplosion(my.x + TANK_SIZE / 2, my.y + TANK_SIZE / 2, TANK_SIZE * 1.3); // explodiert IMMER sofort bei Treffer, egal wie oft sie schon abgeprallt ist
           my.lives = Math.max(0, (my.lives ?? START_LIVES) - 1);
           if (my.lives <= 0) {
             iAmDead = true;
@@ -369,7 +389,8 @@
       ctx.rotate(t.angle * Math.PI / 180);
       if (!t.alive) ctx.globalAlpha = 0.25;
       if (panzerImg.complete && panzerImg.naturalWidth > 0) {
-        ctx.drawImage(panzerImg, -TANK_SIZE / 2, -TANK_SIZE / 2, TANK_SIZE, TANK_SIZE);
+        // Bild bewusst länger als breit gezeichnet (Fahrtrichtung = Länge)
+        ctx.drawImage(panzerImg, -TANK_DRAW_W / 2, -TANK_DRAW_LEN / 2, TANK_DRAW_W, TANK_DRAW_LEN);
       } else {
         ctx.fillStyle = isMe ? '#7ed957' : '#ff2e93';
         ctx.fillRect(-TANK_SIZE / 2, -TANK_SIZE / 2, TANK_SIZE, TANK_SIZE);
@@ -402,24 +423,41 @@
       for (let gx = 0; gx < ARENA_W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, ARENA_H); ctx.stroke(); }
       for (let gy = 0; gy < ARENA_H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(ARENA_W, gy); ctx.stroke(); }
 
-      // Wand in der Mitte: kreisförmig zugeschnitten (durchsichtige Ecken), passend zur
-      // kreisförmigen Kollision
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(WALL_CX, WALL_CY, WALL_RADIUS, 0, Math.PI * 2);
-      ctx.clip();
-      if (wallImg.complete && wallImg.naturalWidth > 0) {
-        ctx.drawImage(wallImg, WALL_CX - WALL_RADIUS, WALL_CY - WALL_RADIUS, WALL_SIZE, WALL_SIZE);
-      } else {
-        ctx.fillStyle = '#8a8a8a';
-        ctx.fillRect(WALL_CX - WALL_RADIUS, WALL_CY - WALL_RADIUS, WALL_SIZE, WALL_SIZE);
+      // Drei kleinere, diagonal verteilte Wände statt einer großen - jede mit einem
+      // pulsierenden Leucht-Schein im Hintergrund, kreisförmig zugeschnitten (durchsichtige
+      // Ecken), passend zur kreisförmigen Kollision, mit Lücken dazwischen zum Durchfahren.
+      const glowPulse = 0.55 + 0.35 * Math.sin(Date.now() / 450);
+      for (const w of WALLS) {
+        // Leucht-Schein im Hintergrund
+        const grad = ctx.createRadialGradient(w.cx, w.cy, w.r * 0.5, w.cx, w.cy, w.r * 1.7);
+        grad.addColorStop(0, w.glow + 'aa');
+        grad.addColorStop(1, w.glow + '00');
+        ctx.globalAlpha = glowPulse;
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(w.cx, w.cy, w.r * 1.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(w.cx, w.cy, w.r, 0, Math.PI * 2);
+        ctx.clip();
+        if (wallImg.complete && wallImg.naturalWidth > 0) {
+          ctx.drawImage(wallImg, w.cx - w.r, w.cy - w.r, w.r * 2, w.r * 2);
+        } else {
+          ctx.fillStyle = '#8a8a8a';
+          ctx.fillRect(w.cx - w.r, w.cy - w.r, w.r * 2, w.r * 2);
+        }
+        ctx.restore();
+        ctx.strokeStyle = w.glow;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = w.glow; ctx.shadowBlur = 10 * glowPulse;
+        ctx.beginPath();
+        ctx.arc(w.cx, w.cy, w.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
       }
-      ctx.restore();
-      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(WALL_CX, WALL_CY, WALL_RADIUS, 0, Math.PI * 2);
-      ctx.stroke();
 
       // Alle Panzer
       for (const pid in allTanks) {
@@ -459,7 +497,7 @@
     let gameOverTriggered = false;
     function maybeCheckGameOver() {
       if (!gameRunning || gameOverTriggered) return;
-      const activeIds = getActivePlayerIds();
+      const activeIds = getAllParticipantIds();
       if (activeIds.length < 2) return; // Solospiel macht hier keinen Sinn geprüft
       const aliveIds = activeIds.filter(id => allTanks[id] && allTanks[id].alive !== false);
       if (aliveIds.length <= 1) {
@@ -526,8 +564,13 @@
 
     window.onload = function() {
       if (!playerId) return;
-      get(ref(db, 'players/' + playerId)).then((snap) => {
-        const data = snap.val();
+      // Erst die KOMPLETTE Spielerliste laden und garantiert abwarten, bevor der eigene
+      // Startpunkt berechnet wird - vorher lief das parallel zum separaten Live-Listener und
+      // konnte bei mehreren gleichzeitig ladenden Spielern alle auf denselben Index (0)
+      // zurückfallen lassen, wodurch sie sich alle am selben Punkt stapelten.
+      get(ref(db, 'players/')).then((allSnap) => {
+        allPlayers = allSnap.val() || {};
+        const data = allPlayers[playerId];
         myName = (data && data.name) || 'Panzer-Pilot';
         if (data && data.name && (data.name.includes("Host") || data.name.includes("Admin"))) {
           isHost = true;

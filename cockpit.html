@@ -691,52 +691,42 @@
     // Klick aufs Glücksrad-Icon: einmalig pro Spieler, danach dauerhaft grün umrandet und
     // ohne weitere Funktion. Bei drei Klicks unterschiedlicher Spieler dreht sich das echte
     // Rad des Wahnsinns von selbst, danach beginnt der Zähler wieder bei 0.
+    // ==== GLÜCKSRAD-ICON: eine einzige, gemeinsame Liste ("wer hat diese Runde geklickt")
+    // statt verstreuter Einzel-Flags pro Spieler - lässt sich dadurch mit EINEM einzigen,
+    // atomaren Befehl zurücksetzen (kein Risiko mehr, dass einzelne Spieler-Flags aus
+    // Versehen "hängen bleiben"). ====
     window.clickGlucksradIcon = function(evt) {
       const btn = document.getElementById('glucksrad-icon-btn');
       console.log('[Glücksrad] Klick registriert, playerId:', playerId);
-      get(ref(db, 'players/' + playerId + '/glucksradClicked')).then((snap) => {
-        console.log('[Glücksrad] Bereits geklickt laut Firebase:', snap.val());
-        if (snap.val()) { console.log('[Glücksrad] Abbruch - schon geklickt.'); return; }
+      runTransaction(ref(db, 'gameState/glucksradClickedIds'), (current) => {
+        const dict = current || {};
+        if (dict[playerId]) return; // schon in dieser Runde geklickt - unverändert lassen, Abbruch
+        dict[playerId] = true;
+        return dict;
+      }).then((result) => {
+        console.log('[Glücksrad] Transaktion committed:', result.committed, '| Inhalt jetzt:', result.snapshot.val());
+        if (!result.committed) return;
+        const dict = result.snapshot.val() || {};
+        if (!dict[playerId]) { console.log('[Glücksrad] War schon drin - kein neuer Klick.'); return; }
 
-        update(ref(db, 'players/' + playerId), { glucksradClicked: true })
-          .then(() => console.log('[Glücksrad] "glucksradClicked" erfolgreich gesetzt.'))
-          .catch((err) => console.error('[Glücksrad] FEHLER beim Setzen:', err));
         btn.classList.add('icon-gif-clicked');
         spawnDustPoof(evt.clientX, evt.clientY);
 
-        runTransaction(ref(db, 'gameState/glucksradClickCount'), (current) => (current || 0) + 1)
-          .then((result) => {
-            const newCount = result.snapshot.val() || 0;
-            console.log('[Glücksrad] Zähler jetzt bei:', newCount, '| Transaktion committed:', result.committed);
-            if (newCount >= 3) {
-              set(ref(db, 'gameState/glucksradClickCount'), 0); // Zähler beginnt wieder von vorne
-              resetAllPlayersFlag('glucksradClicked'); // grüner Rahmen für alle wieder weg
-              spinGlucksradWheel();
-            }
-          })
-          .catch((err) => console.error('[Glücksrad] FEHLER bei der Zähler-Transaktion:', err));
-      }).catch((err) => console.error('[Glücksrad] FEHLER beim Prüfen des Status:', err));
+        const count = Object.keys(dict).length;
+        console.log('[Glücksrad] Zähler jetzt bei:', count);
+        if (count >= 3) {
+          set(ref(db, 'gameState/glucksradClickedIds'), null); // EIN sauberer Rutsch, alles wieder leer
+          spinGlucksradWheel();
+        }
+      }).catch((err) => console.error('[Glücksrad] FEHLER bei der Transaktion:', err));
     };
 
-    // Setzt ein bestimmtes Merkmal (z.B. "schon geklickt") bei ALLEN aktiven Spielern zurück -
-    // damit die grüne Umrandung nach dem Auslösen wieder verschwindet und die nächste Runde
-    // von vorne beginnen kann.
-    function resetAllPlayersFlag(fieldName) {
-      get(ref(db, 'players/')).then((snap) => {
-        const players = snap.val() || {};
-        const activeIds = getActiveIds(players);
-        const updates = {};
-        activeIds.forEach(id => { updates['players/' + id + '/' + fieldName] = false; });
-        update(ref(db), updates);
-      });
-    }
-
-    // Notfall-Hilfsmittel für die Fehlersuche: in der Browser-Konsole eintippen, um den
-    // eigenen "schon geklickt"-Status sofort zurückzusetzen, falls er aus einem früheren Test
-    // feststeckt.
-    window.debugResetMyIconFlags = function() {
-      update(ref(db, 'players/' + playerId), { glucksradClicked: false, battleIconClicked: false })
-        .then(() => console.log('[Debug] Eigene Icon-Flags zurückgesetzt. Seite neu laden oder nochmal klicken.'));
+    // Notfall-Hilfsmittel für die Fehlersuche: in der Browser-Konsole eintippen, um die
+    // gemeinsame Klick-Liste für ALLE sofort zu leeren, falls mal was feststeckt.
+    window.debugResetIconLists = function() {
+      set(ref(db, 'gameState/glucksradClickedIds'), null);
+      set(ref(db, 'gameState/battleClickedIds'), null);
+      console.log('[Debug] Beide gemeinsamen Klick-Listen zurückgesetzt.');
     };
 
     function spawnDustPoof(x, y) {
@@ -749,20 +739,18 @@
     }
 
     // Live-Anzeige des Zählers für alle Spieler, und eigenen grünen Rahmen live halten -
-    // reagiert auch darauf, wenn der Rahmen nach einem erfolgreichen Dreh wieder zurückgesetzt
-    // wird (nicht mehr nur einmalig beim Laden geprüft, sonst hätte man die Rücksetzung erst
-    // nach einem Neuladen der Seite gesehen).
-    onValue(ref(db, 'gameState/glucksradClickCount'), (snapshot) => {
+    // reagiert auch darauf, wenn die Liste nach einem erfolgreichen Dreh wieder geleert wird.
+    onValue(ref(db, 'gameState/glucksradClickedIds'), (snapshot) => {
+      const dict = snapshot.val() || {};
       const label = document.getElementById('glucksrad-count-label');
-      if (label) label.innerText = (snapshot.val() || 0) + '/3';
-    });
-    onValue(ref(db, 'players/' + playerId + '/glucksradClicked'), (snap) => {
+      if (label) label.innerText = Object.keys(dict).length + '/3';
       const btn = document.getElementById('glucksrad-icon-btn');
-      if (btn) btn.classList.toggle('icon-gif-clicked', !!snap.val());
+      if (btn) btn.classList.toggle('icon-gif-clicked', !!dict[playerId]);
     });
 
     // ==== SCHLACHT-ICON: drei Klicks lösen eines der drei Minispiele aus (zufällig, max. 3x
-    // pro Spiel insgesamt), mit gemeinsamer "Alle bereit?"-Vorbereitung davor. ====
+    // pro Spiel insgesamt), mit gemeinsamer "Alle bereit?"-Vorbereitung davor. Gleiches Muster
+    // wie beim Glücksrad - eine gemeinsame Liste statt Einzel-Flags. ====
     const BATTLE_GAMES = {
       connect4: { label: 'Vier Gewinnt', activeGame: 'vier-gewinnt.html', stateKey: 'connect4State' },
       snake: { label: 'Snake', activeGame: 'snake.html', stateKey: 'snakeState' },
@@ -772,36 +760,35 @@
     window.clickBattleIcon = function(evt) {
       const btn = document.getElementById('battle-icon-btn');
       console.log('[Schlachtruf] Klick registriert, playerId:', playerId);
-      get(ref(db, 'players/' + playerId + '/battleIconClicked')).then((snap) => {
-        console.log('[Schlachtruf] Bereits geklickt laut Firebase:', snap.val());
-        if (snap.val()) { console.log('[Schlachtruf] Abbruch - schon geklickt.'); return; }
+      runTransaction(ref(db, 'gameState/battleClickedIds'), (current) => {
+        const dict = current || {};
+        if (dict[playerId]) return;
+        dict[playerId] = true;
+        return dict;
+      }).then((result) => {
+        console.log('[Schlachtruf] Transaktion committed:', result.committed, '| Inhalt jetzt:', result.snapshot.val());
+        if (!result.committed) return;
+        const dict = result.snapshot.val() || {};
+        if (!dict[playerId]) { console.log('[Schlachtruf] War schon drin - kein neuer Klick.'); return; }
 
-        update(ref(db, 'players/' + playerId), { battleIconClicked: true })
-          .then(() => console.log('[Schlachtruf] "battleIconClicked" erfolgreich gesetzt.'))
-          .catch((err) => console.error('[Schlachtruf] FEHLER beim Setzen:', err));
         btn.classList.add('icon-gif-clicked');
         spawnDustPoof(evt.clientX, evt.clientY);
 
-        runTransaction(ref(db, 'gameState/battleClickCount'), (current) => (current || 0) + 1)
-          .then((result) => {
-            const newCount = result.snapshot.val() || 0;
-            console.log('[Schlachtruf] Zähler jetzt bei:', newCount, '| Transaktion committed:', result.committed);
-            if (newCount >= 3) {
-              set(ref(db, 'gameState/battleClickCount'), 0); // Zähler beginnt wieder von vorne
-              startBattleSelection();
-            }
-          })
-          .catch((err) => console.error('[Schlachtruf] FEHLER bei der Zähler-Transaktion:', err));
-      }).catch((err) => console.error('[Schlachtruf] FEHLER beim Prüfen des Status:', err));
+        const count = Object.keys(dict).length;
+        console.log('[Schlachtruf] Zähler jetzt bei:', count);
+        if (count >= 3) {
+          set(ref(db, 'gameState/battleClickedIds'), null); // EIN sauberer Rutsch, alles wieder leer
+          startBattleSelection();
+        }
+      }).catch((err) => console.error('[Schlachtruf] FEHLER bei der Transaktion:', err));
     };
 
-    onValue(ref(db, 'gameState/battleClickCount'), (snapshot) => {
+    onValue(ref(db, 'gameState/battleClickedIds'), (snapshot) => {
+      const dict = snapshot.val() || {};
       const label = document.getElementById('battle-count-label');
-      if (label) label.innerText = (snapshot.val() || 0) + '/3';
-    });
-    onValue(ref(db, 'players/' + playerId + '/battleIconClicked'), (snap) => {
+      if (label) label.innerText = Object.keys(dict).length + '/3';
       const btn = document.getElementById('battle-icon-btn');
-      if (btn) btn.classList.toggle('icon-gif-clicked', !!snap.val());
+      if (btn) btn.classList.toggle('icon-gif-clicked', !!dict[playerId]);
     });
 
     // Wählt eines der Minispiele, die noch nicht 3x gespielt wurden, zufällig aus - oder
@@ -865,7 +852,6 @@
       const game = BATTLE_GAMES[gameKey];
       if (!game) return;
       set(ref(db, 'gameState/battlePrepEvent'), null); // Vorbereitungs-Fenster für alle schließen
-      resetAllPlayersFlag('battleIconClicked'); // grüner Rahmen für alle wieder weg
 
       // Startzeitpunkt jetzt live gesetzt (nicht mehr fest 0) - sonst dachten Snake/Goldregen,
       // sie hätten schon 1970 begonnen und wären demnach längst vorbei.
