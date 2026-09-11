@@ -54,23 +54,30 @@
     // ==== ARENA-MASSE ====
     const ARENA_W = 900, ARENA_H = 540;
     const TANK_SIZE = 42;
-    const WALL_W = 380, WALL_H = 380; // deutlich größer, sodass die Panzer wirklich drum rum müssen
-    const WALL_X = ARENA_W / 2 - WALL_W / 2, WALL_Y = ARENA_H / 2 - WALL_H / 2;
+    const WALL_SIZE = 380; // Durchmesser der kreisförmigen Wand, so groß wie das Bild
+    const WALL_RADIUS = WALL_SIZE / 2;
+    const WALL_CX = ARENA_W / 2, WALL_CY = ARENA_H / 2; // Kreis-Mittelpunkt
     const MOVE_SPEED = 3.2;
     const BULLET_SPEED = 6.5;
     const BULLET_MAX_BOUNCES = 3;
     const EXPLOSION_MS = 550;
-    const BULLET_LIFETIME_MS = 1800;
     const SHOOT_COOLDOWN_MS = 500;
+    const START_LIVES = 3;
 
-    // Feste Startpunkte an den Rändern, möglichst weit auseinander und von der Wand entfernt
+    // Mindestens 10 Startpunkte, gleichmäßig am Rand verteilt und weit von der Wand entfernt
     const SPAWN_POINTS = [
-      { x: 50, y: 50, angle: 45 },
-      { x: ARENA_W - 90, y: 50, angle: 135 },
-      { x: 50, y: ARENA_H - 90, angle: -45 },
-      { x: ARENA_W - 90, y: ARENA_H - 90, angle: -135 },
+      { x: 40, y: 40, angle: 45 },
       { x: ARENA_W / 2 - 20, y: 20, angle: 90 },
-      { x: ARENA_W / 2 - 20, y: ARENA_H - 60, angle: -90 }
+      { x: ARENA_W - 82, y: 40, angle: 135 },
+      { x: 20, y: ARENA_H / 2 - 20, angle: 0 },
+      { x: ARENA_W - 62, y: ARENA_H / 2 - 20, angle: 180 },
+      { x: 40, y: ARENA_H - 82, angle: -45 },
+      { x: ARENA_W / 2 - 20, y: ARENA_H - 62, angle: -90 },
+      { x: ARENA_W - 82, y: ARENA_H - 82, angle: -135 },
+      { x: ARENA_W / 2 - 220, y: 20, angle: 90 },
+      { x: ARENA_W / 2 + 180, y: 20, angle: 90 },
+      { x: ARENA_W / 2 - 220, y: ARENA_H - 62, angle: -90 },
+      { x: ARENA_W / 2 + 180, y: ARENA_H - 62, angle: -90 }
     ];
 
     const PANZER_IMG_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/74c358da0a62eaf05646fc02faed88d16369ffa9/Panzer.png";
@@ -107,8 +114,18 @@
     function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
       return ax < bx + bw && ax + aw > bx && ay < by + ah && ay + ah > by;
     }
+    // Wand ist jetzt ein Kreis (Durchmesser = Bildgröße) statt eines Vierecks - Kollision über
+    // den nächstgelegenen Punkt des Quadrats (Panzer) zum Kreismittelpunkt.
     function overlapsWall(x, y, size) {
-      return rectsOverlap(x, y, size, size, WALL_X, WALL_Y, WALL_W, WALL_H);
+      const closestX = Math.max(x, Math.min(WALL_CX, x + size));
+      const closestY = Math.max(y, Math.min(WALL_CY, y + size));
+      const dx = WALL_CX - closestX, dy = WALL_CY - closestY;
+      return (dx * dx + dy * dy) < (WALL_RADIUS * WALL_RADIUS);
+    }
+    // Für Geschosse (Punkt statt Quadrat): direkter Abstand zum Kreismittelpunkt
+    function pointInWall(px, py) {
+      const dx = px - WALL_CX, dy = py - WALL_CY;
+      return (dx * dx + dy * dy) < (WALL_RADIUS * WALL_RADIUS);
     }
 
     // ==== EIGENER PANZER (lokal gesteuert, regelmäßig nach Firebase geschrieben) ====
@@ -124,7 +141,7 @@
       const activeIds = getActivePlayerIds().sort(); // feste, für alle gleiche Reihenfolge
       const myIndex = Math.max(0, activeIds.indexOf(playerId));
       const spawn = SPAWN_POINTS[myIndex % SPAWN_POINTS.length];
-      my = { x: spawn.x, y: spawn.y, angle: spawn.angle, alive: true };
+      my = { x: spawn.x, y: spawn.y, angle: spawn.angle, alive: true, lives: START_LIVES };
       iAmDead = false;
       resultShown = false;
       writeMyTank();
@@ -132,7 +149,7 @@
 
     function writeMyTank() {
       update(ref(db, 'panzerState/tanks/' + playerId), {
-        x: my.x, y: my.y, angle: my.angle, alive: my.alive, name: myName
+        x: my.x, y: my.y, angle: my.angle, alive: my.alive, lives: my.lives, name: myName
       });
     }
 
@@ -181,16 +198,24 @@
 
     // Prallt ein Geschoss von der Wand ab? Ermittelt, ob eher die linke/rechte oder obere/
     // untere Kante getroffen wurde, um die passende Geschwindigkeits-Komponente zu spiegeln.
+    // Physikalisch korrektes Abprallen am Kreis: die Normale am Auftreffpunkt zeigt vom
+    // Kreismittelpunkt zur Kugel, die Geschwindigkeit wird an dieser Normalen gespiegelt
+    // (v' = v - 2*(v·n)*n) - das ergibt einen realistischen, winkeltreuen Abprall statt nur
+    // grob geschätzt "die nächstgelegene Kante".
     function bounceOffWallIfNeeded(bl) {
-      if (!overlapsWall(bl.x - 3, bl.y - 3, 6)) return false;
-      const cx = bl.x, cy = bl.y;
-      const distLeft = Math.abs(cx - WALL_X), distRight = Math.abs(cx - (WALL_X + WALL_W));
-      const distTop = Math.abs(cy - WALL_Y), distBottom = Math.abs(cy - (WALL_Y + WALL_H));
-      const minDist = Math.min(distLeft, distRight, distTop, distBottom);
-      if (minDist === distLeft || minDist === distRight) bl.vx *= -1;
-      else bl.vy *= -1;
-      // Sofort ein Stück rausschieben, damit es nicht sofort wieder als "drin" erkannt wird
-      bl.x += bl.vx; bl.y += bl.vy;
+      if (!pointInWall(bl.x, bl.y)) return false;
+      let nx = bl.x - WALL_CX, ny = bl.y - WALL_CY;
+      const len = Math.hypot(nx, ny) || 1;
+      nx /= len; ny /= len;
+
+      const dot = bl.vx * nx + bl.vy * ny;
+      bl.vx = bl.vx - 2 * dot * nx;
+      bl.vy = bl.vy - 2 * dot * ny;
+
+      // Kugel exakt auf den Kreisrand (plus etwas Puffer) zurücksetzen, damit sie nicht
+      // sofort wieder als "drin" erkannt wird und mehrfach hintereinander abprallt
+      bl.x = WALL_CX + nx * (WALL_RADIUS + 4);
+      bl.y = WALL_CY + ny * (WALL_RADIUS + 4);
       return true;
     }
 
@@ -301,10 +326,14 @@
         if (!b || b.ownerId === playerId) continue;
         const hit = b.x > my.x && b.x < my.x + TANK_SIZE && b.y > my.y && b.y < my.y + TANK_SIZE;
         if (hit) {
-          iAmDead = true;
-          my.alive = false;
+          remove(ref(db, 'panzerState/bullets/' + bid)); // Geschoss ist nach dem Treffer weg
+          my.lives = Math.max(0, (my.lives ?? START_LIVES) - 1);
+          if (my.lives <= 0) {
+            iAmDead = true;
+            my.alive = false;
+            runTransaction(ref(db, 'panzerState/kills/' + b.ownerId), (c) => (c || 0) + 1);
+          }
           writeMyTank();
-          runTransaction(ref(db, 'panzerState/kills/' + b.ownerId), (c) => (c || 0) + 1);
           break;
         }
       }
@@ -313,6 +342,26 @@
     // ==== RENDERN ====
     const canvas = document.getElementById("panzer-canvas");
     const ctx = canvas.getContext("2d");
+
+    // Kleines "Pixel-Herz" (5 kleine Blöcke in Herzform) - gefüllt = noch vorhandenes Leben,
+    // grau/leer = bereits verlorenes Leben.
+    function drawPixelHeart(cx, cy, blockSize, filled) {
+      const pattern = [
+        [1, 0, 1],
+        [1, 1, 1],
+        [0, 1, 0]
+      ];
+      ctx.fillStyle = filled ? '#ff2e6e' : 'rgba(255,255,255,0.25)';
+      for (let row = 0; row < pattern.length; row++) {
+        for (let col = 0; col < pattern[row].length; col++) {
+          if (!pattern[row][col]) continue;
+          ctx.fillRect(
+            cx + (col - 1) * blockSize, cy + row * blockSize,
+            blockSize - 0.5, blockSize - 0.5
+          );
+        }
+      }
+    }
 
     function drawTank(t, isMe) {
       ctx.save();
@@ -331,8 +380,18 @@
         ctx.font = 'bold 11px Baloo 2, sans-serif';
         ctx.textAlign = 'center';
         ctx.shadowColor = '#000'; ctx.shadowBlur = 3;
-        ctx.fillText(t.name || '', t.x + TANK_SIZE / 2, t.y - 6);
+        ctx.fillText(t.name || '', t.x + TANK_SIZE / 2, t.y - 16);
         ctx.shadowBlur = 0;
+
+        // Herzen schwirren über dem Panzer
+        const lives = t.lives ?? START_LIVES;
+        const heartBlock = 3;
+        const heartsWidth = START_LIVES * (heartBlock * 3 + 4);
+        let hx = t.x + TANK_SIZE / 2 - heartsWidth / 2;
+        for (let i = 0; i < START_LIVES; i++) {
+          drawPixelHeart(hx, t.y - 12, heartBlock, i < lives);
+          hx += heartBlock * 3 + 4;
+        }
       }
     }
 
@@ -343,16 +402,24 @@
       for (let gx = 0; gx < ARENA_W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, ARENA_H); ctx.stroke(); }
       for (let gy = 0; gy < ARENA_H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(ARENA_W, gy); ctx.stroke(); }
 
-      // Wand in der Mitte
+      // Wand in der Mitte: kreisförmig zugeschnitten (durchsichtige Ecken), passend zur
+      // kreisförmigen Kollision
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(WALL_CX, WALL_CY, WALL_RADIUS, 0, Math.PI * 2);
+      ctx.clip();
       if (wallImg.complete && wallImg.naturalWidth > 0) {
-        ctx.drawImage(wallImg, WALL_X, WALL_Y, WALL_W, WALL_H);
+        ctx.drawImage(wallImg, WALL_CX - WALL_RADIUS, WALL_CY - WALL_RADIUS, WALL_SIZE, WALL_SIZE);
       } else {
         ctx.fillStyle = '#8a8a8a';
-        ctx.fillRect(WALL_X, WALL_Y, WALL_W, WALL_H);
+        ctx.fillRect(WALL_CX - WALL_RADIUS, WALL_CY - WALL_RADIUS, WALL_SIZE, WALL_SIZE);
       }
+      ctx.restore();
       ctx.strokeStyle = 'rgba(0,0,0,0.4)';
       ctx.lineWidth = 3;
-      ctx.strokeRect(WALL_X, WALL_Y, WALL_W, WALL_H);
+      ctx.beginPath();
+      ctx.arc(WALL_CX, WALL_CY, WALL_RADIUS, 0, Math.PI * 2);
+      ctx.stroke();
 
       // Alle Panzer
       for (const pid in allTanks) {
