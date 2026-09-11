@@ -85,16 +85,30 @@
     html[data-theme="dark"] .jax-btn:hover { box-shadow: 0 0 18px rgba(0,240,255,0.5); }
 
     .theme-toggle-btn {
-      border: 3px solid var(--c-ink); border-radius: 9999px; background: var(--c-card-bg); color: var(--c-card-text);
-      width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
-      box-shadow: 3px 3px 0 var(--c-card-shadow); transition: transform .12s ease;
-      font-size: 1.2rem; cursor: pointer; flex-shrink: 0;
+      background: transparent; border: none; box-shadow: none;
+      width: auto; height: auto; display: flex; align-items: center; justify-content: center;
+      transition: transform .12s ease; cursor: pointer; flex-shrink: 0;
     }
-    html[data-theme="dark"] .theme-toggle-btn { border-radius: 8px; box-shadow: 0 0 14px rgba(0,240,255,0.35); }
     .theme-toggle-btn:hover { transform: scale(1.08); }
+    #darkmode-icon-img {
+      /* Dicke schwarze Kontur direkt am (transparenten) Icon, statt eines Rahmens drumherum -
+         mehrere versetzte Schlagschatten übereinander ergeben eine durchgehende Kontur. */
+      filter:
+        drop-shadow(1.5px 0 0 #000) drop-shadow(-1.5px 0 0 #000)
+        drop-shadow(0 1.5px 0 #000) drop-shadow(0 -1.5px 0 #000)
+        drop-shadow(1.1px 1.1px 0 #000) drop-shadow(-1.1px 1.1px 0 #000)
+        drop-shadow(1.1px -1.1px 0 #000) drop-shadow(-1.1px -1.1px 0 #000);
+    }
 
     @keyframes wiggle { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
     .jax-wiggle { animation: wiggle 0.7s ease-in-out infinite; }
+
+    /* Risse: feine, adrige Linien in grellen Neonfarben, die sich per Stroke-Animation
+       nach und nach "einritzen" statt nur einzublenden. */
+    .crack-path {
+      stroke-dasharray: 220; stroke-dashoffset: 220;
+      filter: drop-shadow(0 0 1.5px currentColor);
+    }
 
     @keyframes bounceIn { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
     .jax-pop { animation: bounceIn 0.5s cubic-bezier(.34,1.56,.64,1); }
@@ -265,27 +279,33 @@
     let darkEggPlaying = false;
 
     window.toggleTheme = function() {
+      console.log('[DarkEgg] Button geklickt. darkEggPlaying:', darkEggPlaying, 'playerId:', playerId);
       if (darkEggPlaying) return;
       get(ref(db, 'players/' + playerId + '/darkEggUsed')).then((snap) => {
+        console.log('[DarkEgg] Bereits benutzt?', snap.val());
         if (snap.val()) return; // schon einmal ausgelöst - keine Funktion mehr
         darkEggPlaying = true;
         playDarkEggSequence();
-      });
+      }).catch((err) => console.error('[DarkEgg] Fehler beim Prüfen des Status:', err));
     };
 
     function playDarkEggSequence() {
       const overlay = document.getElementById('darkegg-overlay');
       const gif = document.getElementById('darkegg-gif');
       const cracks = document.getElementById('darkegg-cracks');
+      const crackPaths = cracks.querySelectorAll('.crack-path');
       const flash = document.getElementById('darkegg-flash');
       const bsod = document.getElementById('darkegg-bsod');
       const popup = document.getElementById('darkegg-popup');
+
+      const GROW_MS = 7000; // etwas langsameres Wachstum als zuvor
 
       // Zurücksetzen für den Fall, dass irgendwas von einem vorherigen Zustand übrig wäre
       gif.style.transition = 'none';
       gif.style.width = '4px'; gif.style.height = '4px';
       cracks.style.transition = 'none';
       cracks.style.opacity = '0';
+      crackPaths.forEach(p => { p.style.transition = 'none'; p.style.strokeDashoffset = '220'; });
       flash.style.transition = 'none';
       flash.style.opacity = '0';
 
@@ -294,47 +314,61 @@
 
       const audioCtx = startBadPianoMusic();
 
-      // GIF wächst zügig auf, bis es nach 5 Sekunden den ganzen Bildschirm ausfüllt
+      // GIF wächst zügig, aber jetzt etwas gemächlicher auf, bis es den ganzen Bildschirm ausfüllt
       requestAnimationFrame(() => {
-        gif.style.transition = 'width 5s cubic-bezier(.3,.1,.7,1), height 5s cubic-bezier(.3,.1,.7,1)';
+        gif.style.transition = `width ${GROW_MS}ms cubic-bezier(.3,.1,.7,1), height ${GROW_MS}ms cubic-bezier(.3,.1,.7,1)`;
         const maxSize = Math.max(window.innerWidth, window.innerHeight) * 1.3;
         gif.style.width = maxSize + 'px';
         gif.style.height = maxSize + 'px';
       });
 
-      // Risse blenden in der zweiten Hälfte langsam ein, als würde der Bildschirm gleich platzen
+      // Risse bauen sich ab der Mitte der Sequenz gestaffelt auf - jede einzelne "Ader" ritzt
+      // sich zeitversetzt und in unterschiedlichem Tempo ein, statt alle gleichzeitig
+      // einzublenden, das wirkt organischer und dramatischer.
       setTimeout(() => {
-        cracks.style.transition = 'opacity 2s ease-in';
+        cracks.style.transition = 'opacity 0.4s ease-in';
         cracks.style.opacity = '1';
-      }, 2500);
+        crackPaths.forEach((p, i) => {
+          const delay = i * 180 + Math.random() * 250;
+          const duration = 900 + Math.random() * 900;
+          setTimeout(() => {
+            p.style.transition = `stroke-dashoffset ${duration}ms ease-out`;
+            p.style.strokeDashoffset = '0';
+          }, delay);
+        });
+      }, GROW_MS * 0.42);
 
-      // Kurz vor Schluss: Schrei-Ton + greller Blitz, dann sofort zum Absturz-Bildschirm
+      // Kurz vor Schluss: schrillerer Schrei-Ton + greller Blitz, dann sofort zum Absturz-Bildschirm
       setTimeout(() => {
         playScreamSound(audioCtx);
         flash.style.transition = 'opacity 0.15s ease-out';
         flash.style.opacity = '1';
-      }, 4800);
+      }, GROW_MS - 250);
 
       setTimeout(() => {
         stopBadPianoMusic(audioCtx);
         overlay.classList.add('hidden');
         bsod.classList.remove('hidden');
-      }, 5000);
+      }, GROW_MS);
 
       setTimeout(() => {
         bsod.classList.add('hidden');
         finishDarkEgg();
-      }, 7000); // 2 Sekunden Absturz-Bildschirm nach den 5 Sekunden
+      }, GROW_MS + 2000); // 2 Sekunden Absturz-Bildschirm danach
     }
 
     function finishDarkEgg() {
+      console.log('[DarkEgg] finishDarkEgg() aufgerufen, playerId:', playerId);
       get(ref(db, 'players/' + playerId)).then((snap) => {
         const data = snap.val() || {};
         const newScore = Math.max(0, (data.score || 0) - 50);
-        update(ref(db, 'players/' + playerId), { score: newScore, darkEggUsed: true });
+        console.log('[DarkEgg] Alter Score:', data.score, '-> Neuer Score:', newScore);
+        update(ref(db, 'players/' + playerId), { score: newScore, darkEggUsed: true })
+          .then(() => console.log('[DarkEgg] Erfolgreich in Firebase gespeichert.'))
+          .catch((err) => console.error('[DarkEgg] FEHLER beim Speichern:', err));
         document.getElementById('darkegg-popup').classList.remove('hidden');
         darkEggPlaying = false;
-      });
+      }).catch((err) => console.error('[DarkEgg] FEHLER beim Laden des Spielers:', err));
     }
 
     window.closeDarkEggPopup = function() {
@@ -376,20 +410,28 @@
     function playScreamSound(ctx) {
       if (!ctx) return;
       try {
-        const osc = ctx.createOscillator();
-        osc.type = 'sawtooth';
-        const gain = ctx.createGain();
         const now = ctx.currentTime;
-        osc.frequency.setValueAtTime(300, now);
-        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.15);
-        osc.frequency.exponentialRampToValueAtTime(500, now + 0.4);
+        const gain = ctx.createGain();
         gain.gain.setValueAtTime(0.001, now);
-        gain.gain.exponentialRampToValueAtTime(0.6, now + 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-        osc.connect(gain);
+        gain.gain.exponentialRampToValueAtTime(0.55, now + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
         gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.55);
+
+        // Zwei übereinandergelegte, hoch hinausschießende Sägezahn-Töne für einen schrilleren,
+        // durchdringenderen Schrei statt eines einzelnen, eher dumpfen Tons.
+        [1, 1.5].forEach((mult, i) => {
+          const osc = ctx.createOscillator();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(400 * mult, now);
+          osc.frequency.exponentialRampToValueAtTime(2600 * mult, now + 0.12);
+          osc.frequency.exponentialRampToValueAtTime(900 * mult, now + 0.45);
+          const oscGain = ctx.createGain();
+          oscGain.gain.value = i === 0 ? 1 : 0.5;
+          osc.connect(oscGain);
+          oscGain.connect(gain);
+          osc.start(now);
+          osc.stop(now + 0.6);
+        });
       } catch (e) {}
     }
 
@@ -511,7 +553,7 @@
       continueBox.classList.add("hidden");
       wheelEl.classList.remove("hidden");
       introEl.classList.remove("hidden");
-      introEl.innerHTML = `${icon('wheel', 'w-5 h-5 inline -mt-1')} Das Rad des Wahnsinns entscheidet...`;
+      introEl.innerHTML = ``;
 
       spinWheel(wheelEl, labels, targetIdx, () => {
         const effect = WHEEL_EFFECTS[targetIdx];
@@ -1637,7 +1679,7 @@
       </div>
     </div>
     <button onclick="toggleTheme()" id="theme-toggle-btn" class="theme-toggle-btn" title="Hell-/Dunkelmodus umschalten">
-      <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/ef27eb7437b4c75b65eb938a3f5d0b8f548798ce/Darkmodeicon.png" class="w-6 h-6" alt="" onerror="this.parentElement.innerText='🌙'">
+      <img id="darkmode-icon-img" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/ef27eb7437b4c75b65eb938a3f5d0b8f548798ce/Darkmodeicon.png" class="w-11 h-11" alt="" onerror="this.parentElement.innerText='🌙'">
     </button>
   </div>
 
@@ -1725,8 +1767,10 @@
   <!-- RAD DES WAHNSINNS MODAL -->
   <div id="chaos-card-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="jax-card jax-pop p-8 w-full max-w-sm text-center space-y-3 text-[var(--c-ink)]">
-      <div class="font-jax text-lg font-extrabold text-[var(--c-purple)] flex items-center justify-center gap-2">
-        <span><svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l7.8 3"/></svg></span> Rad des Wahnsinns
+      <div class="font-black text-xl tracking-wide" style="font-family: 'Comic Sans MS', 'Baloo 2', cursive;">
+        <span style="color:#ff2e93;">R</span><span style="color:#ffd23f;">a</span><span style="color:#7ed957;">d</span>
+        <span style="color:#3ecbff;">d</span><span style="color:#b026ff;">e</span><span style="color:#ff6a3d;">s</span>
+        <span style="color:#ff2e93;">W</span><span style="color:#39ff8c;">a</span><span style="display:inline-block; transform: rotate(180deg); color:#00e5ff;">h</span><span style="color:#f5ff3d;">n</span><span style="color:#ff2ee0;">s</span><span style="color:#7ed957;">i</span><span style="color:#3ecbff;">n</span><span style="color:#ff8a3d;">n</span><span style="font-size:1.5em; color:#ff2e93; text-decoration: underline wavy #ff2e93 2px; text-underline-offset: 4px;">S</span>
       </div>
       <div class="text-[10px] text-[var(--c-ink)]/50 -mt-1">Kleine Dinge geschehen...</div>
       <div id="chaos-roll-intro" class="text-sm font-semibold min-h-[2.5rem] flex items-center justify-center"></div>
@@ -1790,15 +1834,19 @@
     <img id="darkegg-gif" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/6e6229827ee062d3d983537f2594a7ebac80ab4a/dancing.gif"
       class="absolute top-1/2 left-1/2" style="width:4px; height:4px; transform: translate(-50%,-50%) scale(1); border-radius:6px;" alt="">
     <svg id="darkegg-cracks" class="absolute inset-0 w-full h-full opacity-0" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <g stroke="#ffffff" stroke-width="0.4" fill="none" opacity="0.85">
-        <path d="M0,0 L8,6 L6,14 L14,20 L10,28"/>
-        <path d="M100,0 L92,7 L96,15 L88,22 L93,30"/>
-        <path d="M0,100 L9,92 L5,84 L13,78 L9,70"/>
-        <path d="M100,100 L91,93 L95,85 L87,79 L92,71"/>
-        <path d="M50,0 L48,10 L53,18 L47,26"/>
-        <path d="M0,50 L10,48 L18,53 L26,47"/>
-        <path d="M100,50 L90,52 L82,47 L74,53"/>
-        <path d="M50,100 L52,90 L47,82 L53,74"/>
+      <g fill="none" stroke-linecap="round">
+        <path class="crack-path" stroke="#39ff14" stroke-width="0.18" d="M0,0 C3,4 5,3 7,7 C9,11 6,13 9,17 C11,20 8,23 11,27 C12,29 10,31 12,34"/>
+        <path class="crack-path" stroke="#39ff14" stroke-width="0.1" d="M7,7 C9,8 11,7 13,10 C14,12 17,11 18,14"/>
+        <path class="crack-path" stroke="#ff2ee0" stroke-width="0.18" d="M100,0 C97,4 95,3 93,8 C91,12 94,14 91,18 C89,21 92,24 89,28 C88,30 90,32 88,35"/>
+        <path class="crack-path" stroke="#ff2ee0" stroke-width="0.1" d="M93,8 C91,9 88,8 87,11 C86,13 83,12 82,15"/>
+        <path class="crack-path" stroke="#00e5ff" stroke-width="0.18" d="M0,100 C3,96 6,97 8,92 C10,88 7,86 10,82 C12,79 9,76 12,72 C13,70 11,68 13,65"/>
+        <path class="crack-path" stroke="#00e5ff" stroke-width="0.1" d="M8,92 C10,91 13,92 14,89 C15,87 18,88 19,85"/>
+        <path class="crack-path" stroke="#f5ff3d" stroke-width="0.18" d="M100,100 C97,96 94,97 92,92 C90,88 93,86 90,82 C88,79 91,76 88,72 C87,70 89,68 87,65"/>
+        <path class="crack-path" stroke="#f5ff3d" stroke-width="0.1" d="M92,92 C90,91 87,92 86,89 C85,87 82,88 81,85"/>
+        <path class="crack-path" stroke="#b026ff" stroke-width="0.14" d="M50,0 C49,3 51,5 49,8 C48,10 51,12 49,15 C48,17 50,19 48,22"/>
+        <path class="crack-path" stroke="#ff6a3d" stroke-width="0.14" d="M0,50 C4,49 3,51 7,50 C10,49 12,51 15,50 C18,49 20,51 23,50"/>
+        <path class="crack-path" stroke="#39ff14" stroke-width="0.14" d="M100,50 C96,49 97,51 93,50 C90,49 88,51 85,50 C82,49 80,51 77,50"/>
+        <path class="crack-path" stroke="#00e5ff" stroke-width="0.14" d="M50,100 C49,97 51,95 49,92 C48,90 51,88 49,85 C48,83 50,81 48,78"/>
       </g>
     </svg>
     <div id="darkegg-flash" class="absolute inset-0 bg-white opacity-0"></div>
