@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Baloo 2', sans-serif; }
-    .arena-bg { background: radial-gradient(ellipse at top, #2b3a1f 0%, #0a0d06 70%); }
+    .arena-bg { background: radial-gradient(ellipse at top, #3f6b28 0%, #14260c 70%); }
     .jax-card {
       background: #ffffff; border: 4px solid #1a1a2e; border-radius: 22px;
       box-shadow: 7px 7px 0 rgba(0,0,0,0.85);
@@ -20,7 +20,7 @@
     }
     .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
     .jax-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
-    #panzer-canvas { background: #3d5a2c; border: 4px solid #1a1a2e; border-radius: 14px; touch-action: none; }
+    #panzer-canvas { background: #4f8a34; border: 4px solid #1a1a2e; border-radius: 14px; touch-action: none; }
     @keyframes countdownPop {
       0% { transform: scale(0.3); opacity: 0; }
       50% { transform: scale(1.3); opacity: 1; }
@@ -54,10 +54,12 @@
     // ==== ARENA-MASSE ====
     const ARENA_W = 900, ARENA_H = 540;
     const TANK_SIZE = 42;
-    const WALL_W = 260, WALL_H = 260; // "soll schon groß sein, sodass die Panzer drum rum fahren müssen"
+    const WALL_W = 380, WALL_H = 380; // deutlich größer, sodass die Panzer wirklich drum rum müssen
     const WALL_X = ARENA_W / 2 - WALL_W / 2, WALL_Y = ARENA_H / 2 - WALL_H / 2;
     const MOVE_SPEED = 3.2;
-    const BULLET_SPEED = 9;
+    const BULLET_SPEED = 6.5;
+    const BULLET_MAX_BOUNCES = 3;
+    const EXPLOSION_MS = 550;
     const BULLET_LIFETIME_MS = 1800;
     const SHOOT_COOLDOWN_MS = 500;
 
@@ -73,9 +75,11 @@
 
     const PANZER_IMG_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/74c358da0a62eaf05646fc02faed88d16369ffa9/Panzer.png";
     const WALL_IMG_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/74c358da0a62eaf05646fc02faed88d16369ffa9/peace-graffiti-.png";
+    const EXPLOSION_IMG_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/abf15658d4cff651ecd9ba993c5426a8d1033571/kevin-altman-explosion-boss-port.gif";
 
     const panzerImg = new Image(); panzerImg.src = PANZER_IMG_URL;
     const wallImg = new Image(); wallImg.src = WALL_IMG_URL;
+    const explosionImg = new Image(); explosionImg.src = EXPLOSION_IMG_URL;
 
     onValue(ref(db, 'players/'), (snap) => { allPlayers = snap.val() || {}; });
 
@@ -147,6 +151,14 @@
       if (e.key === 'ArrowRight') keys.right = false;
     });
 
+    // Eigene Geschosse werden hier lokal JEDEN Frame vollständig simuliert (Position,
+    // Geschwindigkeit, Abpraller) - nur ein throttled Auszug davon geht an Firebase, damit
+    // andere Clients sie sehen können. So bleibt die Physik robust und ruckelfrei, statt sie
+    // nur rein zeitbasiert (ohne echten Bounce-Zustand) zu berechnen - das ließ Geschosse
+    // vorher einfach durch die Wand "durchrechnen".
+    let myBullets = {}; // bulletId -> { x, y, vx, vy, bounces }
+    let myBulletsWriteTick = 0;
+
     function tryShoot() {
       const now = Date.now();
       if (now - lastShotAt < SHOOT_COOLDOWN_MS) return;
@@ -154,12 +166,62 @@
       myBulletCounter++;
       const bulletId = playerId + '_b' + myBulletCounter;
       const rad = my.angle * Math.PI / 180;
+      const bx = my.x + TANK_SIZE / 2 + Math.sin(rad) * (TANK_SIZE / 2 + 6);
+      const by = my.y + TANK_SIZE / 2 - Math.cos(rad) * (TANK_SIZE / 2 + 6);
+      myBullets[bulletId] = {
+        x: bx, y: by,
+        vx: Math.sin(rad) * BULLET_SPEED, vy: -Math.cos(rad) * BULLET_SPEED,
+        bounces: 0
+      };
       set(ref(db, 'panzerState/bullets/' + bulletId), {
-        x: my.x + TANK_SIZE / 2, y: my.y + TANK_SIZE / 2,
-        angle: my.angle, ownerId: playerId, ownerName: myName, firedAt: now
+        x: bx, y: by, vx: myBullets[bulletId].vx, vy: myBullets[bulletId].vy,
+        bounces: 0, ownerId: playerId, ownerName: myName, createdAt: now
       });
-      // Eigenes Geschoss nach Ablauf seiner Lebenszeit selbst wieder aufräumen
-      setTimeout(() => remove(ref(db, 'panzerState/bullets/' + bulletId)), BULLET_LIFETIME_MS + 200);
+    }
+
+    // Prallt ein Geschoss von der Wand ab? Ermittelt, ob eher die linke/rechte oder obere/
+    // untere Kante getroffen wurde, um die passende Geschwindigkeits-Komponente zu spiegeln.
+    function bounceOffWallIfNeeded(bl) {
+      if (!overlapsWall(bl.x - 3, bl.y - 3, 6)) return false;
+      const cx = bl.x, cy = bl.y;
+      const distLeft = Math.abs(cx - WALL_X), distRight = Math.abs(cx - (WALL_X + WALL_W));
+      const distTop = Math.abs(cy - WALL_Y), distBottom = Math.abs(cy - (WALL_Y + WALL_H));
+      const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+      if (minDist === distLeft || minDist === distRight) bl.vx *= -1;
+      else bl.vy *= -1;
+      // Sofort ein Stück rausschieben, damit es nicht sofort wieder als "drin" erkannt wird
+      bl.x += bl.vx; bl.y += bl.vy;
+      return true;
+    }
+
+    function simulateMyBullets() {
+      myBulletsWriteTick++;
+      const shouldWrite = (myBulletsWriteTick % 2 === 0); // ~alle 2 Frames nach Firebase schreiben
+      for (const bid in myBullets) {
+        const bl = myBullets[bid];
+        bl.x += bl.vx; bl.y += bl.vy;
+        let bounced = false;
+
+        // Abprallen an den Außenwänden der Arena
+        if (bl.x <= 4 || bl.x >= ARENA_W - 4) { bl.vx *= -1; bl.x = Math.max(4, Math.min(ARENA_W - 4, bl.x)); bounced = true; }
+        if (bl.y <= 4 || bl.y >= ARENA_H - 4) { bl.vy *= -1; bl.y = Math.max(4, Math.min(ARENA_H - 4, bl.y)); bounced = true; }
+        // Abprallen an der Wand in der Mitte
+        if (bounceOffWallIfNeeded(bl)) bounced = true;
+
+        if (bounced) {
+          bl.bounces++;
+          if (bl.bounces >= BULLET_MAX_BOUNCES) {
+            spawnExplosion(bl.x, bl.y, 46);
+            remove(ref(db, 'panzerState/bullets/' + bid));
+            delete myBullets[bid];
+            continue;
+          }
+        }
+
+        if (shouldWrite) {
+          update(ref(db, 'panzerState/bullets/' + bid), { x: bl.x, y: bl.y, vx: bl.vx, vy: bl.vy, bounces: bl.bounces });
+        }
+      }
     }
 
     function tickMyMovement() {
@@ -180,28 +242,64 @@
       writeMyTank();
     }
 
-    // ==== ALLE PANZER & GESCHOSSE (aus Firebase gelesen, fürs Zeichnen und für die eigene
-    // Treffer-Prüfung - jeder Client prüft nur, ob ER SELBST von einem fremden Geschoss
-    // getroffen wird, das hält es einfach und robust). ====
+    // ==== ALLE PANZER & GESCHOSSE (aus Firebase gelesen, fürs Zeichnen fremder Geschosse und
+    // für die eigene Treffer-Prüfung - jeder Client prüft nur, ob ER SELBST von einem fremden
+    // Geschoss getroffen wird, das hält es einfach und robust). ====
     let allTanks = {};
     let allBullets = {};
     onValue(ref(db, 'panzerState/tanks'), (snap) => { allTanks = snap.val() || {}; });
-    onValue(ref(db, 'panzerState/bullets'), (snap) => { allBullets = snap.val() || {}; });
-
-    function checkIfImHit() {
-      if (!gameRunning || iAmDead || !my) return;
+    onValue(ref(db, 'panzerState/bullets'), (snap) => {
+      allBullets = snap.val() || {};
+      // Sicherheitsnetz: falls der Besitzer eines Geschosses mitten im Spiel die Seite
+      // schließt, würde es sonst für immer in Firebase hängen bleiben.
       const now = Date.now();
       for (const bid in allBullets) {
         const b = allBullets[bid];
+        if (b && b.createdAt && now - b.createdAt > 6000) remove(ref(db, 'panzerState/bullets/' + bid));
+      }
+    });
+
+    // Kleine Explosionen (Geschoss- und Panzer-Treffer): GIFs animieren auf einem Canvas
+    // NICHT (da erscheint nur ein Standbild) - deshalb hier als echtes <img>-Element auf einer
+    // eigenen Ebene über dem Canvas, prozentual positioniert, damit es unabhängig von der
+    // tatsächlichen Bildschirmgröße immer an der richtigen Stelle sitzt.
+    function spawnExplosion(x, y, size) {
+      const layer = document.getElementById("explosion-layer");
+      if (!layer) return;
+      const img = document.createElement('img');
+      img.src = EXPLOSION_IMG_URL;
+      img.style.position = 'absolute';
+      img.style.left = ((x / ARENA_W) * 100) + '%';
+      img.style.top = ((y / ARENA_H) * 100) + '%';
+      img.style.width = ((size / ARENA_W) * 100) + '%';
+      img.style.transform = 'translate(-50%, -50%)';
+      img.style.pointerEvents = 'none';
+      layer.appendChild(img);
+      setTimeout(() => img.remove(), EXPLOSION_MS);
+    }
+
+    // Panzer-Explosionen für ALLE sichtbar machen: sobald ein Panzer laut Firebase von
+    // lebendig auf tot wechselt, spielt JEDER Client (nicht nur das Opfer selbst) an dessen
+    // letzter bekannter Position eine Explosion ab.
+    let lastKnownAliveState = {};
+    onValue(ref(db, 'panzerState/tanks'), (snap) => {
+      const tanks = snap.val() || {};
+      for (const tid in tanks) {
+        const t = tanks[tid];
+        const wasAlive = lastKnownAliveState[tid] !== false;
+        if (wasAlive && t && t.alive === false) {
+          spawnExplosion(t.x + TANK_SIZE / 2, t.y + TANK_SIZE / 2, TANK_SIZE * 1.6);
+        }
+        lastKnownAliveState[tid] = t ? t.alive !== false : true;
+      }
+    });
+
+    function checkIfImHit() {
+      if (!gameRunning || iAmDead || !my) return;
+      for (const bid in allBullets) {
+        const b = allBullets[bid];
         if (!b || b.ownerId === playerId) continue;
-        const age = now - b.firedAt;
-        if (age < 0 || age > BULLET_LIFETIME_MS) continue;
-        const dist = age / 1000 * BULLET_SPEED * 60; // Strecke, die das Geschoss seit dem Abschuss zurückgelegt hat
-        const rad = b.angle * Math.PI / 180;
-        const bx = b.x + Math.sin(rad) * dist;
-        const by = b.y - Math.cos(rad) * dist;
-        if (overlapsWall(bx - 3, by - 3, 6)) continue; // Geschoss steckt in der Wand fest
-        const hit = bx > my.x && bx < my.x + TANK_SIZE && by > my.y && by < my.y + TANK_SIZE;
+        const hit = b.x > my.x && b.x < my.x + TANK_SIZE && b.y > my.y && b.y < my.y + TANK_SIZE;
         if (hit) {
           iAmDead = true;
           my.alive = false;
@@ -263,27 +361,27 @@
       }
       if (my) drawTank({ ...my, name: myName }, true);
 
-      // Geschosse
-      const now = Date.now();
+      // Geschosse: eigene aus der lokalen, ruckelfreien Simulation, fremde aus Firebase
       ctx.fillStyle = '#ffd23f';
+      for (const bid in myBullets) {
+        const bl = myBullets[bid];
+        ctx.beginPath();
+        ctx.arc(bl.x, bl.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
       for (const bid in allBullets) {
+        if (bid.startsWith(playerId + '_b')) continue; // eigene schon oben gezeichnet
         const b = allBullets[bid];
         if (!b) continue;
-        const age = now - b.firedAt;
-        if (age < 0 || age > BULLET_LIFETIME_MS) continue;
-        const dist = age / 1000 * BULLET_SPEED * 60;
-        const rad = b.angle * Math.PI / 180;
-        const bx = b.x + Math.sin(rad) * dist;
-        const by = b.y - Math.cos(rad) * dist;
-        if (overlapsWall(bx - 3, by - 3, 6)) continue;
         ctx.beginPath();
-        ctx.arc(bx, by, 4, 0, Math.PI * 2);
+        ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
     function gameLoop() {
       tickMyMovement();
+      simulateMyBullets();
       checkIfImHit();
       renderFrame();
       maybeCheckGameOver();
@@ -392,7 +490,10 @@
       🎖️ Panzerschlacht 🎖️
     </h1>
     <p class="text-xs text-white/60 mb-3">Pfeiltasten zum Fahren · Leertaste zum Schießen · ein Leben, keine zweite Chance!</p>
-    <canvas id="panzer-canvas" width="900" height="540" class="w-full h-auto max-w-full mx-auto block"></canvas>
+    <div class="relative w-full max-w-full mx-auto" style="aspect-ratio: 900/540;">
+      <canvas id="panzer-canvas" width="900" height="540" class="w-full h-full block"></canvas>
+      <div id="explosion-layer" class="absolute inset-0 pointer-events-none"></div>
+    </div>
     <div class="text-xs text-white/50 mt-2">Du bist: <span id="player-info-name" class="font-bold text-[#7ed957]">...</span></div>
   </div>
 
