@@ -219,20 +219,20 @@
     // ==== RAD DES WAHNSINNS: keine Runden, keine Verpflichtungen. Ein Dreh löst sofort
     // eine Punkte-Umverteilung aus - komplett in diesem einen Moment erledigt. ====
     const WHEEL_EFFECTS = [
-      { id: 'e1', icon: '💥', title: 'Punkte-Dusche' },
-      { id: 'e2', icon: '👑', title: 'Robin Hood' },
-      { id: 'e4', icon: '⭐', title: 'Zufalls-Bonus' },
-      { id: 'e5', icon: '📉', title: 'Zufalls-Abzug' },
-      { id: 'e7', icon: '🦹', title: 'Punkteklau' },
-      { id: 'e8', icon: '💀', title: 'Fehlalarm' },
-      { id: 'e9', icon: '📊', title: 'Platzierungs-Check' },
-      { id: 'e10', icon: '🕵️', title: 'Großer Einbruch' },
-      { id: 'e11', icon: '🤏', title: 'Taschendiebstahl' },
-      { id: 'e12', icon: '💃', title: 'Schönheitswettbewerb' },
-      { id: 'e13', icon: '🖥️', title: 'IP mit Port' },
-      { id: 'e14', icon: '⌨️', title: 'G statt F' },
-      { id: 'e15', icon: '😤', title: 'Widerworte' },
-      { id: 'e16', icon: '🦷', title: 'Zähne vergessen' }
+      { id: 'e1', icon: '🎉', title: 'Punkte-Dusche', type: 'positive' },
+      { id: 'e2', icon: '🏹', title: 'Robin Hood', type: 'neutral' },
+      { id: 'e4', icon: '🍀', title: 'Zufalls-Bonus', type: 'positive' },
+      { id: 'e5', icon: '💸', title: 'Zufalls-Abzug', type: 'negative' },
+      { id: 'e7', icon: '🥷', title: 'Punkteklau', type: 'negative' },
+      { id: 'e8', icon: '😅', title: 'Fehlalarm', type: 'neutral' },
+      { id: 'e9', icon: '📊', title: 'Platzierungs-Check', type: 'neutral' },
+      { id: 'e10', icon: '🕵️', title: 'Großer Einbruch', type: 'negative' },
+      { id: 'e11', icon: '🤏', title: 'Taschendiebstahl', type: 'negative' },
+      { id: 'e12', icon: '💃', title: 'Schönheitswettbewerb', type: 'positive' },
+      { id: 'e13', icon: '🖥️', title: 'IP mit Port', type: 'positive' },
+      { id: 'e14', icon: '⌨️', title: 'G statt F', type: 'negative' },
+      { id: 'e15', icon: '😤', title: 'Widerworte', type: 'negative' },
+      { id: 'e16', icon: '🦷', title: 'Zähne vergessen', type: 'neutral' }
     ];
 
     function shuffle(arr) {
@@ -460,11 +460,12 @@
       spinWheel(wheelEl, labels, targetIdx, () => {
         wheelEl.classList.add("hidden");
         resultEl.classList.remove("hidden");
+        const typeColor = effect.type === 'positive' ? '#7ed957' : effect.type === 'negative' ? '#ff2e93' : '#a78bfa';
         resultEl.innerHTML = `
-          <div class="wheel-sticker">
+          <div class="wheel-sticker" style="background: radial-gradient(circle at 35% 30%, #fff, ${typeColor}55 60%, ${typeColor} 100%);">
             <span class="wheel-sticker-emoji">${effect.icon}</span>
           </div>
-          <div class="text-xl font-black text-yellow-300 mb-2 mt-3">${effect.title}</div>
+          <div class="text-xl font-black mb-2 mt-3" style="color:${typeColor};">${effect.title}</div>
           <div class="text-sm text-white/80">${description || ''}</div>
         `;
         continueBox.classList.remove("hidden");

@@ -257,16 +257,141 @@
     // knalliger Tech-HUD-Look. Wahl wird in localStorage gemerkt. ====
     function applyTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
-      const btn = document.getElementById('theme-toggle-btn');
-      if (btn) btn.innerText = theme === 'dark' ? '☀️' : '🌙';
     }
+    // Dark-Mode-Button ist jetzt komplett zum einmaligen Schrecken-Easter-Egg umfunktioniert -
+    // kein echter Theme-Wechsel mehr. Nach einmaliger Auslösung (pro Spieler in Firebase
+    // gespeichert) passiert beim Klick nichts mehr.
+    applyTheme('light');
+    let darkEggPlaying = false;
+
     window.toggleTheme = function() {
-      const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-      const next = current === 'dark' ? 'light' : 'dark';
-      localStorage.setItem('quiz_theme', next);
-      applyTheme(next);
+      if (darkEggPlaying) return;
+      get(ref(db, 'players/' + playerId + '/darkEggUsed')).then((snap) => {
+        if (snap.val()) return; // schon einmal ausgelöst - keine Funktion mehr
+        darkEggPlaying = true;
+        playDarkEggSequence();
+      });
     };
-    applyTheme(localStorage.getItem('quiz_theme') || 'light');
+
+    function playDarkEggSequence() {
+      const overlay = document.getElementById('darkegg-overlay');
+      const gif = document.getElementById('darkegg-gif');
+      const cracks = document.getElementById('darkegg-cracks');
+      const flash = document.getElementById('darkegg-flash');
+      const bsod = document.getElementById('darkegg-bsod');
+      const popup = document.getElementById('darkegg-popup');
+
+      // Zurücksetzen für den Fall, dass irgendwas von einem vorherigen Zustand übrig wäre
+      gif.style.transition = 'none';
+      gif.style.width = '4px'; gif.style.height = '4px';
+      cracks.style.transition = 'none';
+      cracks.style.opacity = '0';
+      flash.style.transition = 'none';
+      flash.style.opacity = '0';
+
+      overlay.classList.remove('hidden');
+      void overlay.offsetWidth; // Reflow erzwingen, damit der Reset wirklich greift
+
+      const audioCtx = startBadPianoMusic();
+
+      // GIF wächst zügig auf, bis es nach 5 Sekunden den ganzen Bildschirm ausfüllt
+      requestAnimationFrame(() => {
+        gif.style.transition = 'width 5s cubic-bezier(.3,.1,.7,1), height 5s cubic-bezier(.3,.1,.7,1)';
+        const maxSize = Math.max(window.innerWidth, window.innerHeight) * 1.3;
+        gif.style.width = maxSize + 'px';
+        gif.style.height = maxSize + 'px';
+      });
+
+      // Risse blenden in der zweiten Hälfte langsam ein, als würde der Bildschirm gleich platzen
+      setTimeout(() => {
+        cracks.style.transition = 'opacity 2s ease-in';
+        cracks.style.opacity = '1';
+      }, 2500);
+
+      // Kurz vor Schluss: Schrei-Ton + greller Blitz, dann sofort zum Absturz-Bildschirm
+      setTimeout(() => {
+        playScreamSound(audioCtx);
+        flash.style.transition = 'opacity 0.15s ease-out';
+        flash.style.opacity = '1';
+      }, 4800);
+
+      setTimeout(() => {
+        stopBadPianoMusic(audioCtx);
+        overlay.classList.add('hidden');
+        bsod.classList.remove('hidden');
+      }, 5000);
+
+      setTimeout(() => {
+        bsod.classList.add('hidden');
+        finishDarkEgg();
+      }, 7000); // 2 Sekunden Absturz-Bildschirm nach den 5 Sekunden
+    }
+
+    function finishDarkEgg() {
+      get(ref(db, 'players/' + playerId)).then((snap) => {
+        const data = snap.val() || {};
+        const newScore = Math.max(0, (data.score || 0) - 50);
+        update(ref(db, 'players/' + playerId), { score: newScore, darkEggUsed: true });
+        document.getElementById('darkegg-popup').classList.remove('hidden');
+        darkEggPlaying = false;
+      });
+    }
+
+    window.closeDarkEggPopup = function() {
+      document.getElementById('darkegg-popup').classList.add('hidden');
+    };
+
+    // Bewusst einfach synthetisiert (kein externes Audio nötig): eine schleppende, leicht
+    // schiefe Klaviermelodie über Web Audio, die zum Schluss in einen kurzen Schrei übergeht.
+    function startBadPianoMusic() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const notes = [261.6, 277.2, 246.9, 233.1, 220.0, 207.7, 196.0]; // absichtlich schief/dissonant
+        const noteDuration = 0.7;
+        const master = ctx.createGain();
+        master.gain.value = 0.12;
+        master.connect(ctx.destination);
+
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          osc.type = 'triangle';
+          osc.frequency.value = freq;
+          const gain = ctx.createGain();
+          const startAt = ctx.currentTime + i * noteDuration;
+          gain.gain.setValueAtTime(0, startAt);
+          gain.gain.linearRampToValueAtTime(0.5, startAt + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, startAt + noteDuration * 0.95);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(startAt);
+          osc.stop(startAt + noteDuration);
+        });
+        ctx._master = master;
+        return ctx;
+      } catch (e) { return null; }
+    }
+    function stopBadPianoMusic(ctx) {
+      if (ctx && ctx._master) ctx._master.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+    }
+    function playScreamSound(ctx) {
+      if (!ctx) return;
+      try {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        const gain = ctx.createGain();
+        const now = ctx.currentTime;
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.15);
+        osc.frequency.exponentialRampToValueAtTime(500, now + 0.4);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.exponentialRampToValueAtTime(0.6, now + 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.55);
+      } catch (e) {}
+    }
 
     let playerId = localStorage.getItem("quiz_player_id");
     if (!playerId) {
@@ -279,15 +404,20 @@
     // ==== RAD DES WAHNSINNS: keine Runden, keine Verpflichtungen. Ein Dreh des Hosts löst
     // sofort eine Punkte-Umverteilung aus - alles ist in diesem einen Moment erledigt. ====
     const WHEEL_EFFECTS = [
-      { id: 'e1', icon: 'burst', emoji: '🎉', title: 'Punkte-Dusche' },
-      { id: 'e2', icon: 'crown', emoji: '🏹', title: 'Robin Hood' },
-      { id: 'e3', icon: 'wheel', emoji: '🔄', title: 'Tausch-Rausch' },
-      { id: 'e4', icon: 'star', emoji: '🍀', title: 'Zufalls-Bonus' },
-      { id: 'e5', icon: 'trendDown', emoji: '💸', title: 'Zufalls-Abzug' },
-      { id: 'e6', icon: 'crystal', emoji: '⚖️', title: 'Gleichmacherei' },
-      { id: 'e7', icon: 'mask', emoji: '🥷', title: 'Punkteklau' },
-      { id: 'e8', icon: 'skull', emoji: '😅', title: 'Fehlalarm' },
-      { id: 'e9', icon: 'chart', emoji: '📊', title: 'Platzierungs-Check' }
+      { id: 'e1', icon: '🎉', title: 'Punkte-Dusche', type: 'positive' },
+      { id: 'e2', icon: '🏹', title: 'Robin Hood', type: 'neutral' },
+      { id: 'e4', icon: '🍀', title: 'Zufalls-Bonus', type: 'positive' },
+      { id: 'e5', icon: '💸', title: 'Zufalls-Abzug', type: 'negative' },
+      { id: 'e7', icon: '🥷', title: 'Punkteklau', type: 'negative' },
+      { id: 'e8', icon: '😅', title: 'Fehlalarm', type: 'neutral' },
+      { id: 'e9', icon: '📊', title: 'Platzierungs-Check', type: 'neutral' },
+      { id: 'e10', icon: '🕵️', title: 'Großer Einbruch', type: 'negative' },
+      { id: 'e11', icon: '🤏', title: 'Taschendiebstahl', type: 'negative' },
+      { id: 'e12', icon: '💃', title: 'Schönheitswettbewerb', type: 'positive' },
+      { id: 'e13', icon: '🖥️', title: 'IP mit Port', type: 'positive' },
+      { id: 'e14', icon: '⌨️', title: 'G statt F', type: 'negative' },
+      { id: 'e15', icon: '😤', title: 'Widerworte', type: 'negative' },
+      { id: 'e16', icon: '🦷', title: 'Zähne vergessen', type: 'neutral' }
     ];
 
     function shuffle(arr) {
@@ -387,11 +517,12 @@
         const effect = WHEEL_EFFECTS[targetIdx];
         wheelEl.classList.add("hidden");
         resultEl.classList.remove("hidden");
+        const typeColor = effect?.type === 'positive' ? '#7ed957' : effect?.type === 'negative' ? '#ff2e93' : '#a78bfa';
         resultEl.innerHTML = effect ? `
-          <div class="wheel-sticker">
-            <span class="wheel-sticker-emoji">${effect.emoji || '🎲'}</span>
+          <div class="wheel-sticker" style="background: radial-gradient(circle at 35% 30%, #fff, ${typeColor}55 60%, ${typeColor} 100%);">
+            <span class="wheel-sticker-emoji">${effect.icon || '🎲'}</span>
           </div>
-          <div class="text-xl font-jax font-extrabold text-[#7017c9] mb-2 mt-3">${effect.title}</div>
+          <div class="text-xl font-jax font-extrabold mb-2 mt-3" style="color:${typeColor};">${effect.title}</div>
           <div class="text-sm text-[#1a1a2e]/80">${ws.description || ''}</div>
         ` : '';
         continueBox.classList.remove("hidden");
@@ -1499,13 +1630,15 @@
       </div>
     </div>
 
-    <button onclick="toggleTheme()" id="theme-toggle-btn" class="theme-toggle-btn" title="Hell-/Dunkelmodus umschalten">🌙</button>
     <div class="jax-card px-4 py-2 flex items-center space-x-3">
       <div>
         <div id="cockpit-user-name" class="text-sm font-jax font-bold text-[var(--c-ink)]">PILOT</div>
         <div id="cockpit-user-id" class="text-[10px] text-[var(--c-ink)]/50">ID: ---</div>
       </div>
     </div>
+    <button onclick="toggleTheme()" id="theme-toggle-btn" class="theme-toggle-btn" title="Hell-/Dunkelmodus umschalten">
+      <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/ef27eb7437b4c75b65eb938a3f5d0b8f548798ce/Darkmodeicon.png" class="w-6 h-6" alt="" onerror="this.parentElement.innerText='🌙'">
+    </button>
   </div>
 
   <div class="relative z-10 flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 my-6">
@@ -1650,6 +1783,44 @@
   <div id="paint-flyby-layer" class="hidden fixed inset-0 z-[94] pointer-events-none overflow-hidden">
     <div id="paint-flyby-name" class="absolute text-white font-jax font-bold text-xs px-2 py-1 bg-black/60 rounded-full" style="top: 0.5%;"></div>
     <img id="paint-flyby-img" class="absolute" style="top: 3%; width: 220px; border: 3px solid white; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.5);">
+  </div>
+
+  <!-- ==== DARKMODE-EASTEREGG: einmaliger Schrecken-Klick, danach ohne Funktion. ==== -->
+  <div id="darkegg-overlay" class="hidden fixed inset-0 z-[999] bg-black overflow-hidden">
+    <img id="darkegg-gif" src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/6e6229827ee062d3d983537f2594a7ebac80ab4a/dancing.gif"
+      class="absolute top-1/2 left-1/2" style="width:4px; height:4px; transform: translate(-50%,-50%) scale(1); border-radius:6px;" alt="">
+    <svg id="darkegg-cracks" class="absolute inset-0 w-full h-full opacity-0" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <g stroke="#ffffff" stroke-width="0.4" fill="none" opacity="0.85">
+        <path d="M0,0 L8,6 L6,14 L14,20 L10,28"/>
+        <path d="M100,0 L92,7 L96,15 L88,22 L93,30"/>
+        <path d="M0,100 L9,92 L5,84 L13,78 L9,70"/>
+        <path d="M100,100 L91,93 L95,85 L87,79 L92,71"/>
+        <path d="M50,0 L48,10 L53,18 L47,26"/>
+        <path d="M0,50 L10,48 L18,53 L26,47"/>
+        <path d="M100,50 L90,52 L82,47 L74,53"/>
+        <path d="M50,100 L52,90 L47,82 L53,74"/>
+      </g>
+    </svg>
+    <div id="darkegg-flash" class="absolute inset-0 bg-white opacity-0"></div>
+  </div>
+
+  <!-- Windows-Absturz-Bildschirm (eigene, humorvolle Version, kein echter Original-Text) -->
+  <div id="darkegg-bsod" class="hidden fixed inset-0 z-[999] bg-[#0037da] text-white flex items-center justify-center">
+    <div class="max-w-lg px-8 font-mono">
+      <div class="text-6xl mb-6">:(</div>
+      <p class="text-lg leading-relaxed">Deinem Gerät ist ein Problem widerfahren und es muss neu gestartet werden.<br>Wir sammeln gerade ein paar Fehlerinformationen und tanzen dabei weiter.</p>
+      <p class="mt-6 text-sm text-white/70">Fehlercode: TANZ_ZU_WEIT_GEGANGEN</p>
+    </div>
+  </div>
+
+  <!-- Auflösungs-Popup nach dem Easter-Egg -->
+  <div id="darkegg-popup" class="hidden fixed inset-0 z-[999] flex items-center justify-center bg-black/70">
+    <div class="jax-card jax-pop p-8 max-w-sm text-center space-y-4 text-[var(--c-ink)]">
+      <div class="text-5xl">😳</div>
+      <div class="font-jax font-extrabold text-2xl">Was war das?!</div>
+      <p class="text-sm">Und warum fehlen dir jetzt auf einmal <b>50 Punkte</b>?</p>
+      <button onclick="closeDarkEggPopup()" class="jax-btn bg-[var(--c-pink)] text-white font-jax font-bold px-6 py-3 w-full">Na gut...</button>
+    </div>
   </div>
 </body>
 </html>
