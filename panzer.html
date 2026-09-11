@@ -66,7 +66,7 @@
     const BULLET_SPEED = 6.5;
     const BULLET_MAX_BOUNCES = 3;
     const EXPLOSION_MS = 550;
-    const SHOOT_COOLDOWN_MS = 500;
+    const SHOOT_COOLDOWN_MS = 1100; // deutlich längere Pause zwischen zwei Schüssen
     const START_LIVES = 3;
 
     // Mindestens 10 Startpunkte, gleichmäßig am Rand verteilt und weit von der Wand entfernt
@@ -173,17 +173,19 @@
 
     window.addEventListener('keydown', (e) => {
       if (!gameRunning || iAmDead) return;
-      if (e.key === 'ArrowUp') { keys.up = true; e.preventDefault(); }
-      if (e.key === 'ArrowDown') { keys.down = true; e.preventDefault(); }
-      if (e.key === 'ArrowLeft') { keys.left = true; e.preventDefault(); }
-      if (e.key === 'ArrowRight') { keys.right = true; e.preventDefault(); }
+      const k = e.key.toLowerCase();
+      if (e.key === 'ArrowUp' || k === 'w') { keys.up = true; e.preventDefault(); }
+      if (e.key === 'ArrowDown' || k === 's') { keys.down = true; e.preventDefault(); }
+      if (e.key === 'ArrowLeft' || k === 'a') { keys.left = true; e.preventDefault(); }
+      if (e.key === 'ArrowRight' || k === 'd') { keys.right = true; e.preventDefault(); }
       if (e.code === 'Space') { e.preventDefault(); tryShoot(); }
     });
     window.addEventListener('keyup', (e) => {
-      if (e.key === 'ArrowUp') keys.up = false;
-      if (e.key === 'ArrowDown') keys.down = false;
-      if (e.key === 'ArrowLeft') keys.left = false;
-      if (e.key === 'ArrowRight') keys.right = false;
+      const k = e.key.toLowerCase();
+      if (e.key === 'ArrowUp' || k === 'w') keys.up = false;
+      if (e.key === 'ArrowDown' || k === 's') keys.down = false;
+      if (e.key === 'ArrowLeft' || k === 'a') keys.left = false;
+      if (e.key === 'ArrowRight' || k === 'd') keys.right = false;
     });
 
     // Eigene Geschosse werden hier lokal JEDEN Frame vollständig simuliert (Position,
@@ -238,6 +240,14 @@
       return true;
     }
 
+    // Gemeinsames "Treffer"-Ereignis, damit ALLE Clients die Explosion sehen, nicht nur der
+    // Schütze selbst - unabhängig davon, ob der Treffer tödlich war oder nur ein Herz kostet.
+    function broadcastHitEvent(x, y) {
+      const id = playerId + '_h' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+      set(ref(db, 'panzerState/hitEvents/' + id), { x, y, at: Date.now() });
+      setTimeout(() => remove(ref(db, 'panzerState/hitEvents/' + id)), 1500);
+    }
+
     function simulateMyBullets() {
       myBulletsWriteTick++;
       const shouldWrite = (myBulletsWriteTick % 2 === 0); // ~alle 2 Frames nach Firebase schreiben
@@ -246,10 +256,42 @@
         bl.x += bl.vx; bl.y += bl.vy;
         let bounced = false;
 
+        // WICHTIG: der SCHÜTZE selbst prüft hier jeden Frame, ob sein eigenes Geschoss gerade
+        // einen fremden Panzer trifft - läuft dadurch ohne Verzögerung durch einen Umweg über
+        // das (evtl. langsamere) Opfer-Gerät. Vorher flogen Geschosse teils sichtbar durch
+        // andere Panzer hindurch, weil nur das Opfer selbst den Treffer erkannt hat.
+        let hitTankId = null;
+        for (const tid in allTanks) {
+          if (tid === playerId) continue;
+          const t = allTanks[tid];
+          if (!t || t.alive === false) continue;
+          if (bl.x > t.x && bl.x < t.x + TANK_SIZE && bl.y > t.y && bl.y < t.y + TANK_SIZE) {
+            hitTankId = tid;
+            break;
+          }
+        }
+        if (hitTankId) {
+          spawnExplosion(bl.x, bl.y, TANK_SIZE * 1.3);
+          broadcastHitEvent(bl.x, bl.y);
+          remove(ref(db, 'panzerState/bullets/' + bid));
+          delete myBullets[bid];
+          runTransaction(ref(db, 'panzerState/tanks/' + hitTankId + '/lives'), (current) => {
+            const cur = (current === null || current === undefined) ? START_LIVES : current;
+            return Math.max(0, cur - 1);
+          }).then((result) => {
+            const newLives = result.snapshot.val();
+            if (newLives <= 0) {
+              update(ref(db, 'panzerState/tanks/' + hitTankId), { alive: false });
+              runTransaction(ref(db, 'panzerState/kills/' + playerId), (c) => (c || 0) + 1);
+            }
+          });
+          continue;
+        }
+
         // Abprallen an den Außenwänden der Arena
         if (bl.x <= 4 || bl.x >= ARENA_W - 4) { bl.vx *= -1; bl.x = Math.max(4, Math.min(ARENA_W - 4, bl.x)); bounced = true; }
         if (bl.y <= 4 || bl.y >= ARENA_H - 4) { bl.vy *= -1; bl.y = Math.max(4, Math.min(ARENA_H - 4, bl.y)); bounced = true; }
-        // Abprallen an der Wand in der Mitte
+        // Abprallen an einer der drei Wände
         if (bounceOffWallIfNeeded(bl)) bounced = true;
 
         if (bounced) {
@@ -268,14 +310,34 @@
       }
     }
 
+    // Fremde Treffer-Ereignisse (von anderen Schützen ausgelöst) auch bei mir als Explosion
+    // anzeigen, damit wirklich JEDER es sieht, nicht nur Schütze und Opfer.
+    let seenHitEventIds = new Set();
+    onValue(ref(db, 'panzerState/hitEvents'), (snap) => {
+      const events = snap.val() || {};
+      for (const eid in events) {
+        if (seenHitEventIds.has(eid)) continue;
+        seenHitEventIds.add(eid);
+        const ev = events[eid];
+        if (ev && Date.now() - ev.at < 1200) spawnExplosion(ev.x, ev.y, TANK_SIZE * 1.3);
+      }
+    });
+
     function tickMyMovement() {
       if (!gameRunning || iAmDead || !my) return;
-      let dx = 0, dy = 0, newAngle = my.angle;
-      if (keys.up) { dy = -MOVE_SPEED; newAngle = 0; }
-      else if (keys.down) { dy = MOVE_SPEED; newAngle = 180; }
-      else if (keys.left) { dx = -MOVE_SPEED; newAngle = -90; }
-      else if (keys.right) { dx = MOVE_SPEED; newAngle = 90; }
+      let dx = 0, dy = 0;
+      if (keys.up) dy -= 1;
+      if (keys.down) dy += 1;
+      if (keys.left) dx -= 1;
+      if (keys.right) dx += 1;
       if (dx === 0 && dy === 0) return;
+
+      // Bei diagonaler Bewegung (z.B. oben+rechts gleichzeitig) auf dieselbe Geschwindigkeit
+      // normieren wie bei gerader Fahrt, statt durch die Kombination schneller zu werden.
+      const len = Math.hypot(dx, dy);
+      dx = (dx / len) * MOVE_SPEED;
+      dy = (dy / len) * MOVE_SPEED;
+      const newAngle = Math.atan2(dx, -dy) * 180 / Math.PI; // 0° = oben, im Uhrzeigersinn
 
       let nx = Math.max(0, Math.min(ARENA_W - TANK_SIZE, my.x + dx));
       let ny = Math.max(0, Math.min(ARENA_H - TANK_SIZE, my.y + dy));
@@ -338,26 +400,19 @@
       }
     });
 
-    function checkIfImHit() {
-      if (!gameRunning || iAmDead || !my) return;
-      for (const bid in allBullets) {
-        const b = allBullets[bid];
-        if (!b || b.ownerId === playerId) continue;
-        const hit = b.x > my.x && b.x < my.x + TANK_SIZE && b.y > my.y && b.y < my.y + TANK_SIZE;
-        if (hit) {
-          remove(ref(db, 'panzerState/bullets/' + bid)); // Geschoss ist nach dem Treffer weg
-          spawnExplosion(my.x + TANK_SIZE / 2, my.y + TANK_SIZE / 2, TANK_SIZE * 1.3); // explodiert IMMER sofort bei Treffer, egal wie oft sie schon abgeprallt ist
-          my.lives = Math.max(0, (my.lives ?? START_LIVES) - 1);
-          if (my.lives <= 0) {
-            iAmDead = true;
-            my.alive = false;
-            runTransaction(ref(db, 'panzerState/kills/' + b.ownerId), (c) => (c || 0) + 1);
-          }
-          writeMyTank();
-          break;
-        }
+    // Der SCHÜTZE ist jetzt für Treffer verantwortlich (siehe simulateMyBullets) und schreibt
+    // "lives"/"alive" direkt in meinen Firebase-Eintrag - hier übernehme ich das nur noch live
+    // in meinen lokalen Zustand, statt selbst nochmal unabhängig auf Kollision zu prüfen
+    // (das führte vorher zu Verzögerungen/"durchfliegenden" Geschossen).
+    onValue(ref(db, 'panzerState/tanks/' + playerId), (snap) => {
+      const t = snap.val();
+      if (!t || !my) return;
+      if (typeof t.lives === 'number') my.lives = t.lives;
+      if (t.alive === false && !iAmDead) {
+        iAmDead = true;
+        my.alive = false;
       }
-    }
+    });
 
     // ==== RENDERN ====
     const canvas = document.getElementById("panzer-canvas");
@@ -487,7 +542,6 @@
     function gameLoop() {
       tickMyMovement();
       simulateMyBullets();
-      checkIfImHit();
       renderFrame();
       maybeCheckGameOver();
       requestAnimationFrame(gameLoop);
@@ -599,7 +653,7 @@
     <h1 class="font-jax text-2xl md:text-4xl font-extrabold text-[#7ed957] title-pop mb-1" style="text-shadow: 3px 3px 0 #08150a, -3px -3px 0 #08150a, 3px -3px 0 #08150a, -3px 3px 0 #08150a;">
       🎖️ Panzerschlacht 🎖️
     </h1>
-    <p class="text-xs text-white/60 mb-3">Pfeiltasten zum Fahren · Leertaste zum Schießen · ein Leben, keine zweite Chance!</p>
+    <p class="text-xs text-white/60 mb-3">Pfeiltasten oder WASD zum Fahren (auch diagonal) · Leertaste zum Schießen · 3 Herzen pro Panzer!</p>
     <div class="relative w-full max-w-full mx-auto" style="aspect-ratio: 900/540;">
       <canvas id="panzer-canvas" width="900" height="540" class="w-full h-full block"></canvas>
       <div id="explosion-layer" class="absolute inset-0 pointer-events-none"></div>
