@@ -1327,17 +1327,28 @@
 
   <!-- RAD DES WAHNSINNS MODAL -->
   <div id="chaos-card-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
-    <div class="admin-panel p-8 w-full max-w-sm border-2 border-yellow-400 text-center space-y-3">
-      <div class="font-black text-xl tracking-wide" style="font-family: 'Comic Sans MS', 'Baloo 2', cursive;">
+    <div class="p-8 w-full max-w-sm text-center space-y-3 relative overflow-hidden" style="background: radial-gradient(ellipse at top, #2b0f45 0%, #14081f 70%, #0a0413 100%); border: 4px solid #ff2e93; border-radius: 26px; box-shadow: 8px 8px 0 rgba(0,0,0,0.6), 0 0 30px rgba(255,46,224,0.25); color: #f4e9ff;">
+      <!-- Deko: Clowns und absurde Symbole, an den Rändern verteilt, stören den Text nicht -->
+      <div class="pointer-events-none absolute inset-0 text-2xl opacity-70" aria-hidden="true">
+        <span class="absolute" style="top:4px; left:6px; transform:rotate(180deg);">🤡</span>
+        <span class="absolute" style="top:6px; right:8px;">🎪</span>
+        <span class="absolute" style="bottom:6px; left:10px;">🃏</span>
+        <span class="absolute" style="bottom:4px; right:6px; transform:rotate(180deg);">🤡</span>
+        <span class="absolute text-lg" style="top:38px; left:-2px; transform:rotate(-25deg);">❓</span>
+        <span class="absolute text-lg" style="top:34px; right:-2px; transform:rotate(160deg);">✨</span>
+        <span class="absolute text-lg" style="bottom:36px; left:2px;">🌀</span>
+        <span class="absolute text-lg" style="bottom:32px; right:0px; transform:rotate(180deg);">⚡</span>
+      </div>
+      <div class="font-black text-xl tracking-wide relative" style="font-family: 'Comic Sans MS', 'Baloo 2', cursive;">
         <span style="color:#ff2e93;">R</span><span style="color:#ffd23f;">a</span><span style="color:#7ed957;">d</span>
         <span style="color:#3ecbff;">d</span><span style="color:#b026ff;">e</span><span style="color:#ff6a3d;">s</span>
         <span style="color:#ff2e93;">W</span><span style="color:#39ff8c;">a</span><span style="display:inline-block; transform: rotate(180deg); color:#00e5ff;">h</span><span style="color:#f5ff3d;">n</span><span style="color:#ff2ee0;">s</span><span style="color:#7ed957;">i</span><span style="color:#3ecbff;">n</span><span style="color:#ff8a3d;">n</span><span style="font-size:1.5em; color:#ff2e93; text-decoration: underline wavy #ff2e93 2px; text-underline-offset: 4px;">S</span>
       </div>
-      <div class="text-[10px] text-yellow-100/50 -mt-2">Kleine Dinge geschehen...</div>
-      <div id="chaos-roll-intro" class="text-sm text-yellow-100 min-h-[2.5rem] flex items-center justify-center"></div>
-      <div id="chaos-wheel-container" class="py-2"></div>
-      <div id="chaos-card-result" class="hidden"></div>
-      <div id="chaos-modal-continue" class="hidden"></div>
+      <div class="text-[10px] text-white/50 -mt-1 relative">Kleine Dinge geschehen...</div>
+      <div id="chaos-roll-intro" class="text-sm text-white/90 min-h-[2.5rem] flex items-center justify-center relative"></div>
+      <div id="chaos-wheel-container" class="py-2 relative"></div>
+      <div id="chaos-card-result" class="hidden relative"></div>
+      <div id="chaos-modal-continue" class="hidden relative"></div>
     </div>
   </div>
 

@@ -77,6 +77,7 @@
     });
 
     window.hostEndSnake = function() {
+      if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
       set(ref(db, 'snakeState'), null);
       update(ref(db, 'gameState'), { status: 'cockpit' });
     };
@@ -302,6 +303,7 @@
           document.getElementById("player-canvas-wrap").classList.add("hidden");
           document.getElementById("host-hint").classList.remove("hidden");
           document.getElementById("host-end-btn").classList.remove("hidden");
+          document.getElementById("host-end-persistent-btn").classList.remove("hidden");
         } else {
           ctx = document.getElementById("snake-canvas").getContext("2d");
         }
@@ -310,6 +312,10 @@
   </script>
 </head>
 <body class="sky-bg text-white min-h-screen flex flex-col items-center justify-center p-4 overflow-hidden relative select-none">
+
+  <button id="host-end-persistent-btn" onclick="hostEndSnake()" class="hidden fixed top-4 left-4 z-[95] jax-btn bg-white text-[#1a1a2e] font-jax font-bold px-4 py-2.5 text-sm">
+    🏠 Spiel beenden & zurück ins Cockpit
+  </button>
 
   <div id="countdown-overlay" class="hidden fixed inset-0 z-[90] bg-black/85 flex items-center justify-center">
     <div id="countdown-number" class="countdown-pop font-jax text-9xl font-extrabold text-[#7ed957]" style="text-shadow: 4px 4px 0 #08150a, -4px -4px 0 #08150a, 4px -4px 0 #08150a, -4px 4px 0 #08150a;">3</div>

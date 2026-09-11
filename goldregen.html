@@ -190,6 +190,7 @@
     });
 
     window.hostEndGoldregen = function() {
+      if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
       set(ref(db, 'goldregenState'), null);
       update(ref(db, 'gameState'), { status: 'cockpit' });
     };
@@ -201,6 +202,7 @@
         if (data && data.name && (data.name.includes("Host") || data.name.includes("Admin"))) {
           isHost = true;
           document.getElementById("host-end-btn")?.classList.remove("hidden");
+          document.getElementById("host-end-persistent-btn")?.classList.remove("hidden");
           // Nur der Host treibt das Spawnen der Münzen an - aber nur, wenn er es nicht schon
           // selbst tut (z.B. bei Seiten-Neuladen mitten im Regen), daher Prüfung auf Startzeit.
           get(ref(db, 'goldregenState/startedAt')).then((s) => {
@@ -227,6 +229,10 @@
   </script>
 </head>
 <body class="sky-bg text-white min-h-screen flex flex-col items-center justify-center p-4 overflow-hidden relative select-none">
+
+  <button id="host-end-persistent-btn" onclick="hostEndGoldregen()" class="hidden fixed top-4 left-4 z-[95] jax-btn bg-white text-[#1a1a2e] font-jax font-bold px-4 py-2.5 text-sm">
+    🏠 Spiel beenden & zurück ins Cockpit
+  </button>
 
   <div id="coin-layer" class="fixed inset-0 pointer-events-none z-20"></div>
 

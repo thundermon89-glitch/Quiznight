@@ -601,6 +601,7 @@
         const data = snap.val();
         if (data && data.name && (data.name.includes("Host") || data.name.includes("Admin"))) {
           isHost = true;
+          document.getElementById("host-return-persistent-btn")?.classList.remove("hidden");
         }
         // Der Zeremonie-Zustand wird ERST JETZT beobachtet - also garantiert NACHDEM isHost
         // feststeht. Sonst könnte der Host-Button fälschlich für immer versteckt bleiben,
@@ -640,6 +641,13 @@
       });
     }
 
+    // Einfache, NICHT-destruktive Rückkehr ins Cockpit als Notfall-Option - im Gegensatz zu
+    // hostEndCeremony() weiter unten werden hier KEINE Punkte/Spielerdaten gelöscht.
+    window.hostReturnToCockpit = function() {
+      if (!confirm("Zurück ins Cockpit? Punkte und Spielerdaten bleiben dabei erhalten.")) return;
+      update(ref(db, 'gameState'), { status: 'cockpit' });
+    };
+
     window.hostEndCeremony = function() {
       if (!confirm("Die Partie wirklich beenden? Alle Spiele werden zurückgesetzt, die Lobby wird komplett geleert (alle Spieler werden abgemeldet) und alle Spielerdaten (Punkte usw.) werden gelöscht - für eine wirklich neue Sitzung.")) return;
 
@@ -664,6 +672,10 @@
   </script>
 </head>
 <body class="night-sky text-white min-h-screen flex flex-col items-center justify-between p-4 md:p-8 overflow-hidden relative select-none">
+
+  <button id="host-return-persistent-btn" onclick="hostReturnToCockpit()" class="hidden fixed top-4 left-4 z-[95] jax-btn bg-white text-[#1a1a2e] font-jax font-bold px-4 py-2.5 text-sm">
+    🏠 Zurück ins Cockpit
+  </button>
 
   <div id="stars-layer" class="fixed inset-0 pointer-events-none z-0"></div>
   <div id="confetti-layer" class="fixed inset-0 pointer-events-none z-40 overflow-hidden"></div>

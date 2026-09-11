@@ -620,6 +620,7 @@
         const data = snap.val();
         if (data && data.name && (data.name.includes("Host") || data.name.includes("Admin"))) {
           isHost = true;
+          document.getElementById("host-end-game-btn")?.classList.remove("hidden");
           document.getElementById("host-panel")?.classList.remove("hidden");
           document.getElementById("player-panel")?.classList.add("hidden");
           // WICHTIG: die Host-Erkennung läuft asynchron und kommt oft NACH dem ersten
@@ -633,6 +634,11 @@
   </script>
 </head>
 <body class="studio-bg text-white min-h-screen flex flex-col justify-between p-4 md:p-8 select-none relative overflow-x-hidden">
+
+  <!-- ZURÜCK-INS-COCKPIT: bewusst unten rechts fixiert, damit er nicht aus Versehen getroffen wird -->
+  <button id="host-end-game-btn" onclick="hostEndGame6()" class="hidden fixed bottom-4 right-4 z-30 py-3 px-4 jax-btn bg-[#ff2e93] text-white font-jax font-bold text-sm flex items-center justify-center gap-1.5">
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8"/><path d="M14 12h7m0 0l-3-3m3 3l-3 3"/></svg> Spiel beenden & zurück ins Cockpit
+  </button>
 
   <!-- TOP HUD BAR -->
   <header class="relative z-10 flex justify-between items-center jax-card p-4 text-[#1a1a2e]">

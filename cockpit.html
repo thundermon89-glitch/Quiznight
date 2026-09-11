@@ -705,11 +705,25 @@
             const newCount = result.snapshot.val() || 0;
             if (newCount >= 3) {
               set(ref(db, 'gameState/glucksradClickCount'), 0); // Zähler beginnt wieder von vorne
+              resetAllPlayersFlag('glucksradClicked'); // grüner Rahmen für alle wieder weg
               spinGlucksradWheel();
             }
           });
       });
     };
+
+    // Setzt ein bestimmtes Merkmal (z.B. "schon geklickt") bei ALLEN aktiven Spielern zurück -
+    // damit die grüne Umrandung nach dem Auslösen wieder verschwindet und die nächste Runde
+    // von vorne beginnen kann.
+    function resetAllPlayersFlag(fieldName) {
+      get(ref(db, 'players/')).then((snap) => {
+        const players = snap.val() || {};
+        const activeIds = getActiveIds(players);
+        const updates = {};
+        activeIds.forEach(id => { updates['players/' + id + '/' + fieldName] = false; });
+        update(ref(db), updates);
+      });
+    }
 
     function spawnDustPoof(x, y) {
       const dust = document.createElement('div');
@@ -720,27 +734,26 @@
       setTimeout(() => dust.remove(), 550);
     }
 
-    // Live-Anzeige des Zählers für alle Spieler, und eigenen grünen Rahmen beim Neuladen
-    // wiederherstellen, falls schon geklickt wurde.
+    // Live-Anzeige des Zählers für alle Spieler, und eigenen grünen Rahmen live halten -
+    // reagiert auch darauf, wenn der Rahmen nach einem erfolgreichen Dreh wieder zurückgesetzt
+    // wird (nicht mehr nur einmalig beim Laden geprüft, sonst hätte man die Rücksetzung erst
+    // nach einem Neuladen der Seite gesehen).
     onValue(ref(db, 'gameState/glucksradClickCount'), (snapshot) => {
       const label = document.getElementById('glucksrad-count-label');
       if (label) label.innerText = (snapshot.val() || 0) + '/3';
     });
-    get(ref(db, 'players/' + playerId + '/glucksradClicked')).then((snap) => {
-      if (snap.val()) {
-        const btn = document.getElementById('glucksrad-icon-btn');
-        if (btn) btn.classList.add('icon-gif-clicked');
-      }
+    onValue(ref(db, 'players/' + playerId + '/glucksradClicked'), (snap) => {
+      const btn = document.getElementById('glucksrad-icon-btn');
+      if (btn) btn.classList.toggle('icon-gif-clicked', !!snap.val());
     });
 
     // ==== SCHLACHT-ICON: drei Klicks lösen eines der drei Minispiele aus (zufällig, max. 3x
     // pro Spiel insgesamt), mit gemeinsamer "Alle bereit?"-Vorbereitung davor. ====
     const BATTLE_GAMES = {
-      connect4: { label: 'Vier Gewinnt', activeGame: 'vier-gewinnt.html', stateKey: 'connect4State', resetVal: null },
-      snake: { label: 'Snake', activeGame: 'snake.html', stateKey: 'snakeState', resetVal: { status: 'active', startedAt: 0, scores: null, finished: null } },
-      goldregen: { label: 'Goldregen', activeGame: 'goldregenState_placeholder', stateKey: 'goldregenState', resetVal: { status: 'active', startedAt: 0, coins: null, tally: null } }
+      connect4: { label: 'Vier Gewinnt', activeGame: 'vier-gewinnt.html', stateKey: 'connect4State' },
+      snake: { label: 'Snake', activeGame: 'snake.html', stateKey: 'snakeState' },
+      goldregen: { label: 'Goldregen', activeGame: 'goldregen.html', stateKey: 'goldregenState' }
     };
-    BATTLE_GAMES.goldregen.activeGame = 'goldregen.html';
 
     window.clickBattleIcon = function(evt) {
       const btn = document.getElementById('battle-icon-btn');
@@ -766,11 +779,9 @@
       const label = document.getElementById('battle-count-label');
       if (label) label.innerText = (snapshot.val() || 0) + '/3';
     });
-    get(ref(db, 'players/' + playerId + '/battleIconClicked')).then((snap) => {
-      if (snap.val()) {
-        const btn = document.getElementById('battle-icon-btn');
-        if (btn) btn.classList.add('icon-gif-clicked');
-      }
+    onValue(ref(db, 'players/' + playerId + '/battleIconClicked'), (snap) => {
+      const btn = document.getElementById('battle-icon-btn');
+      if (btn) btn.classList.toggle('icon-gif-clicked', !!snap.val());
     });
 
     // Wählt eines der Minispiele, die noch nicht 3x gespielt wurden, zufällig aus - oder
@@ -834,12 +845,20 @@
       const game = BATTLE_GAMES[gameKey];
       if (!game) return;
       set(ref(db, 'gameState/battlePrepEvent'), null); // Vorbereitungs-Fenster für alle schließen
+      resetAllPlayersFlag('battleIconClicked'); // grüner Rahmen für alle wieder weg
 
-      set(ref(db, game.stateKey), game.resetVal).then(() => {
+      // Startzeitpunkt jetzt live gesetzt (nicht mehr fest 0) - sonst dachten Snake/Goldregen,
+      // sie hätten schon 1970 begonnen und wären demnach längst vorbei.
+      const now = Date.now();
+      const resetVal = gameKey === 'connect4' ? null
+        : gameKey === 'snake' ? { status: 'active', startedAt: now, scores: null, finished: null }
+        : { status: 'active', startedAt: now, coins: null, tally: null };
+
+      set(ref(db, game.stateKey), resetVal).then(() => {
         set(ref(db, 'gameState'), {
           status: 'in_game',
           activeGame: game.activeGame,
-          startTime: Date.now()
+          startTime: now
         }).then(() => {
           runTransaction(ref(db, 'gameState/minigamePlayCounts/' + gameKey), (current) => (current || 0) + 1)
             .then(() => {
@@ -2064,14 +2083,11 @@
 
     <div class="jax-card-dark p-6 flex flex-col items-center justify-between text-center space-y-4">
       <div class="w-full my-auto space-y-3">
-        <div class="flex items-center justify-center gap-4">
-          <div class="flex flex-col items-center gap-1">
-            <button onclick="openPaintWindow()" class="icon-gif-box" title="IcqDraw öffnen">
-              <span class="icon-gif-placeholder">🖌️</span>
-              <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/1b42781ed36285d696daa226a1314dac03171ea8/creative-thinking_19034744.gif" class="icon-gif-img" alt="" onerror="this.style.display='none'">
-            </button>
-            <span class="text-[11px] font-jax font-extrabold text-white/90 tracking-wide">IcqDraw</span>
-          </div>
+        <div class="grid grid-cols-2 gap-4 justify-items-center max-w-[220px] mx-auto">
+          <button onclick="openPaintWindow()" class="icon-gif-box" title="IcqDraw öffnen">
+            <span class="icon-gif-placeholder">🖌️</span>
+            <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/1b42781ed36285d696daa226a1314dac03171ea8/creative-thinking_19034744.gif" class="icon-gif-img" alt="" onerror="this.style.display='none'">
+          </button>
 
           <div class="relative">
             <button class="icon-gif-box" ondblclick="openInvaderGame()" title="Doppelklick für ein kleines Geheimspiel...">
@@ -2096,7 +2112,7 @@
           <div class="flex flex-col items-center gap-1">
             <button id="glucksrad-icon-btn" onclick="clickGlucksradIcon(event)" class="icon-gif-box" title="Gemeinsam mit anderen das Glücksrad in Bewegung bringen...">
               <span class="icon-gif-placeholder">🎡</span>
-              <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/1b42781ed36285d696daa226a1314dac03171ea8/glucksrad.gif" class="icon-gif-img" alt="" onerror="this.style.display='none'">
+              <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/405ff09dff8bae3e865dacb0c23073dab712b71a/glucksrad.gif" class="icon-gif-img" alt="" onerror="this.style.display='none'">
             </button>
             <span id="glucksrad-count-label" class="text-[11px] font-jax font-extrabold text-white/90 tracking-wide">0/3</span>
           </div>
