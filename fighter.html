@@ -655,10 +655,11 @@
       });
     }
 
-    // Steuerung: Pfeile/A-D laufen, ↓/S ducken, Leertaste springen, Strg Schlag, Shift Tritt, Strg+Shift Spezial
+    // Steuerung: Pfeile/A-D laufen, ↓/S ducken, Leertaste springen, Strg Schlag, Y Tritt, Strg+Y Spezial
     const CODEMAP = {
       ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowDown: 'down', KeyS: 'down',
-      Space: 'up', ArrowUp: 'up', ControlLeft: 'punch', ControlRight: 'punch', ShiftLeft: 'kick', ShiftRight: 'kick'
+      Space: 'up', ArrowUp: 'up', ControlLeft: 'punch', ControlRight: 'punch',
+      KeyZ: 'kick', KeyY: 'kick', IntlBackslash: 'kick', KeyX: 'kick' // Y (dt. Tastatur), Z (US), < und X - kein Shift wegen Windows-Einrastfunktion
     };
     window.addEventListener('keydown', (e) => {
       const k = CODEMAP[e.code];
@@ -695,7 +696,7 @@
       const backKey = my.face === 1 ? 'left' : 'right';
       const grounded = my.y <= 0 && my.vy <= 0;
 
-      // Angriffstasten 3 Frames puffern: Strg + Shift zusammen = Spezialangriff
+      // Angriffstasten 3 Frames puffern: Strg + Y zusammen = Spezialangriff
       if (keysPressed.has('punch') || keysPressed.has('kick')) {
         if (!pendingAtk) pendingAtk = { f: 0, p: false, k: false };
         if (keysPressed.has('punch')) pendingAtk.p = true;
@@ -1123,6 +1124,7 @@
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(loFrame, 0, 0, W, H);
       ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(decalHi, 0, 0);
       // Scheinwerferkegel (schwenken leicht)
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       [[210, 0.9], [480, 1.3], [750, 1.1]].forEach(([lx, sp], i) => {
@@ -1183,6 +1185,7 @@
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(loFrame, 0, 0, W, H);
       ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(decalHi, 0, 0);
 
       // Lichtkegel der Laterne
       if (lampOn) {
@@ -1205,67 +1208,60 @@
     }
 
     // --- Blut, Wunden, Dellen ---------------------------------------------------------------
-    const BLOOD = ['#7a0000', '#9e0808', '#c21010', '#e01b1b', '#5c0000'];
-    function clearDecals() { dg.clearRect(0, 0, LW, LH); }
+    // Blut auf dem Boden in voller Auflösung (feiner als der Pixel-Hintergrund), Risse im Pixel-Raster
+    const decalHi = document.createElement('canvas'); decalHi.width = W; decalHi.height = H;
+    const dh = decalHi.getContext('2d');
+    const BLOOD = ['#5e0505', '#740808', '#8c0b0b', '#a31212'];
+    function clearDecals() { dg.clearRect(0, 0, LW, LH); dh.clearRect(0, 0, W, H); }
 
+    // Tropfen fliegen kurz und landen nahe beim Getroffenen auf dem Boden
     function spawnBlood(x, y, dir, amount, power) {
+      const pw = power || 1;
       for (let i = 0; i < amount; i++) {
-        const sp = (0.8 + Math.random() * 6.5) * (power || 1);
         drops.push({
-          x: x + (Math.random() - 0.5) * 16, y: y + (Math.random() - 0.5) * 16,
-          vx: dir * sp + (Math.random() - 0.5) * 3.5, vy: -1 - Math.random() * 7 * (power || 1),
-          s: Math.random() < 0.3 ? 2 : 1, c: BLOOD[(Math.random() * BLOOD.length) | 0],
-          land: GROUND - 30 + Math.random() * 75,                       // Tiefe auf dem Pflaster
-          wall: Math.random() < 0.25 ? 14 + Math.random() * 30 : 0,     // klatscht hinten an Wand/Container
-          age: 0
+          x: x + (Math.random() - 0.5) * 10, y: y + (Math.random() - 0.5) * 10,
+          vx: dir * (0.4 + Math.random() * 3.2) * pw + (Math.random() - 0.5) * 1.2,
+          vy: -(0.3 + Math.random() * 3.4) * pw,
+          s: 1.2 + Math.random() * 1.4, c: BLOOD[(Math.random() * BLOOD.length) | 0],
+          land: GROUND - 10 + Math.random() * 28
         });
       }
     }
     function stepBlood() {
       for (const d of drops) {
-        d.age++;
-        d.x += d.vx; d.y += d.vy; d.vy += 0.36; d.vx *= 0.985;
-        if (d.wall && d.age >= d.wall && d.y < FLOOR_Y - 6) { splat(d.x, d.y, d.s + 1, d.c, true); d.dead = true; }
-        else if (d.vy > 0 && d.y >= d.land) { splat(d.x, d.land, d.s, d.c, false); d.dead = true; }
+        d.x += d.vx; d.y += d.vy; d.vy += 0.32; d.vx *= 0.97;
+        if (d.vy > 0 && d.y >= d.land) { splat(d.x, d.land, d.s, d.c, d.vx); d.dead = true; }
         else if (d.x < -30 || d.x > W + 30 || d.y > H + 20) d.dead = true;
       }
       drops = drops.filter(d => !d.dead);
-      // Wunden tropfen nach, je weniger Leben desto mehr
       for (const pid in lastFd) {
         const fd = lastFd[pid], ws = wounds[pid];
-        if (!fd || !ws || !ws.length || fd.y > 5) continue;
+        if (!fd) continue;
+        // Blutspuren an der Figur laufen langsam nach unten
+        if (ws) for (const w of ws) if (w.drip < w.dripMax) w.drip += 0.04;
+        // Bei wenig Leben tropft es von der Figur auf den Boden
         const hp = fd.hp == null ? START_HP : fd.hp;
-        if (Math.random() < (1 - hp / START_HP) * 0.06) {
-          const wd = ws[(Math.random() * ws.length) | 0];
-          const sc = fd.scale || 1.85;
-          drops.push({ x: fd.x + fd.face * (wd.x - 100) * sc, y: GROUND - (158 - wd.y) * sc, vx: (Math.random() - 0.5) * 0.4, vy: 0.5, s: 1, c: BLOOD[1], land: GROUND + Math.random() * 10, wall: 0, age: 0 });
+        if (ws && ws.length && fd.y < 5 && Math.random() < (1 - hp / START_HP) * 0.05) {
+          const wd = ws[(Math.random() * ws.length) | 0], sc = fd.scale || 1.85;
+          drops.push({ x: fd.x + fd.face * (wd.x - 100) * sc, y: GROUND - (158 - wd.y - wd.drip) * sc, vx: 0, vy: 0.3, s: 1.3, c: BLOOD[1], land: GROUND - 2 + Math.random() * 8 });
         }
-      }
-      // Blutlache unter K.O.-Kämpfern wächst
-      for (const pid in lastFd) {
-        const fd = lastFd[pid];
-        if (!fd || fd.act !== 'ko') continue;
-        const r = koPools[pid] = Math.min(16, (koPools[pid] || 0) + 0.05);
-        if (Math.random() < 0.25) {
-          dg.fillStyle = Math.random() < 0.5 ? '#6e0000' : '#8a0505';
-          dg.beginPath(); dg.ellipse(Math.round((fd.x + fd.face * 45) / LO), Math.round((GROUND + 6) / LO), r, r / 3.2, 0, 0, Math.PI * 2); dg.fill();
+        // Blutlache unter K.O.-Kämpfern: wird langsam größer und in der Mitte dunkler
+        if (fd.act === 'ko') {
+          const r = koPools[pid] = Math.min(46, (koPools[pid] || 6) + 0.12);
+          if (Math.random() < 0.08) {
+            dh.fillStyle = 'rgba(70,4,4,0.22)';
+            dh.beginPath(); dh.ellipse(fd.x + fd.face * 40, GROUND + 6, r, r / 4, 0, 0, Math.PI * 2); dh.fill();
+          }
         }
       }
     }
-    function splat(x, y, s, c, wall) {
-      const lx = Math.round(x / LO), ly = Math.round(y / LO);
-      dg.fillStyle = c;
-      if (wall) {
-        dg.fillRect(lx - s + 1, ly - s + 1, s * 2 - 1, s * 2 - 1);
-        dg.fillRect(lx - s, ly, s * 2 + 1, 1);
-        const drip = (Math.random() * 7) | 0;            // läuft an der Wand herunter
-        dg.fillRect(lx, ly, 1, drip + s);
-        if (Math.random() < 0.5) dg.fillRect(lx + (Math.random() < 0.5 ? -2 : 2) * s, ly + 1, 1, 1);
-      } else {
-        dg.fillRect(lx - s - 1, ly, s * 2 + 3, Math.max(1, s));  // flach aufs Pflaster
-        if (Math.random() < 0.6) dg.fillRect(lx + ((Math.random() * 8 - 4) | 0), ly + ((Math.random() * 2) | 0), 1, 1);
-        dg.fillStyle = '#4a0000'; dg.fillRect(lx - s, ly + Math.max(1, s) - 1, s * 2 + 1, 1);
-      }
+    // Aufprall auf dem Pflaster: kleiner länglicher Fleck in Flugrichtung + ein paar Spritzer
+    function splat(x, y, s, c, vx) {
+      const len = s + Math.min(4, Math.abs(vx) * 1.2);
+      dh.globalAlpha = 0.85; dh.fillStyle = c;
+      dh.beginPath(); dh.ellipse(x, y, len, s * 0.45, 0, 0, Math.PI * 2); dh.fill();
+      if (Math.random() < 0.5) { dh.beginPath(); dh.arc(x + Math.sign(vx || 1) * (len + 1 + Math.random() * 3), y + (Math.random() - 0.5), 0.7, 0, Math.PI * 2); dh.fill(); }
+      dh.globalAlpha = 1;
     }
     // Delle/Riss: zackige dunkle Linien, ausgehend von einem Einschlagspunkt
     function crack(lx, ly, size, flat) {
@@ -1288,30 +1284,38 @@
     function onHurt(pid, x, fy, face, hh, dmg, act) {
       const ko = act === 'ko';
       const wy = GROUND - (fy || 0) - hh;
-      const amount = Math.round((10 + dmg * 3.5) * (ko ? 2.4 : 1));
-      spawnBlood(x - face * 8, wy, -face, amount, ko ? 1.3 : 1);       // nach hinten weg
-      spawnBlood(x, wy, face, Math.round(amount / 3), 0.7);            // ein bisschen nach vorn
-      spawnSpark(x, wy, '#ff3b3b', 6);
-      // Wunden auf der Figur (Koordinaten im Sprite-Frame: Füße bei x=100, y=158)
+      const amount = Math.round((5 + dmg) * (ko ? 2.2 : 1));
+      spawnBlood(x - face * 6, wy, -face, amount, ko ? 1.2 : 1);     // spritzt vom Gegner weg
+      spawnBlood(x, wy, face, Math.round(amount / 4), 0.5);
+      // Blut klebt an der Figur: kleine Pixel-Flecken genau an der Trefferstelle (im Sprite-Frame, Füße bei x=100/y=158)
       const sc = (lastFd[pid] && lastFd[pid].scale) || 1.85;
       const list = wounds[pid] = wounds[pid] || [];
       const n = ko ? 3 : (dmg >= 9 ? 2 : 1);
       for (let i = 0; i < n; i++) {
-        list.push({ x: 100 + (Math.random() - 0.5) * 22, y: 158 - (hh + (Math.random() - 0.5) * 30) / sc, r: 1 + Math.random() * 2.2, drip: 2 + Math.random() * 7, kind: Math.random() < 0.35 ? 'bruise' : 'cut' });
+        const head = hh >= 130;
+        const cx = 100 + (Math.random() - 0.4) * (head ? 10 : 18);
+        const cy = 158 - (hh + (Math.random() - 0.5) * (head ? 10 : 24)) / sc;
+        const px = [];
+        const cnt = 3 + Math.min(7, (dmg / 2) | 0) + ((Math.random() * 3) | 0);
+        for (let k = 0; k < cnt; k++) {
+          const a = Math.random() * Math.PI * 2, r = Math.random() * Math.random() * 3.2;
+          px.push([Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r * 0.8), (Math.random() * 3) | 0]);
+        }
+        list.push({ x: Math.round(cx), y: Math.round(cy), px, drip: 0, dripMax: Math.random() < 0.6 ? 2 + Math.random() * 6 : 0 });
       }
-      if (list.length > 45) list.splice(0, list.length - 45);
-      // Gegen den Rand geprügelt? Dann gibt's eine Delle in Wand/Container
+      if (list.length > 40) list.splice(0, list.length - 40);
+      // Gegen den Rand geprügelt? Dann gibt's eine Delle in Wand/Käfig
       if (x < 120 || x > W - 120) {
         const ex = x < 120 ? 18 : W - 18;
         crack(Math.round(ex / LO), Math.round(Math.min(FLOOR_Y - 20, wy) / LO), 6 + dmg / 2, false);
-        spawnBlood(ex, wy, x < 120 ? 1 : -1, 10, 0.5);
       }
     }
 
     function drawDrops() {
+      ctx.lineCap = 'round';
       for (const d of drops) {
-        ctx.fillStyle = d.c;
-        ctx.fillRect(Math.round(d.x / LO) * LO, Math.round(d.y / LO) * LO, LO * d.s, LO * d.s);
+        ctx.strokeStyle = d.c; ctx.lineWidth = d.s;
+        ctx.beginPath(); ctx.moveTo(d.x - d.vx * 0.9, d.y - d.vy * 0.9); ctx.lineTo(d.x, d.y); ctx.stroke();
       }
     }
 
@@ -1554,17 +1558,12 @@
       wg.drawImage(img, fi * fw, 0, fw, fh, 0, 0, fw, fh);
       const ws = wounds[fd.pid];
       if (ws && ws.length) {
+        // nur dort malen, wo die Figur selbst Pixel hat (klebt also am Körper/Gesicht)
         wg.globalCompositeOperation = 'source-atop';
+        const cols = ['rgba(92,4,4,0.92)', 'rgba(128,10,10,0.92)', 'rgba(165,18,18,0.9)'];
         for (const w of ws) {
-          const r = Math.round(w.r);
-          if (w.kind === 'bruise') {
-            wg.fillStyle = 'rgba(70,10,50,0.75)'; wg.fillRect(Math.round(w.x - r - 1), Math.round(w.y - r), r * 2 + 3, r * 2 + 1);
-            wg.fillStyle = 'rgba(120,20,40,0.8)'; wg.fillRect(Math.round(w.x - r), Math.round(w.y - r + 1), r * 2 + 1, r * 2 - 1);
-          } else {
-            wg.fillStyle = '#5c0000'; wg.fillRect(Math.round(w.x - r), Math.round(w.y - r), r * 2 + 1, r * 2 + 1);
-            wg.fillStyle = '#d41414'; wg.fillRect(Math.round(w.x - r + 1), Math.round(w.y - r + 1), Math.max(1, r * 2 - 1), Math.max(1, r * 2 - 1));
-            wg.fillStyle = '#9e0808'; wg.fillRect(Math.round(w.x), Math.round(w.y + r), 1, Math.round(w.drip)); // Blutspur nach unten
-          }
+          for (const [dx, dy, ci] of w.px) { wg.fillStyle = cols[ci]; wg.fillRect(w.x + dx, w.y + dy, 1, 1); }
+          if (w.drip >= 1) { wg.fillStyle = cols[1]; wg.fillRect(w.x, w.y + 1, 1, Math.floor(w.drip)); }
         }
         wg.globalCompositeOperation = 'source-over';
       }
@@ -2007,10 +2006,10 @@
       <span class="key">↓</span> ducken ·
       <span class="key">Leertaste</span> springen ·
       <span class="key">Strg</span> Schlag ·
-      <span class="key">Shift</span> Tritt ·
-      <span class="key">Strg</span>+<span class="key">Shift</span> Spezialangriff ·
+      <span class="key">Y</span> Tritt ·
+      <span class="key">Strg</span>+<span class="key">Y</span> Spezialangriff ·
       zurück halten = blocken
-      <div class="text-white/50">Volle Energie = 10 Sek. Superpower (Doppelsprung, härtere Treffer) · ↓+Shift ist ein Feger · A/D/S gehen auch</div>
+      <div class="text-white/50">Volle Energie = 10 Sek. Superpower (Doppelsprung, härtere Treffer) · ↓+Y ist ein Feger · A/D/S gehen auch, statt Y auch X</div>
     </div>
 
     <div class="mt-4 text-left">
