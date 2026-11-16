@@ -246,9 +246,14 @@
     const LO = 3, LW = 320, LH = 180;  // Pixel-Auflösung des Hintergrunds (wird 3-fach vergrößert)
 
     const headImgCache = {};
+    // Pixel-Porträts (aus Spiel 3) für Anzeige & Siegerehrung - keine 3D-Köpfe mehr
+    const PIXEL_PORTRAIT = {
+      "cCc": "cCcspiel3.png", "Sörn1989": "sörnspiel3.png", "Santax": "santaspiel3.png",
+      "Holzkohle": "Holzkohlespiel3.png", "breekibree": "Breekibree Spiel3.png", "skywalker161": "Skywalkerspiel3.png"
+    };
     function headImgFor(pid) {
       const p = allPlayers[pid] || {};
-      const url = p.head || p.avatar;
+      const url = PIXEL_PORTRAIT[p.name] || p.avatar;
       if (!url) return null;
       if (!headImgCache[url]) { const img = new Image(); img.src = url; headImgCache[url] = img; }
       return headImgCache[url];
@@ -354,52 +359,137 @@
     // =====================================================================================
     function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
-    function pairUp(ids) {
-      const matches = [];
-      for (let i = 0; i < ids.length; i += 2) {
-        if (i + 1 < ids.length) matches.push({ a: ids[i], b: ids[i + 1], w: '' });
-        else matches.push({ a: ids[i], b: '', w: ids[i] }); // Freilos
+    // -------------------------------------------------------------------------------------
+    // LIGA: jeder gegen jeden, verteilt über mehrere Starts (pro Start 3 Kämpfe).
+    // Wenn alle Paarungen gespielt sind: Halbfinale (1-4, 2-3) und Grand Finale im Käfig.
+    // Gespeichert unter "fighterLeague" - bleibt also zwischen den Starts erhalten.
+    // -------------------------------------------------------------------------------------
+    const LEAGUE = 'fighterLeague';
+    const FIGHTS_PER_START = 3;
+    let league = null;
+    function arr(x) { return !x ? [] : (Array.isArray(x) ? x : Object.keys(x).sort((a, b) => a - b).map(k => x[k])).filter(Boolean); }
+    function normLeague(l) { if (!l) return null; l.ids = arr(l.ids); l.matches = arr(l.matches); l.semis = arr(l.semis); return l; }
+    onValue(ref(db, LEAGUE), (snap) => { league = normLeague(snap.val()); renderBracket(); updateUi(); });
+
+    function roundRobin(ids) {
+      // Kreis-Methode: verteilt die Paarungen so, dass möglichst niemand zweimal direkt hintereinander kämpft
+      const a = ids.slice(); if (a.length % 2) a.push('');
+      const n = a.length, out = [];
+      for (let r = 0; r < n - 1; r++) {
+        for (let i = 0; i < n / 2; i++) { const x = a[i], y = a[n - 1 - i]; if (x && y) out.push({ a: x, b: y, w: '', ra: 0, rb: 0 }); }
+        a.splice(1, 0, a.pop());
       }
-      return matches;
+      return out;
     }
-
-    let bracketCreated = false;
-    function driverCreateBracket() {
-      if (bracketCreated) return;
-      bracketCreated = true;
-      const ids = shuffle(getParticipantIds());
-      set(ref(db, FS + '/meta'), {
-        phase: 'bracket',
-        bracket: [pairUp(ids)],
-        cur: null,
-        champion: '',
-        tooFew: ids.length < 2
-      });
+    function standings(l) {
+      const t = {};
+      for (const id of l.ids) t[id] = { id, k: 0, s: 0, n: 0, rp: 0, rm: 0 };
+      for (const m of l.matches) {
+        if (!m.w || !t[m.a] || !t[m.b]) continue;
+        t[m.a].k++; t[m.b].k++;
+        t[m.a].rp += m.ra || 0; t[m.a].rm += m.rb || 0; t[m.b].rp += m.rb || 0; t[m.b].rm += m.ra || 0;
+        if (m.w === m.a) { t[m.a].s++; t[m.b].n++; } else { t[m.b].s++; t[m.a].n++; }
+      }
+      // Sortierung: Siege (3 Punkte), dann Rundendifferenz, dann gewonnene Runden
+      return Object.values(t).sort((x, y) => (y.s - x.s) || ((y.rp - y.rm) - (x.rp - x.rm)) || (y.rp - x.rp) || nameOf(x.id).localeCompare(nameOf(y.id)));
     }
+    function leagueStage(l) {
+      if (!l) return 'none';
+      if (l.champion) return 'done';
+      if (l.matches.some(m => !m.w)) return 'league';
+      return 'playoff';
+    }
+    function buildQueue(l) {
+      const st = leagueStage(l);
+      if (st === 'league') {
+        const q = [];
+        l.matches.forEach((m, i) => { if (!m.w && q.length < FIGHTS_PER_START) q.push({ k: 'L', i }); });
+        return q;
+      }
+      if (st === 'playoff') {
+        const q = [];
+        if (l.ids.length >= 4) l.semis.forEach((m, i) => { if (!m.w) q.push({ k: 'S', i }); });
+        q.push({ k: 'F', i: 0 });
+        return q;
+      }
+      return [];
+    }
+    function pairFor(item, l) {
+      if (!item || !l) return null;
+      if (item.k === 'L') { const m = l.matches[item.i]; return m ? { a: m.a, b: m.b } : null; }
+      if (item.k === 'S') { const m = l.semis[item.i]; return m ? { a: m.a, b: m.b } : null; }
+      if (l.final && l.final.a) return { a: l.final.a, b: l.final.b };
+      if (l.semis.length === 2 && l.semis.every(m => m.w)) return { a: l.semis[0].w, b: l.semis[1].w };
+      return null;
+    }
+    function kindLabel(k, i) { return k === 'S' ? 'Halbfinale ' + (i + 1) : k === 'F' ? 'GRAND FINALE' : 'Liga'; }
 
-    function findNextMatch(bracket) {
-      const r = bracket.length - 1;
-      const m = bracket[r].findIndex(x => !x.w);
-      return m >= 0 ? { r, m } : null;
+    let sessionCreating = false;
+    async function driverCreateSession() {
+      if (sessionCreating) return;
+      sessionCreating = true;
+      let l = normLeague((await get(ref(db, LEAGUE))).val());
+      const ids = getParticipantIds();
+      if (!l || l.ids.length < 2) {
+        if (ids.length < 2) { set(ref(db, FS + '/meta'), { phase: 'bracket', queue: [], qi: -1, tooFew: true }); return; }
+        const order = shuffle(ids.slice());
+        l = { created: Date.now(), ids: order, matches: roundRobin(order), semis: [], champion: '' };
+        await set(ref(db, LEAGUE), l);
+        l = normLeague(l);
+      }
+      // Liga durch? Dann Playoffs vorbereiten
+      if (leagueStage(l) === 'playoff') {
+        const tab = standings(l);
+        if (l.ids.length >= 4 && !l.semis.length) {
+          l.semis = [{ a: tab[0].id, b: tab[3].id, w: '' }, { a: tab[1].id, b: tab[2].id, w: '' }];
+          await update(ref(db, LEAGUE), { semis: l.semis });
+        }
+        if (l.ids.length < 4 && !l.final) {
+          l.final = { a: tab[0].id, b: tab[1].id, w: '' };
+          await update(ref(db, LEAGUE), { final: l.final });
+        }
+      }
+      set(ref(db, FS + '/meta'), { phase: 'bracket', queue: buildQueue(l), qi: -1, champion: l.champion || '', tooFew: false });
     }
 
     window.hostNextFight = function() {
-      if (!isDriver() || !meta) return;
+      if (!isDriver() || !meta || !league) return;
       if (meta.phase !== 'bracket' && meta.phase !== 'matchEnd') return;
-      const bracket = JSON.parse(JSON.stringify(meta.bracket || []));
-      let next = findNextMatch(bracket);
-      if (!next) {
-        const winners = bracket[bracket.length - 1].map(x => x.w).filter(Boolean);
-        if (winners.length <= 1) { driverFinishTournament(winners[0] || ''); return; }
-        bracket.push(pairUp(winners));
-        next = findNextMatch(bracket);
+      // Nach dem Grand Finale: Siegerehrung
+      if (meta.phase === 'matchEnd' && meta.cur && meta.cur.kind === 'F') {
+        update(ref(db, FS + '/meta'), { phase: 'done', champion: meta.matchWinner || league.champion || '' });
+        return;
       }
-      const match = bracket[next.r][next.m];
-      const cur = { r: next.r, m: next.m, p1: match.a, p2: match.b, rn: 1, w1: 0, w2: 0, rk: next.r + '_' + next.m + '_1' };
-      update(ref(db, FS + '/meta'), { bracket, cur, phase: 'intro', roundWinner: '', reason: '' });
+      const q = arr(meta.queue);
+      const qi = (meta.qi == null ? -1 : meta.qi) + 1;
+      const item = q[qi];
+      const pr = pairFor(item, league);
+      if (!item || !pr) { update(ref(db, FS + '/meta'), { phase: 'sessionDone', cur: null }); return; }
+      if (item.k === 'F' && !(league.final && league.final.a)) update(ref(db, LEAGUE), { final: { a: pr.a, b: pr.b, w: '' } });
+      const cur = { kind: item.k, i: item.i, qi, p1: pr.a, p2: pr.b, rn: 1, w1: 0, w2: 0, rk: qi + '_m_1' };
+      update(ref(db, FS + '/meta'), { qi, cur, phase: 'intro', roundWinner: '', reason: '' });
       set(ref(db, FS + '/proj'), null);
       setTimeout(() => driverStartFight(cur.rk), 2400);
     };
+
+    window.hostResetLeague = function() {
+      if (!confirm('Neue Liga starten? Die bisherige Tabelle wird gelöscht.')) return;
+      set(ref(db, LEAGUE), null).then(() => { sessionCreating = false; return set(ref(db, FS + '/meta'), null); });
+    };
+
+    function recordResult(cur, winner) {
+      if (cur.kind === 'L') update(ref(db, LEAGUE + '/matches/' + cur.i), { w: winner, ra: cur.w1, rb: cur.w2 });
+      else if (cur.kind === 'S') update(ref(db, LEAGUE + '/semis/' + cur.i), { w: winner });
+      else if (cur.kind === 'F') {
+        update(ref(db, LEAGUE), { final: { a: cur.p1, b: cur.p2, w: winner }, champion: winner });
+        if (!championAwarded) {
+          championAwarded = true;
+          runTransaction(ref(db, 'players/' + winner + '/score'), (s) => (s || 0) + CHAMPION_POINTS);
+          logToGame('🥊 ' + nameOf(winner) + ' gewinnt das Grand Finale im Hirnschmalz-Fighter (+' + CHAMPION_POINTS + ')');
+        }
+      }
+    }
+    let championAwarded = false;
 
     function driverStartFight(rk) {
       if (!meta || !meta.cur || meta.cur.rk !== rk || meta.phase !== 'intro') return;
@@ -421,13 +511,11 @@
         const forced = cur.rn >= 5 && cur.w1 < WINS_NEEDED && cur.w2 < WINS_NEEDED;
         if (cur.w1 >= WINS_NEEDED || cur.w2 >= WINS_NEEDED || forced) {
           const matchWinner = cur.w1 >= cur.w2 ? cur.p1 : cur.p2;
-          const bracket = JSON.parse(JSON.stringify(meta.bracket));
-          bracket[cur.r][cur.m].w = matchWinner;
-          // Ist das Turnier damit entschieden? Dann direkt den Champion küren.
-          // Auch nach dem Finale geht es erst per Klick des Admins weiter (Champion küren)
-          update(ref(db, FS + '/meta'), { bracket, phase: 'matchEnd', matchWinner });
+          recordResult(cur, matchWinner);
+          // Weiter geht es erst per Klick des Admins
+          update(ref(db, FS + '/meta'), { phase: 'matchEnd', matchWinner });
         } else {
-          const next = { ...cur, rn: cur.rn + 1, rk: cur.r + '_' + cur.m + '_' + (cur.rn + 1) };
+          const next = { ...cur, rn: cur.rn + 1, rk: cur.qi + '_m_' + (cur.rn + 1) };
           update(ref(db, FS + '/meta'), { cur: next, phase: 'intro', roundWinner: '', reason: '' });
           set(ref(db, FS + '/proj'), null);
           setTimeout(() => driverStartFight(next.rk), 2400);
@@ -435,16 +523,6 @@
       }, 3000);
     }
 
-    let championAwarded = false;
-    function driverFinishTournament(championId) {
-      if (championAwarded || (meta && meta.phase === 'done')) return;
-      championAwarded = true;
-      update(ref(db, FS + '/meta'), { phase: 'done', champion: championId || '', cur: null });
-      if (championId) {
-        runTransaction(ref(db, 'players/' + championId + '/score'), (s) => (s || 0) + CHAMPION_POINTS);
-        get(ref(db, 'players/' + championId + '/name')).then(s => logToGame('🥊 ' + (s.val() || 'Jemand') + ' gewinnt den Hirnschmalz-Fighter (+' + CHAMPION_POINTS + ')'));
-      }
-    }
     function logToGame(text) {
       const id = 'f' + Date.now();
       set(ref(db, 'gameLog/' + id), { text, at: Date.now() }).catch(() => {});
@@ -494,12 +572,12 @@
     onValue(ref(db, FS + '/meta'), (snap) => {
       meta = snap.val();
       if (!meta) {
-        if (isDriver() && playersLoaded) driverCreateBracket();
+        if (isDriver() && playersLoaded) driverCreateSession();
         updateUi();
         return;
       }
-      if (meta.bracket && !Array.isArray(meta.bracket)) meta.bracket = Object.values(meta.bracket);
-      if (meta.bracket) meta.bracket = meta.bracket.map(r => Array.isArray(r) ? r : Object.values(r));
+      meta.queue = arr(meta.queue);
+      sessionCreating = false; // Sitzung steht - bei einem neuen Start darf wieder eine erstellt werden
       const cur = meta.cur;
       const phaseKey = meta.phase + '|' + (cur ? cur.rk : '');
       if (phaseKey !== lastPhaseKey) {
@@ -514,10 +592,11 @@
       const cur = meta.cur;
       if (meta.phase === 'intro' && cur) {
         if (amFighting()) resetMyFighter(cur.rk);
+        if (cur.rn === 1 && (cur.kind === 'S' || cur.kind === 'F')) sfx('ko');
         particles = []; drops = []; koPools = {};
         // Blut & Dellen bleiben den ganzen Kampf über liegen, erst beim nächsten Kampf ist alles sauber
         if (cur.rn === 1) { clearDecals(); wounds = {}; }
-        banner = { text: 'RUNDE ' + cur.rn, sub: nameOf(cur.p1) + '  vs  ' + nameOf(cur.p2), color: '#ffd23f', until: performance.now() + 2200 };
+        banner = { text: (cur.kind === 'F' ? 'GRAND FINALE · ' : cur.kind === 'S' ? 'HALBFINALE · ' : '') + 'RUNDE ' + cur.rn, sub: nameOf(cur.p1) + '  vs  ' + nameOf(cur.p2), color: cur.kind === 'F' ? '#ff4d4d' : '#ffd23f', until: performance.now() + 2200 };
       } else if (meta.phase === 'fight' && cur) {
         fightLocalStart = performance.now(); fightRk = cur.rk;
         if (amFighting() && (!my || myRk !== cur.rk)) resetMyFighter(cur.rk);
@@ -532,8 +611,8 @@
       } else if (meta.phase === 'matchEnd') {
         banner = { text: nameOf(meta.matchWinner) + ' GEWINNT!', sub: isDriver() ? 'Klick auf „Nächster Kampf", wenn alle bereit sind' : 'Gleich geht\'s weiter …', color: '#7ed957', until: performance.now() + 60000 };
         my = null; myProj = null;
-      } else if (meta.phase === 'done') {
-        banner = null; my = null; myProj = null;
+      } else if (meta.phase === 'done' || meta.phase === 'sessionDone') {
+        banner = null; my = null; myProj = null; confetti = [];
       } else if (meta.phase === 'bracket') {
         banner = null;
       }
@@ -717,7 +796,7 @@
           my.x = opp.x + dir * PUSH_DIST;
         }
       }
-      my.x = Math.max(45, Math.min(W - 45, my.x));
+      my.x = Math.max(isCage() ? 70 : 45, Math.min(W - (isCage() ? 70 : 45), my.x));
       // Wer am Boden liegt, soll komplett sichtbar bleiben (nicht halb aus dem Bild ragen)
       if (['kd', 'ko', 'getup'].includes(my.act)) {
         my.x = my.face === 1 ? Math.max(235, my.x) : Math.min(W - 235, my.x);
@@ -891,6 +970,11 @@
 
     function seeded(seed) { let s = seed; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
     buildBackground(loStatic.getContext('2d'));
+    const cageStatic = document.createElement('canvas'); cageStatic.width = LW; cageStatic.height = LH;
+    buildCage(cageStatic.getContext('2d'));
+    function isCage() {
+      return !!(meta && ((meta.cur && (meta.cur.kind === 'S' || meta.cur.kind === 'F') && meta.phase !== 'sessionDone') || meta.phase === 'done'));
+    }
 
     function px(g, x, y, w, h, c) { g.fillStyle = c; g.fillRect(x | 0, y | 0, w | 0, h | 0); }
 
@@ -985,7 +1069,81 @@
       for (let i = 0; i < 6; i++) { g.fillStyle = `rgba(5,3,12,${0.05 * i})`; g.fillRect(0, LH - 6 + i, LW, 1); }
     }
 
+    // Käfig-Arena für Halbfinale & Grand Finale: alte Lagerhalle, Maschendrahtkäfig, Scheinwerfer
+    function buildCage(g) {
+      const rnd = seeded(2027);
+      // Hallenwand: dunkler Beton mit Schmutzflecken
+      for (let y = 0; y < FL; y++) px(g, 0, y, LW, 1, y < 20 ? '#0b0b10' : `rgb(${22 + y / 12 | 0},${20 + y / 14 | 0},${28 + y / 10 | 0})`);
+      for (let i = 0; i < 260; i++) px(g, rnd() * LW, 20 + rnd() * (FL - 20), 1 + rnd() * 3, 1, 'rgba(0,0,0,0.25)');
+      // Stahlträger
+      for (const bx of [20, 100, 212, 292]) { px(g, bx, 14, 8, FL - 14, '#2c2a33'); px(g, bx + 1, 14, 1, FL - 14, '#45424f'); px(g, bx - 2, 14, 12, 3, '#3a3743'); px(g, bx - 2, FL - 4, 12, 4, '#3a3743');
+        for (let ry = 22; ry < FL - 6; ry += 10) px(g, bx + 3, ry, 2, 1, '#55525f'); }
+      // Fachwerk unter der Decke
+      px(g, 0, 12, LW, 3, '#33303b'); px(g, 0, 24, LW, 2, '#2a2731');
+      for (let x = 0; x < LW; x += 12) for (let i = 0; i < 12; i++) { px(g, x + i, 14 + i, 1, 1, '#2a2731'); }
+      // Hängende Scheinwerfer
+      for (const lx of [70, 160, 250]) { px(g, lx, 15, 1, 8, '#1a1820'); px(g, lx - 5, 23, 11, 5, '#1a1820'); px(g, lx - 4, 27, 9, 2, '#fff2c4'); }
+      // Banner "GRAND FINALE"-Fahnen
+      for (const [bx, col] of [[46, '#9e1b1b'], [262, '#9e1b1b'], [132, '#c9a227'], [180, '#c9a227']]) {
+        px(g, bx, 30, 14, 26, col); px(g, bx, 30, 14, 2, '#00000055');
+        for (let i = 0; i < 7; i++) px(g, bx + i, 56 + (i / 2 | 0), 1, 3 - (i / 2 | 0), col), px(g, bx + 13 - i, 56 + (i / 2 | 0), 1, 3 - (i / 2 | 0), col);
+        px(g, bx + 4, 38, 6, 6, '#ffffff33');
+      }
+      // Käfig hinten: Maschendraht zwischen Pfosten
+      const top = 58;
+      for (let y = top; y < FL; y++) for (let x = 0; x < LW; x++) {
+        if (((x + y) % 6 === 0) || ((x - y + 600) % 6 === 0)) px(g, x, y, 1, 1, 'rgba(170,175,190,0.35)');
+      }
+      px(g, 0, top - 2, LW, 3, '#1d1c22'); px(g, 0, top - 2, LW, 1, '#4a4856');
+      for (let x = 8; x < LW; x += 76) { px(g, x, top - 6, 6, FL - top + 6, '#141318'); px(g, x - 1, top - 8, 8, 3, '#7a1010'); px(g, x + 1, top - 6, 1, FL - top, '#3a3843'); px(g, x - 1, top + 10, 8, 26, '#7a1010'); px(g, x, top + 11, 6, 2, '#a52020'); }
+      // Boden: Kampfmatte mit Ringlinie
+      let y = FL, row = 0;
+      while (y < LH) { const rh = Math.round(3 + row * 0.9); px(g, 0, y, LW, rh, row % 2 ? '#24232e' : '#282733'); y += rh; row++; }
+      px(g, 0, FL, LW, 1, '#5d5670');
+      g.strokeStyle = '#c9a227'; g.lineWidth = 1;
+      g.beginPath(); g.ellipse(LW / 2, 156, 140, 20, 0, 0, Math.PI * 2); g.stroke();
+      g.strokeStyle = '#7a1010'; g.beginPath(); g.ellipse(LW / 2, 156, 148, 22, 0, 0, Math.PI * 2); g.stroke();
+      // Logo auf der Matte
+      g.fillStyle = 'rgba(201,162,39,0.22)'; g.beginPath(); g.ellipse(LW / 2, 158, 34, 8, 0, 0, Math.PI * 2); g.fill();
+      for (let i = 0; i < 6; i++) { g.fillStyle = `rgba(0,0,0,${0.06 * i})`; g.fillRect(0, LH - 6 + i, LW, 1); }
+    }
+
+    function drawCageStage(t) {
+      lf.clearRect(0, 0, LW, LH);
+      lf.drawImage(cageStatic, 0, 0);
+      // Rauch zieht durch die Halle
+      for (let i = 0; i < 5; i++) {
+        const sx = ((t / (40 + i * 13) + i * 90) % (LW + 120)) - 60, sy = 70 + i * 12;
+        lf.fillStyle = 'rgba(160,160,190,0.05)'; lf.beginPath(); lf.ellipse(sx, sy, 50, 9, 0, 0, Math.PI * 2); lf.fill();
+      }
+      lf.drawImage(decal, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(loFrame, 0, 0, W, H);
+      ctx.imageSmoothingEnabled = true;
+      // Scheinwerferkegel (schwenken leicht)
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      [[210, 0.9], [480, 1.3], [750, 1.1]].forEach(([lx, sp], i) => {
+        const tx = lx + Math.sin(t / (1400 * sp) + i) * 90;
+        const gr = ctx.createLinearGradient(0, 85, 0, GROUND + 40);
+        gr.addColorStop(0, 'rgba(255,240,200,0.22)'); gr.addColorStop(1, 'rgba(255,240,200,0.02)');
+        ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.moveTo(lx - 12, 85); ctx.lineTo(lx + 12, 85); ctx.lineTo(tx + 110, GROUND + 40); ctx.lineTo(tx - 110, GROUND + 40); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(255,240,200,0.10)'; ctx.beginPath(); ctx.ellipse(tx, GROUND + 8, 120, 22, 0, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.restore();
+      if (meta && meta.cur && meta.phase !== 'done') bigText(meta.cur.kind === 'S' ? 'HALBFINALE' : 'GRAND FINALE', 128, '#c9a227', 26);
+    }
+    // Vordere Käfigpfosten werden ÜBER die Kämpfer gezeichnet - so stehen sie wirklich im Käfig
+    function drawCageForeground() {
+      ctx.fillStyle = '#0d0c10'; ctx.fillRect(0, 150, 24, H - 150); ctx.fillRect(W - 24, 150, 24, H - 150);
+      ctx.fillStyle = '#7a1010'; ctx.fillRect(0, 300, 27, 80); ctx.fillRect(W - 27, 300, 27, 80);
+      ctx.fillStyle = 'rgba(170,175,190,0.25)';
+      for (let y = 150; y < H; y += 9) { ctx.fillRect(24, y, 30, 3); ctx.fillRect(W - 54, y, 30, 3); }
+      ctx.fillStyle = '#141318'; ctx.fillRect(0, H - 18, W, 18); ctx.fillStyle = '#3a3843'; ctx.fillRect(0, H - 18, W, 3);
+    }
+
     function drawStage(t) {
+      if (isCage()) { drawCageStage(t); return; }
       // Statischen Hintergrund + animierte Pixel in Pixel-Auflösung zusammensetzen
       lf.clearRect(0, 0, LW, LH);
       lf.drawImage(loStatic, 0, 0);
@@ -1567,43 +1725,95 @@
       ctx.restore();
     }
 
+    let confetti = [];
     function drawWaitingScreen(t) {
-      ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, W, H);
-      ctx.textAlign = 'center'; ctx.fillStyle = '#ffd23f';
-      ctx.font = 'bold 48px "Baloo 2", sans-serif';
-      let title = 'TURNIERBAUM', sub = '';
-      if (!meta) { title = 'Turnier wird ausgelost …'; }
-      else if (meta.tooFew) { title = 'Zu wenig Kämpfer'; sub = 'Es braucht mindestens 2 Spieler (ohne Admin).'; }
-      else if (meta.phase === 'done') {
-        title = meta.champion ? '🏆 ' + nameOf(meta.champion) + ' 🏆' : 'Turnier beendet';
-        sub = meta.champion ? 'ist Champion des Hirnschmalz-Fighters und bekommt +' + CHAMPION_POINTS + ' Punkte!' : '';
-        const img = meta.champion ? headImgFor(meta.champion) : null;
-        if (img && img.complete && img.naturalWidth) {
-          const ih = 180 + Math.sin(t / 200) * 6, iw = ih * img.naturalWidth / img.naturalHeight;
-          ctx.drawImage(img, W / 2 - iw / 2, 60, iw, ih);
-        }
-        ctx.fillText(title, W / 2, 300);
-        ctx.font = 'bold 22px "Baloo 2", sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(sub, W / 2, 340);
+      if (meta && meta.phase === 'done') { drawCeremony(t); return; }
+      ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
+      ctx.textAlign = 'center';
+      if (!meta || !league) { bigText('Liga wird geladen …', H / 2, '#ffd23f', 44); return; }
+      if (meta.tooFew) { bigText('Zu wenig Kämpfer', H / 2 - 20, '#ffd23f', 44); smallText('Es braucht mindestens 2 Spieler (ohne Admin).', H / 2 + 22, '#fff', 22); return; }
+      const st = leagueStage(league);
+      const q = arr(meta.queue);
+      if (meta.phase === 'sessionDone') {
+        bigText('Für heute reicht\'s!', 70, '#ffd23f', 42);
+        smallText(st === 'league' ? 'Beim nächsten Start geht die Liga weiter.' : st === 'playoff' ? 'Beim nächsten Start: Playoffs im Käfig!' : '', 104, '#fff', 20);
+        drawMiniTable(150);
         return;
-      } else {
-        const nm = peekNextMatch();
-        sub = nm ? 'Nächster Kampf: ' + nameOf(nm.a) + '  vs  ' + nameOf(nm.b) : '';
       }
-      ctx.fillText(title, W / 2, H / 2 - 20);
-      ctx.font = 'bold 24px "Baloo 2", sans-serif'; ctx.fillStyle = '#fff';
-      ctx.fillText(sub, W / 2, H / 2 + 22);
-      ctx.font = 'bold 16px "Baloo 2", sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      ctx.fillText(isDriver() ? 'Du startest den nächsten Kampf mit dem Knopf unten.' : 'Der Admin startet den nächsten Kampf.', W / 2, H / 2 + 56);
+      const title = st === 'league' ? 'LIGA · JEDER GEGEN JEDEN' : st === 'playoff' ? 'PLAYOFFS IM KÄFIG' : 'LIGA BEENDET';
+      bigText(title, 64, st === 'playoff' ? '#ff4d4d' : '#ffd23f', 40);
+      const done = league.matches.filter(m => m.w).length;
+      smallText(st === 'league' ? `Kampf ${done + 1} von ${league.matches.length} · heute ${q.length} Kämpfe` : st === 'done' ? 'Champion: ' + nameOf(league.champion) + ' · Admin kann eine neue Liga starten' : '', 96, '#fff', 20);
+      // Heutige Kämpfe
+      q.forEach((item, i) => {
+        const pr = pairFor(item, league);
+        const y = 150 + i * 46, isNext = i === (meta.qi == null ? -1 : meta.qi) + 1, past = i <= (meta.qi == null ? -1 : meta.qi);
+        ctx.fillStyle = isNext ? 'rgba(255,210,63,0.18)' : 'rgba(255,255,255,0.06)';
+        ctx.fillRect(W / 2 - 300, y - 30, 600, 40);
+        if (isNext) { ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.strokeRect(W / 2 - 300, y - 30, 600, 40); }
+        drawPortrait(pr && pr.a, W / 2 - 290, y - 28, 36);
+        drawPortrait(pr && pr.b, W / 2 + 254, y - 28, 36);
+        smallText((item.k !== 'L' ? kindLabel(item.k, item.i) + ': ' : '') + (pr ? nameOf(pr.a) + '  vs  ' + nameOf(pr.b) : 'Sieger der Halbfinals'), y - 3, past ? 'rgba(255,255,255,0.4)' : '#fff', 22);
+      });
+      smallText(isDriver() ? 'Du startest den nächsten Kampf mit dem Knopf unten.' : 'Der Admin startet den nächsten Kampf.', H - 40, 'rgba(255,255,255,0.6)', 16);
     }
-
-    function peekNextMatch() {
-      if (!meta || !meta.bracket) return null;
-      const b = meta.bracket;
-      const n = findNextMatch(b);
-      if (n) return b[n.r][n.m];
-      const winners = b[b.length - 1].map(x => x.w).filter(Boolean);
-      if (winners.length >= 2) return { a: winners[0], b: winners[1] };
-      return null;
+    function bigText(txt, y, color, size) {
+      ctx.font = `bold ${size}px "Baloo 2", sans-serif`; ctx.textAlign = 'center';
+      ctx.lineWidth = 7; ctx.strokeStyle = '#111'; ctx.strokeText(txt, W / 2, y); ctx.fillStyle = color; ctx.fillText(txt, W / 2, y);
+    }
+    function smallText(txt, y, color, size) {
+      ctx.font = `bold ${size}px "Baloo 2", sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = color; ctx.fillText(txt, W / 2, y);
+    }
+    function drawPortrait(pid, x, y, h) {
+      const img = pid ? headImgFor(pid) : null;
+      if (!img || !img.complete || !img.naturalWidth) return;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, x, y, h * img.naturalWidth / img.naturalHeight, h);
+      ctx.imageSmoothingEnabled = true;
+    }
+    function drawMiniTable(y0) {
+      const tab = standings(league).slice(0, 8);
+      ctx.font = 'bold 16px "Baloo 2", sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left';
+      ctx.fillText('#   Kämpfer', W / 2 - 250, y0); ctx.textAlign = 'right';
+      ctx.fillText('Kämpfe', W / 2 + 90, y0); ctx.fillText('Siege', W / 2 + 170, y0); ctx.fillText('Runden', W / 2 + 250, y0);
+      tab.forEach((r, i) => {
+        const y = y0 + 34 + i * 38;
+        ctx.fillStyle = i < 4 ? 'rgba(255,210,63,0.12)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(W / 2 - 260, y - 26, 520, 34);
+        drawPortrait(r.id, W / 2 - 222, y - 25, 32);
+        ctx.font = 'bold 20px "Baloo 2", sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
+        ctx.fillText((i + 1) + '.', W / 2 - 250, y); ctx.fillText(nameOf(r.id), W / 2 - 180, y);
+        ctx.textAlign = 'right';
+        ctx.fillText(String(r.k), W / 2 + 90, y); ctx.fillStyle = '#7ed957'; ctx.fillText(String(r.s), W / 2 + 170, y);
+        ctx.fillStyle = '#fff'; ctx.fillText(r.rp + ':' + r.rm, W / 2 + 250, y);
+      });
+    }
+    function drawCeremony(t) {
+      const champ = meta.champion || (league && league.champion);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 0, W, H);
+      // Konfetti in Pixel-Optik
+      if (confetti.length < 160) confetti.push({ x: Math.random() * W, y: -10, vy: 1.5 + Math.random() * 2.5, vx: (Math.random() - 0.5) * 1.5, c: ['#ffd23f', '#ff2e93', '#38bdf8', '#7ed957', '#ffffff'][(Math.random() * 5) | 0] });
+      for (const c of confetti) { c.x += c.vx; c.y += c.vy; if (c.y > H) { c.y = -10; c.x = Math.random() * W; } ctx.fillStyle = c.c; ctx.fillRect(Math.round(c.x / LO) * LO, Math.round(c.y / LO) * LO, LO * 2, LO); }
+      if (!champ) { bigText('Turnier beendet', H / 2, '#ffd23f', 48); return; }
+      // Champion: großes Pixel-Porträt im Goldrahmen + Siegerpose
+      const img = headImgFor(champ);
+      if (img && img.complete && img.naturalWidth) {
+        const ih = 190, iw = ih * img.naturalWidth / img.naturalHeight, x = 150 - iw / 2, y = 150 + Math.sin(t / 300) * 4;
+        ctx.fillStyle = '#b8860b'; ctx.fillRect(x - 12, y - 12, iw + 24, ih + 24);
+        ctx.fillStyle = '#ffd23f'; ctx.fillRect(x - 8, y - 8, iw + 16, ih + 16);
+        ctx.fillStyle = '#1a1030'; ctx.fillRect(x - 4, y - 4, iw + 8, ih + 8);
+        ctx.imageSmoothingEnabled = false; ctx.drawImage(img, x, y, iw, ih); ctx.imageSmoothingEnabled = true;
+      }
+      const name = nameOf(champ), cfg = FIGHTER_SPRITES[name];
+      if (cfg) {
+        ctx.save(); ctx.translate(W / 2 + 60, GROUND); ctx.scale(1.3, 1.3); ctx.translate(-(W / 2 + 60), -GROUND);
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(W / 2 + 60, GROUND + 2, 50, 10, 0, 0, Math.PI * 2); ctx.fill();
+        drawSpriteFighter({ x: W / 2 + 60, y: 0, face: -1, act: 'win', actF: t / (1000 / 60), pid: champ }, name, cfg);
+        ctx.restore();
+      }
+      bigText('🏆 GRAND CHAMPION 🏆', 70, '#ffd23f', 50);
+      bigText(name, 124, '#ffffff', 44);
+      ctx.font = 'bold 20px "Baloo 2", sans-serif'; ctx.fillStyle = '#ffd23f'; ctx.textAlign = 'center';
+      ctx.fillText('+' + CHAMPION_POINTS + ' Punkte', 150, 400);
     }
 
     // =====================================================================================
@@ -1676,6 +1886,7 @@
         }
         drawDrops();
         drawParticles();
+        if (isCage()) drawCageForeground();
         drawHud(t);
       } else {
         drawWaitingScreen(t);
@@ -1690,20 +1901,21 @@
     function renderBracket() {
       const el = document.getElementById('bracket');
       if (!el) return;
-      if (!meta || !meta.bracket) { el.innerHTML = '<div class="text-white/50 text-sm">Turnier wird ausgelost …</div>'; return; }
-      const roundNames = (n, total) => n === total - 1 && meta.bracket[n].length === 1 ? 'Finale' : 'Runde ' + (n + 1);
-      let html = '';
-      meta.bracket.forEach((round, ri) => {
-        html += `<div class="min-w-[170px]"><div class="text-xs font-bold text-[#ffd23f] uppercase mb-1">${roundNames(ri, meta.bracket.length)}</div>`;
-        round.forEach((m, mi) => {
-          const live = meta.cur && meta.cur.r === ri && meta.cur.m === mi && meta.phase !== 'done';
-          const cls = (id) => !m.w ? '' : (m.w === id ? 'bracket-win' : 'bracket-lose');
-          if (!m.b) html += `<div class="bracket-match"><span class="${cls(m.a)}">${esc(nameOf(m.a))}</span> <span class="text-white/40">(Freilos)</span></div>`;
-          else html += `<div class="bracket-match ${live ? 'live' : ''}"><span class="${cls(m.a)}">${esc(nameOf(m.a))}</span> <span class="text-white/40">vs</span> <span class="${cls(m.b)}">${esc(nameOf(m.b))}</span>${live ? ' 🔴' : ''}</div>`;
-        });
-        html += '</div>';
+      if (!league) { el.innerHTML = '<div class="text-white/50 text-sm">Liga wird geladen …</div>'; return; }
+      const tab = standings(league);
+      let html = '<table class="text-sm w-full max-w-xl"><tr class="text-white/50 text-xs"><td>#</td><td>Kämpfer</td><td class="text-right">Kämpfe</td><td class="text-right">Siege</td><td class="text-right">Niederl.</td><td class="text-right">Runden</td></tr>';
+      tab.forEach((r, i) => {
+        html += `<tr class="${i < 4 ? 'text-[#ffd23f]' : ''}"><td>${i + 1}.</td><td>${esc(nameOf(r.id))}</td><td class="text-right">${r.k}</td><td class="text-right">${r.s}</td><td class="text-right">${r.n}</td><td class="text-right">${r.rp}:${r.rm}</td></tr>`;
       });
-      if (meta.champion) html += `<div class="min-w-[150px]"><div class="text-xs font-bold text-[#ffd23f] uppercase mb-1">Champion</div><div class="bracket-match live">🏆 ${esc(nameOf(meta.champion))}</div></div>`;
+      html += '</table>';
+      const done = league.matches.filter(m => m.w).length;
+      html += `<div class="text-xs text-white/50 mt-1">Liga: ${done} von ${league.matches.length} Kämpfen gespielt · Platz 1–4 kommen in die Playoffs (Käfig)</div>`;
+      if (league.semis.length || league.final) {
+        html += '<div class="mt-2 flex gap-3 flex-wrap">';
+        league.semis.forEach((m, i) => html += `<div class="bracket-match">Halbfinale ${i + 1}: <span class="${m.w ? (m.w === m.a ? 'bracket-win' : 'bracket-lose') : ''}">${esc(nameOf(m.a))}</span> vs <span class="${m.w ? (m.w === m.b ? 'bracket-win' : 'bracket-lose') : ''}">${esc(nameOf(m.b))}</span></div>`);
+        if (league.final) html += `<div class="bracket-match live">Grand Finale: ${esc(nameOf(league.final.a))} vs ${esc(nameOf(league.final.b))}${league.champion ? ' · 🏆 ' + esc(nameOf(league.champion)) : ''}</div>`;
+        html += '</div>';
+      }
       el.innerHTML = html;
     }
     function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -1713,11 +1925,16 @@
       const nextBtn = document.getElementById('host-next-btn');
       const awardBox = document.getElementById('host-award-box');
       const phase = meta && meta.phase;
-      nextBtn.classList.toggle('hidden', !(driver && meta && !meta.tooFew && (phase === 'bracket' || phase === 'matchEnd')));
-      if (driver && meta) {
-        const nm = peekNextMatch();
-        nextBtn.innerText = nm ? '▶ Nächster Kampf: ' + nameOf(nm.a) + ' vs ' + nameOf(nm.b) : '🏆 Champion küren';
+      nextBtn.classList.toggle('hidden', !(driver && meta && league && !meta.tooFew && (phase === 'bracket' || phase === 'matchEnd')));
+      if (driver && meta && league) {
+        const q = arr(meta.queue), qi = (meta.qi == null ? -1 : meta.qi) + 1;
+        const pr = pairFor(q[qi], league);
+        if (phase === 'matchEnd' && meta.cur && meta.cur.kind === 'F') nextBtn.innerText = '🏆 Siegerehrung';
+        else if (pr) nextBtn.innerText = '▶ ' + (q[qi].k !== 'L' ? kindLabel(q[qi].k, q[qi].i) + ': ' : 'Nächster Kampf: ') + nameOf(pr.a) + ' vs ' + nameOf(pr.b);
+        else nextBtn.innerText = '📋 Tabelle zeigen';
       }
+      const resetBtn = document.getElementById('host-reset-btn');
+      if (resetBtn) resetBtn.classList.toggle('hidden', !(isHost && meta && ['bracket', 'sessionDone', 'done'].includes(phase)));
       awardBox.classList.toggle('hidden', !(driver && meta && meta.cur && ['intro', 'fight'].includes(phase)));
       if (driver && meta && meta.cur) {
         document.getElementById('award-1').innerText = '🏳️ ' + nameOf(meta.cur.p1) + ' gewinnt';
@@ -1742,7 +1959,7 @@
         }
         return get(ref(db, FS + '/meta'));
       }).then((snap) => {
-        if (!snap.val() && isDriver()) driverCreateBracket();
+        if (!snap.val() && isDriver()) driverCreateSession();
         // Nach einem Neuladen mitten im Kampf: eigenen Zustand wiederherstellen
         if (meta && meta.cur && amFighting() && ['intro', 'fight'].includes(meta.phase)) {
           get(ref(db, FS + '/f/' + playerId)).then((s) => {
@@ -1774,6 +1991,7 @@
 
     <div class="flex flex-wrap gap-2 justify-center mt-3">
       <button id="host-next-btn" onclick="hostNextFight()" class="hidden py-3 px-5 jax-btn bg-[#7ed957] text-[#0b2a0b] font-extrabold text-lg">▶ Nächster Kampf</button>
+      <button id="host-reset-btn" onclick="hostResetLeague()" class="hidden py-2 px-3 jax-btn bg-white/90 text-[#1a1a2e] font-bold text-xs">🔄 Neue Liga</button>
       <div id="host-award-box" class="hidden flex gap-2 items-center">
         <span class="text-xs text-white/50">Notfall (Spieler weg?):</span>
         <button id="award-1" onclick="hostAward(1)" class="py-1.5 px-3 jax-btn bg-white/90 text-[#1a1a2e] font-bold text-xs">P1 gewinnt</button>
@@ -1793,7 +2011,7 @@
     </div>
 
     <div class="mt-4 text-left">
-      <div class="text-sm font-bold text-white/70 mb-1">Turnierbaum</div>
+      <div class="text-sm font-bold text-white/70 mb-1">Ligatabelle</div>
       <div id="bracket" class="flex gap-4 overflow-x-auto pb-2"></div>
     </div>
   </div>
