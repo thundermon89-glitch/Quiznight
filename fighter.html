@@ -47,6 +47,7 @@
     const WINS_NEEDED = 2;         // Best of 3: wer zuerst 2 Runden gewinnt, gewinnt den Kampf
     const START_HP = 100;
     const CHAMPION_POINTS = 150;   // Turniersieger bekommt diese Punkte gutgeschrieben
+    const WIN_POINTS = 10;         // jeder gewonnene Kampf (Liga, Halbfinale, Finale)
     const FS = 'fighterState';
 
     // Aussehen & Spezialangriff pro Spieler (Schlüssel = Spielername wie beim Login).
@@ -478,6 +479,8 @@
     };
 
     function recordResult(cur, winner) {
+      // Jeder gewonnene Kampf bringt dem Sieger Punkte für den Quizabend
+      runTransaction(ref(db, 'players/' + winner + '/score'), (s) => (s || 0) + WIN_POINTS);
       if (cur.kind === 'L') update(ref(db, LEAGUE + '/matches/' + cur.i), { w: winner, ra: cur.w1, rb: cur.w2 });
       else if (cur.kind === 'S') update(ref(db, LEAGUE + '/semis/' + cur.i), { w: winner });
       else if (cur.kind === 'F') {
@@ -609,7 +612,7 @@
         if (meta.reason === 'ko') sfx('ko');
         if (my && meta.roundWinner === playerId) setTimeout(() => { if (my && my.act !== 'ko') setAct('win'); }, 900);
       } else if (meta.phase === 'matchEnd') {
-        banner = { text: nameOf(meta.matchWinner) + ' GEWINNT!', sub: isDriver() ? 'Klick auf „Nächster Kampf", wenn alle bereit sind' : 'Gleich geht\'s weiter …', color: '#7ed957', until: performance.now() + 60000 };
+        banner = { text: nameOf(meta.matchWinner) + ' GEWINNT! +' + WIN_POINTS, sub: isDriver() ? 'Klick auf „Nächster Kampf", wenn alle bereit sind' : 'Gleich geht\'s weiter …', color: '#7ed957', until: performance.now() + 60000 };
         my = null; myProj = null;
       } else if (meta.phase === 'done' || meta.phase === 'sessionDone') {
         banner = null; my = null; myProj = null; confetti = [];
