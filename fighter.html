@@ -95,14 +95,127 @@
     //     }
     //   },
     // -------------------------------------------------------------------------------------
+    // peak = Frame, in dem der Angriff "trifft" (wird im aktiven Moment gezeigt)
     const FIGHTER_SPRITES = {
+      "cCc": {
+        drawHeight: 311, footPad: 12,
+        anims: {
+          idle: { src: "fighter/ccc_idle.png", frames: 11 },
+          walk: { src: "fighter/ccc_walk.png", frames: 13 },
+          crouch: { src: "fighter/ccc_crouch.png", frames: 11 },
+          jump: { src: "fighter/ccc_jump.png", frames: 11 },
+          punch: { src: "fighter/ccc_punch.png", frames: 9, peak: 4 },
+          kick: { src: "fighter/ccc_kick.png", frames: 11, peak: 10 },
+          sweep: { src: "fighter/ccc_sweep.png", frames: 11, peak: 8 },
+          jkick: { src: "fighter/ccc_jkick.png", frames: 9, peak: 5 },
+          special: { src: "fighter/ccc_special.png", frames: 15, peak: 11 },
+          block: { src: "fighter/ccc_block.png", frames: 13 },
+          hit: { src: "fighter/ccc_hit.png", frames: 10 },
+          ko: { src: "fighter/ccc_ko.png", frames: 11 },
+          win: { src: "fighter/ccc_win.png", frames: 11 }
+        }
+      },
+      "Sörn1989": {
+        drawHeight: 323, footPad: 12,
+        anims: {
+          idle: { src: "fighter/soern_idle.png", frames: 1 },
+          walk: { src: "fighter/soern_walk.png", frames: 11 },
+          crouch: { src: "fighter/soern_crouch.png", frames: 9 },
+          jump: { src: "fighter/soern_jump.png", frames: 9 },
+          punch: { src: "fighter/soern_punch.png", frames: 11, peak: 9 },
+          kick: { src: "fighter/soern_kick.png", frames: 13, peak: 6 },
+          sweep: { src: "fighter/soern_sweep.png", frames: 13, peak: 8 },
+          jkick: { src: "fighter/soern_jkick.png", frames: 11, peak: 6 },
+          special: { src: "fighter/soern_special.png", frames: 15, peak: 11 },
+          block: { src: "fighter/soern_block.png", frames: 9 },
+          hit: { src: "fighter/soern_hit.png", frames: 8 },
+          ko: { src: "fighter/soern_ko.png", frames: 9 },
+          win: { src: "fighter/soern_win.png", frames: 13 }
+        }
+      },
+      "Santax": {
+        drawHeight: 296, footPad: 12,
+        anims: {
+          idle: { src: "fighter/santax_idle.png", frames: 1 },
+          walk: { src: "fighter/santax_walk.png", frames: 9 },
+          crouch: { src: "fighter/santax_crouch.png", frames: 13 },
+          jump: { src: "fighter/santax_jump.png", frames: 13 },
+          punch: { src: "fighter/santax_punch.png", frames: 13, peak: 7 },
+          kick: { src: "fighter/santax_kick.png", frames: 9, peak: 4 },
+          sweep: { src: "fighter/santax_sweep.png", frames: 9, peak: 5 },
+          jkick: { src: "fighter/santax_jkick.png", frames: 9, peak: 6 },
+          special: { src: "fighter/santax_special.png", frames: 15, peak: 10 },
+          block: { src: "fighter/santax_block.png", frames: 11 },
+          ko: { src: "fighter/santax_ko.png", frames: 9 },
+          win: { src: "fighter/santax_win.png", frames: 13 }
+        }
+      },
+      "Holzkohle": {
+        drawHeight: 320, footPad: 12,
+        anims: {
+          idle: { src: "fighter/holzkohle_idle.png", frames: 9 },
+          walk: { src: "fighter/holzkohle_walk.png", frames: 9 },
+          crouch: { src: "fighter/holzkohle_crouch.png", frames: 9 },
+          jump: { src: "fighter/holzkohle_jump.png", frames: 9 },
+          punch: { src: "fighter/holzkohle_punch.png", frames: 11, peak: 5 },
+          kick: { src: "fighter/holzkohle_kick.png", frames: 11, peak: 7 },
+          sweep: { src: "fighter/holzkohle_sweep.png", frames: 13, peak: 6 },
+          jkick: { src: "fighter/holzkohle_jkick.png", frames: 9, peak: 6 },
+          special: { src: "fighter/holzkohle_special.png", frames: 13, peak: 11 },
+          block: { src: "fighter/holzkohle_block.png", frames: 9 },
+          hit: { src: "fighter/holzkohle_hit.png", frames: 8 },
+          ko: { src: "fighter/holzkohle_ko.png", frames: 11 },
+          win: { src: "fighter/holzkohle_win.png", frames: 11 }
+        }
+      },
+      "breekibree": {
+        drawHeight: 308, footPad: 12,
+        anims: {
+          idle: { src: "fighter/breeki_idle.png", frames: 1 },
+          walk: { src: "fighter/breeki_walk.png", frames: 11 },
+          crouch: { src: "fighter/breeki_crouch.png", frames: 9 },
+          jump: { src: "fighter/breeki_jump.png", frames: 9 },
+          punch: { src: "fighter/breeki_punch.png", frames: 9, peak: 5 },
+          kick: { src: "fighter/breeki_kick.png", frames: 13, peak: 12 },
+          sweep: { src: "fighter/breeki_sweep.png", frames: 13, peak: 5 },
+          jkick: { src: "fighter/breeki_jkick.png", frames: 13, peak: 8 },
+          special: { src: "fighter/breeki_special.png", frames: 13, peak: 11 },
+          block: { src: "fighter/breeki_block.png", frames: 9 },
+          hit: { src: "fighter/breeki_hit.png", frames: 10 },
+          ko: { src: "fighter/breeki_ko.png", frames: 11 },
+          win: { src: "fighter/breeki_win.png", frames: 11 }
+        }
+      },
+      "skywalker161": {
+        drawHeight: 317, footPad: 12,
+        anims: {
+          idle: { src: "fighter/sky_idle.png", frames: 11 },
+          walk: { src: "fighter/sky_walk.png", frames: 9 },
+          crouch: { src: "fighter/sky_crouch.png", frames: 9 },
+          jump: { src: "fighter/sky_jump.png", frames: 9 },
+          punch: { src: "fighter/sky_punch.png", frames: 9, peak: 7 },
+          kick: { src: "fighter/sky_kick.png", frames: 9, peak: 8 },
+          sweep: { src: "fighter/sky_sweep.png", frames: 9, peak: 6 },
+          jkick: { src: "fighter/sky_jkick.png", frames: 11, peak: 3 },
+          special: { src: "fighter/sky_special.png", frames: 15, peak: 13 },
+          block: { src: "fighter/sky_block.png", frames: 9 },
+          hit: { src: "fighter/sky_hit.png", frames: 8 },
+          ko: { src: "fighter/sky_ko.png", frames: 9 },
+          win: { src: "fighter/sky_win.png", frames: 13 }
+        }
+      }
     };
     const SPRITE_FALLBACK = {
       walkb: 'walk', cpunch: 'crouch', sweep: 'kick', jkick: 'kick', super: 'special',
-      kd: 'ko', getup: 'idle', hit: 'idle', block: 'idle', win: 'idle', crouch: 'idle', jump: 'idle',
+      kd: 'ko', getup: 'ko', hit: 'idle', block: 'idle', win: 'idle', crouch: 'idle', jump: 'idle',
       walk: 'idle', punch: 'idle', kick: 'idle', special: 'punch', ko: 'hit'
     };
-    const LOOPING_ANIMS = new Set(['idle', 'walk', 'walkb', 'win', 'crouch']);
+    // Abspielweise je Animation: loop = Bilder/Sekunde, dur = über so viele Spiel-Frames einmal abspielen und letzten Frame halten
+    const SPRITE_TIMING = {
+      idle: { loop: 8 }, walk: { loop: 12 }, win: { loop: 8 },
+      crouch: { dur: 6 }, jump: { dur: 34 }, hit: { dur: 16 }, block: { dur: 8 }, ko: { dur: 26 }
+    };
+    const SPRITE_FIGURE_H = 190; // sichtbare Figurenhöhe im Spiel (für das Namensschild)
     const spriteImages = {}; // name -> anim -> Image
     for (const name in FIGHTER_SPRITES) {
       spriteImages[name] = {};
@@ -897,7 +1010,7 @@
       ctx.beginPath(); ctx.ellipse(sx, GROUND + 4, 46 - Math.min(30, (fd.y || 0) / 6), 9, 0, 0, Math.PI * 2); ctx.fill();
 
       const sprites = FIGHTER_SPRITES[name];
-      if (sprites && drawSpriteFighter(fd, name, sprites)) { drawLabel(fd, pid, isMe, sy - (sprites.drawHeight || 230) - 6); return; }
+      if (sprites && drawSpriteFighter(fd, name, sprites)) { drawLabel(fd, pid, isMe, sy - (['kd', 'ko'].includes(fd.act) ? 70 : SPRITE_FIGURE_H + 12)); return; }
 
       const p = getPose(fd.act, fd.actF, fd.cr, fd.bc);
       // Skelett mit Hüfte bei (0,0) berechnen (lokal, Blick nach rechts)
@@ -964,21 +1077,41 @@
 
     function drawSpriteFighter(fd, name, cfg) {
       let anim = fd.act, guard = 0;
-      while (anim && !(cfg.anims[anim] && spriteImages[name][anim] && spriteImages[name][anim].complete && spriteImages[name][anim].naturalWidth > 0) && guard++ < 6) anim = SPRITE_FALLBACK[anim];
-      if (!anim || !cfg.anims[anim]) return false;
+      const ready = (n) => cfg.anims[n] && spriteImages[name][n] && spriteImages[name][n].complete && spriteImages[name][n].naturalWidth > 0;
+      while (anim && !ready(anim) && guard++ < 6) anim = SPRITE_FALLBACK[anim];
+      if (!anim || !ready(anim)) return false;
       const a = cfg.anims[anim], img = spriteImages[name][anim];
-      const frames = a.frames || 1, fw = img.naturalWidth / frames, fh = img.naturalHeight;
-      let fi;
+      const n = a.frames || 1, fw = img.naturalWidth / n, fh = img.naturalHeight;
+      const f = Math.max(0, fd.actF);
       const mv = MOVES[fd.act];
-      if (mv && !LOOPING_ANIMS.has(fd.act)) fi = Math.min(frames - 1, Math.floor(fd.actF / Math.max(1, mv.start + mv.active + mv.rec) * frames));
-      else if (fd.act === 'kd' || fd.act === 'ko' || fd.act === 'hit' || fd.act === 'block') fi = Math.min(frames - 1, Math.floor(fd.actF / 6));
-      else fi = Math.floor(fd.actF / (60 / (a.fps || 8))) % frames;
+      let fi;
+      if (mv && a.peak != null) {
+        // Angriff: bis zum Treffer-Frame ausholen, im aktiven Moment halten, dann zurück
+        const pk = Math.min(n - 1, a.peak);
+        if (f < mv.start) fi = Math.floor(f / mv.start * (pk + 1));
+        else if (f < mv.start + mv.active || !mv.rec) fi = pk;
+        else fi = pk + Math.floor((f - mv.start - mv.active) / mv.rec * (n - pk));
+      } else if (fd.act === 'getup') {
+        fi = Math.floor((1 - Math.min(1, f / 18)) * (n - 1)); // KO-Animation rückwärts = Aufstehen
+      } else if (fd.act === 'kd') {
+        fi = Math.floor(Math.min(1, f / 22) * (n - 1));
+      } else {
+        const tm = SPRITE_TIMING[anim] || { loop: 8 };
+        if (tm.loop) {
+          fi = Math.floor(f / (60 / tm.loop)) % n;
+          if (fd.act === 'walkb') fi = n - 1 - fi;
+        } else fi = Math.floor(Math.min(1, f / tm.dur) * (n - 1));
+      }
+      fi = Math.max(0, Math.min(n - 1, fi | 0));
       const dh = cfg.drawHeight || 230, scale = dh / fh, dw = fw * scale;
       const footPad = (cfg.footPad || 0) * scale;
+      // Einzelbild-Stand bekommt ein leichtes Wippen, damit es lebendig wirkt
+      const bob = (n === 1 && fd.act === 'idle') ? Math.round(Math.sin(f * 0.12) * 1.5) * 2 : 0;
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.translate(fd.x, GROUND - (fd.y || 0) + footPad);
+      ctx.translate(Math.round(fd.x), Math.round(GROUND - (fd.y || 0) + footPad + bob));
       ctx.scale(fd.face || 1, 1);
+      if (fd.act === 'hit' && f < 8) ctx.filter = 'brightness(1.8) saturate(0.4)';
       ctx.drawImage(img, fi * fw, 0, fw, fh, -dw / 2, -dh, dw, dh);
       ctx.restore();
       return true;
