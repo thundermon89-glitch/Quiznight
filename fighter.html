@@ -240,6 +240,10 @@
     const PROJ = { speed: 7, dmg: 9, h1: 92, h2: 128, type: 'mid', stun: 16, bstun: 10, kb: 6, en: 6, cooldown: 120 };
     const STAND_H = 175, CROUCH_H = 105, HALF_W = 32, PUSH_DIST = 72;
     const WALK_F = 3.6, WALK_B = 2.8, JUMP_V = 15.5, JUMP_VX = 4.6, GRAV = 0.8;
+    const SUPER_FRAMES = 600;          // Superpower hält 10 Sekunden
+    const SUPER_DMG = 1.5;             // Schaden während der Superpower
+    const FLOOR_Y = 390;               // ab hier beginnt der Boden (Kai) im Hintergrund
+    const LO = 3, LW = 320, LH = 180;  // Pixel-Auflösung des Hintergrunds (wird 3-fach vergrößert)
 
     const headImgCache = {};
     function headImgFor(pid) {
@@ -301,6 +305,11 @@
     let fightLocalStart = null, fightRk = null;
     let banner = null;        // { text, sub, color, until }
     let lastWriteAt = 0, lastWrittenSeq = -1;
+    let pendingAtk = null;    // Strg/Shift kurz puffern, damit beide zusammen den Spezialangriff auslösen
+    let drops = [];           // fliegende Bluttropfen
+    let wounds = {};          // pid -> Wunden auf der Figur (bleiben den ganzen Kampf)
+    let lastFd = {};          // zuletzt gezeichneter Zustand je Kämpfer (für Tropfen aus Wunden)
+    let koPools = {};         // pid -> Größe der Blutlache bei K.O.
 
     onValue(ref(db, 'players/'), (snap) => { allPlayers = snap.val() || {}; renderBracket(); });
 
@@ -505,7 +514,9 @@
       const cur = meta.cur;
       if (meta.phase === 'intro' && cur) {
         if (amFighting()) resetMyFighter(cur.rk);
-        particles = [];
+        particles = []; drops = []; koPools = {};
+        // Blut & Dellen bleiben den ganzen Kampf über liegen, erst beim nächsten Kampf ist alles sauber
+        if (cur.rn === 1) { clearDecals(); wounds = {}; }
         banner = { text: 'RUNDE ' + cur.rn, sub: nameOf(cur.p1) + '  vs  ' + nameOf(cur.p2), color: '#ffd23f', until: performance.now() + 2200 };
       } else if (meta.phase === 'fight' && cur) {
         fightLocalStart = performance.now(); fightRk = cur.rk;
@@ -536,7 +547,8 @@
       const left = cur.p1 === playerId;
       const keepEn = my && myRk && myRk.split('_').slice(0, 2).join('_') === rk.split('_').slice(0, 2).join('_') ? my.en : 0;
       my = { x: left ? 300 : 660, y: 0, vx: 0, vy: 0, face: left ? 1 : -1, act: 'idle', actF: 0, seq: (my ? my.seq + 1 : 1),
-             hp: START_HP, en: keepEn, cr: false, hitDone: false, airAtk: false, stunF: 0, kbv: 0, spCd: 0, blockCr: false };
+             hp: START_HP, en: keepEn, cr: false, hitDone: false, airAtk: false, stunF: 0, kbv: 0, spCd: 0, blockCr: false,
+             sp: 0, dj: false, hid: 0, hh: 0, hd: 0, px: left ? 300 : 660, py: 0 };
       myRk = rk; myProj = null;
       set(ref(db, FS + '/proj/' + playerId), null);
       writeMe(true);
@@ -552,27 +564,30 @@
     function writeMe(force) {
       if (!my || !myRk) return;
       const now = performance.now();
-      if (!force && now - lastWriteAt < 50) return;
+      if (!force && now - lastWriteAt < 33) return; // ~30 Updates pro Sekunde
       lastWriteAt = now; lastWrittenSeq = my.seq;
       set(ref(db, FS + '/f/' + playerId), {
         x: Math.round(my.x * 10) / 10, y: Math.round(my.y * 10) / 10, face: my.face, act: my.act, seq: my.seq,
-        hp: my.hp, en: Math.round(my.en), cr: my.cr, bc: my.blockCr, rk: myRk
+        hp: my.hp, en: Math.round(my.en), cr: my.cr, bc: my.blockCr, rk: myRk,
+        sp: my.sp > 0 ? 1 : 0, hid: my.hid, hh: my.hh, hd: my.hd
       });
     }
 
-    const KEYMAP = {
-      ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down',
-      j: 'punch', k: 'kick', l: 'block', u: 'special', i: 'super'
+    // Steuerung: Pfeile/A-D laufen, ↓/S ducken, Leertaste springen, Strg Schlag, Shift Tritt, Strg+Shift Spezial
+    const CODEMAP = {
+      ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowDown: 'down', KeyS: 'down',
+      Space: 'up', ArrowUp: 'up', ControlLeft: 'punch', ControlRight: 'punch', ShiftLeft: 'kick', ShiftRight: 'kick'
     };
     window.addEventListener('keydown', (e) => {
-      const k = KEYMAP[e.key] || KEYMAP[e.key.toLowerCase()];
+      const k = CODEMAP[e.code];
+      // Browser-Kürzel (Strg+S, Strg+D, Strg+A …) und Scrollen mit der Leertaste abfangen
+      if (k || e.ctrlKey || e.metaKey) e.preventDefault();
       if (!k) return;
-      e.preventDefault();
       if (!keysDown.has(k)) keysPressed.add(k);
       keysDown.add(k);
     });
     window.addEventListener('keyup', (e) => {
-      const k = KEYMAP[e.key] || KEYMAP[e.key.toLowerCase()];
+      const k = CODEMAP[e.code];
       if (k) keysDown.delete(k);
     });
     window.addEventListener('blur', () => keysDown.clear());
@@ -598,11 +613,29 @@
       const backKey = my.face === 1 ? 'left' : 'right';
       const grounded = my.y <= 0 && my.vy <= 0;
 
-      // Richtungs-Verlauf für ↓ → + Schlag (relativ zur Blickrichtung)
-      const nowMs = performance.now();
-      if (keysPressed.has('down')) dirHistory.push({ d: 'down', t: nowMs });
-      if (keysPressed.has(forwardKey)) dirHistory.push({ d: 'fwd', t: nowMs });
-      dirHistory = dirHistory.filter(h => nowMs - h.t < 500);
+      // Angriffstasten 3 Frames puffern: Strg + Shift zusammen = Spezialangriff
+      if (keysPressed.has('punch') || keysPressed.has('kick')) {
+        if (!pendingAtk) pendingAtk = { f: 0, p: false, k: false };
+        if (keysPressed.has('punch')) pendingAtk.p = true;
+        if (keysPressed.has('kick')) pendingAtk.k = true;
+      }
+      let atk = null;
+      if (pendingAtk) {
+        pendingAtk.f++;
+        if (pendingAtk.p && pendingAtk.k) atk = 'special';
+        else if (pendingAtk.f >= 3) atk = pendingAtk.p ? 'punch' : 'kick';
+        if (atk) pendingAtk = null;
+      }
+
+      // Superpower: startet automatisch, sobald die Energie voll ist
+      if (my.sp > 0) {
+        my.sp--; my.en = my.sp / SUPER_FRAMES * 100;
+        if (my.sp === 0) { my.en = 0; writeMe(true); }
+      } else if (my.en >= 100 && fighting) {
+        my.sp = SUPER_FRAMES; sfx('special');
+        banner = { text: 'SUPERPOWER!', sub: 'Doppelsprung & harte Treffer', color: '#38bdf8', until: performance.now() + 1100 };
+        writeMe(true);
+      }
 
       if (my.spCd > 0) my.spCd--;
       my.actF++;
@@ -611,8 +644,9 @@
       if (!grounded || my.vy > 0) {
         my.vy -= GRAV; my.y += my.vy; my.x += my.vx;
         if (my.y <= 0) {
-          my.y = 0; my.vy = 0; my.vx = 0; my.airAtk = false;
+          my.y = 0; my.vy = 0; my.vx = 0; my.airAtk = false; my.dj = false;
           if (my.act === 'jump' || my.act === 'jkick') setAct(keysDown.has('down') ? 'crouch' : 'idle');
+          if (my.act === 'kd' || my.act === 'ko') floorCrack(my.x + my.face * 40, GROUND + 4, 5);
         }
       }
       if (my.kbv) { my.x += my.kbv; my.kbv *= 0.82; if (Math.abs(my.kbv) < 0.3) my.kbv = 0; }
@@ -637,17 +671,14 @@
       // --- Eingaben ---
       const free = ['idle', 'walk', 'walkb', 'crouch'].includes(my.act) && grounded;
       if (fighting && free) {
-        const motionSpecial = keysPressed.has('punch') && dirHistory.some((h, i) => h.d === 'down' && dirHistory.slice(i + 1).some(h2 => h2.d === 'fwd'));
-        if ((keysPressed.has('special') || motionSpecial) && my.spCd <= 0 && !myProj) {
-          my.cr = false; my.spCd = PROJ.cooldown; dirHistory = []; setAct('special');
-        } else if (keysPressed.has('super') && my.en >= 100) {
-          my.en = 0; my.cr = false; setAct('super');
-        } else if (keysPressed.has('punch')) {
+        if (atk === 'special' && my.spCd <= 0 && !myProj) {
+          my.cr = false; my.spCd = PROJ.cooldown; setAct('special');
+        } else if (atk === 'punch' || atk === 'special') {
           setAct(keysDown.has('down') ? 'cpunch' : 'punch');
-        } else if (keysPressed.has('kick')) {
+        } else if (atk === 'kick') {
           setAct(keysDown.has('down') ? 'sweep' : 'kick');
         } else if (keysDown.has('up')) {
-          my.cr = false; my.vy = JUMP_V;
+          my.cr = false; my.vy = JUMP_V; my.dj = false;
           my.vx = keysDown.has('right') ? JUMP_VX : keysDown.has('left') ? -JUMP_VX : 0;
           my.y = 0.01; setAct('jump');
         } else if (keysDown.has('down')) {
@@ -660,7 +691,13 @@
           my.cr = false; if (my.act !== 'idle') setAct('idle');
         }
         my.cr = ['crouch', 'cpunch', 'sweep'].includes(my.act);
-      } else if (fighting && my.act === 'jump' && !my.airAtk && (keysPressed.has('punch') || keysPressed.has('kick'))) {
+      } else if (fighting && my.y > 0 && ['jump', 'jkick'].includes(my.act) && my.sp > 0 && !my.dj && keysPressed.has('up')) {
+        // Doppelsprung nur mit Superpower
+        my.dj = true; my.airAtk = false; my.vy = JUMP_V * 0.95;
+        my.vx = keysDown.has('right') ? JUMP_VX : keysDown.has('left') ? -JUMP_VX : my.vx;
+        setAct('jump');
+        spawnSpark(my.x, GROUND - my.y, '#38bdf8', 10);
+      } else if (fighting && my.act === 'jump' && !my.airAtk && atk) {
         my.airAtk = true; setAct('jkick');
       }
       if (['cpunch', 'sweep'].includes(my.act)) my.cr = true;
@@ -733,11 +770,12 @@
     function sendHit(mv, dir, opp) {
       const oid = opponentId();
       hitCounter++;
+      const dmg = Math.round(mv.dmg * (my.sp > 0 ? SUPER_DMG : 1));
       set(ref(db, FS + '/hit/' + oid), {
-        id: playerId + '_' + hitCounter + '_' + Date.now(), rk: myRk, dmg: mv.dmg, type: mv.type, stun: mv.stun, bstun: mv.bstun,
-        kb: mv.kb, kd: !!mv.kd, dir, from: playerId
+        id: playerId + '_' + hitCounter + '_' + Date.now(), rk: myRk, dmg, type: mv.type, stun: mv.stun, bstun: mv.bstun,
+        kb: mv.kb * (my.sp > 0 ? 1.4 : 1), kd: !!mv.kd, dir, from: playerId
       });
-      my.en = Math.min(100, my.en + (mv.en || 0));
+      if (!my.sp) my.en = Math.min(100, my.en + (mv.en || 0));
       hitstop = 4;
       spawnSpark(opp.x - dir * 10, GROUND - (opp.y || 0) - (opp.cr ? 70 : 120), '#fff3a0', 12);
       sfx('hit');
@@ -768,7 +806,7 @@
       }
       if (blocked) {
         my.hp = Math.max(0, my.hp - Math.max(1, Math.round(h.dmg * 0.15)));
-        my.en = Math.min(100, my.en + 3);
+        if (!my.sp) my.en = Math.min(100, my.en + 3);
         my.cr = crouching; my.blockCr = crouching;
         my.stunF = h.bstun; my.kbv = h.dir * 4;
         setAct('block');
@@ -776,7 +814,7 @@
         sfx('block');
       } else {
         my.hp = Math.max(0, my.hp - h.dmg);
-        my.en = Math.min(100, my.en + 4);
+        if (!my.sp) my.en = Math.min(100, my.en + 4);
         my.kbv = h.dir * h.kb;
         if (my.hp <= 0) {
           my.cr = false; my.vy = Math.max(my.vy, 6); my.y = Math.max(my.y, 0.01); my.vx = h.dir * 3;
@@ -788,8 +826,10 @@
           my.stunF = h.stun;
           setAct('hit');
         }
-        shake = h.kd ? 10 : 5;
-        spawnSpark(my.x, GROUND - my.y - (my.cr ? 70 : 120), '#ff6b6b', 14);
+        shake = h.kd || my.hp <= 0 ? 12 : 6;
+        const hh = { high: 150, mid: 100, low: 28, overhead: 135 }[h.type] || 110;
+        my.hid++; my.hh = my.cr ? Math.min(hh, 85) : hh; my.hd = h.dmg;
+        onHurt(playerId, my.x, my.y, my.face, my.hh, h.dmg, my.act);
         sfx('hit');
       }
       writeMe(true);
@@ -804,13 +844,19 @@
       for (const pid in remoteF) {
         const f = remoteF[pid];
         let v = remoteVis[pid];
-        if (!v || v.rk !== f.rk) { v = remoteVis[pid] = { x: f.x, y: f.y, seq: -1, actStart: now, rk: f.rk, lastAct: '' }; }
+        if (!v || v.rk !== f.rk) { v = remoteVis[pid] = { x: f.x, y: f.y, seq: -1, actStart: now, rk: f.rk, lastAct: '', buf: [], hid: f.hid || 0 }; }
+        // Positions-Puffer für flüssige Darstellung (gezeichnet wird leicht verzögert und dazwischen interpoliert)
+        const last = v.buf[v.buf.length - 1];
+        if (!last || last.x !== f.x || last.y !== f.y || now - last.t > 100) { v.buf.push({ t: now, x: f.x, y: f.y }); if (v.buf.length > 12) v.buf.shift(); }
+        if (pid !== playerId && (f.hid || 0) !== v.hid) {
+          // Neuer Treffer bei diesem Kämpfer: Blut, Wunden, Dellen - bei allen Zuschauern und beim Angreifer
+          v.hid = f.hid || 0;
+          onHurt(pid, f.x, f.y, f.face, f.hh || 110, f.hd || 6, f.act);
+          if (!amFighting()) sfx('hit');
+        }
         if (v.seq !== f.seq) {
-          // Treffer-/Block-Funken auch für Zuschauer und den Angreifer anzeigen
-          if (pid !== playerId && (f.act === 'hit' || f.act === 'block' || f.act === 'kd' || f.act === 'ko') && v.lastAct !== f.act) {
-            const c = f.act === 'block' ? '#7dd3fc' : '#ff6b6b';
-            if (!amFighting()) { spawnSpark(f.x, GROUND - f.y - (f.cr ? 70 : 120), c, f.act === 'block' ? 8 : 14); sfx(f.act === 'block' ? 'block' : 'hit'); shake = Math.max(shake, f.act === 'block' ? 0 : 4); }
-          }
+          if (pid !== playerId && f.act === 'block' && v.lastAct !== 'block' && !amFighting()) { spawnSpark(f.x, GROUND - f.y - (f.cr ? 60 : 120), '#7dd3fc', 8); sfx('block'); }
+          if (pid !== playerId && (f.act === 'kd' || f.act === 'ko') && v.lastAct !== f.act) setTimeout(() => floorCrack(f.x + f.face * 40, GROUND + 4, 5), 320);
           v.seq = f.seq; v.actStart = now; v.lastAct = f.act;
         }
       }
@@ -835,68 +881,292 @@
     // =====================================================================================
     const canvas = document.getElementById("fight-canvas");
     const ctx = canvas.getContext("2d");
-    const bgCanvas = document.createElement('canvas'); bgCanvas.width = W; bgCanvas.height = H;
-    buildBackground(bgCanvas.getContext('2d'));
+    // Hintergrund in Pixel-Auflösung (320x180), passend zu den Sprites, wird 3-fach vergrößert
+    const loStatic = document.createElement('canvas'); loStatic.width = LW; loStatic.height = LH;
+    const loFrame = document.createElement('canvas'); loFrame.width = LW; loFrame.height = LH;
+    const lf = loFrame.getContext('2d');
+    const decal = document.createElement('canvas'); decal.width = LW; decal.height = LH;
+    const dg = decal.getContext('2d');
+    const FL = Math.round(FLOOR_Y / LO); // Bodenkante in Pixel-Auflösung (130)
 
     function seeded(seed) { let s = seed; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
+    buildBackground(loStatic.getContext('2d'));
+
+    function px(g, x, y, w, h, c) { g.fillStyle = c; g.fillRect(x | 0, y | 0, w | 0, h | 0); }
 
     function buildBackground(g) {
-      // Nachthimmel
-      const sky = g.createLinearGradient(0, 0, 0, GROUND);
-      sky.addColorStop(0, '#0b0420'); sky.addColorStop(0.6, '#2a0f45'); sky.addColorStop(1, '#5a1a52');
-      g.fillStyle = sky; g.fillRect(0, 0, W, H);
-      const rnd = seeded(42);
-      for (let i = 0; i < 80; i++) { g.fillStyle = `rgba(255,255,255,${0.2 + rnd() * 0.6})`; g.fillRect(rnd() * W, rnd() * 200, 1.5, 1.5); }
-      // Mond
-      g.fillStyle = '#fff6d5'; g.beginPath(); g.arc(640, 140, 30, 0, Math.PI * 2); g.fill();
-      g.fillStyle = '#1a0a33'; g.beginPath(); g.arc(628, 133, 26, 0, Math.PI * 2); g.fill();
-      // Skyline hinten
+      const rnd = seeded(1989);
+      // --- Himmel: Farbbänder mit Schachbrett-Übergängen (klassischer Pixel-Look)
+      const bands = ['#070a1c', '#0b1029', '#111638', '#181b47', '#211f55', '#2c2460', '#3a2a68', '#4a2f6c'];
+      const bh = 12;
+      for (let i = 0; i < bands.length; i++) {
+        px(g, 0, i * bh, LW, bh, bands[i]);
+        if (i > 0) for (let x = 0; x < LW; x += 2) { px(g, x + (i % 2), i * bh, 1, 1, bands[i - 1]); px(g, x + ((i + 1) % 2), i * bh + 1, 1, 1, bands[i - 1]); }
+      }
+      px(g, 0, bands.length * bh, LW, 100 - bands.length * bh, bands[bands.length - 1]);
+      // Sterne
+      for (let i = 0; i < 70; i++) px(g, rnd() * LW, rnd() * 60, 1, 1, rnd() < 0.3 ? '#fff6d5' : '#8f8fc9');
+      // Mond mit Hof
+      for (let r = 16; r > 10; r -= 2) { g.fillStyle = `rgba(255,240,200,${0.04})`; g.beginPath(); g.arc(150, 50, r, 0, Math.PI * 2); g.fill(); }
+      g.fillStyle = '#f3ead0'; g.beginPath(); g.arc(150, 50, 8, 0, Math.PI * 2); g.fill();
+      px(g, 147, 46, 2, 2, '#d8cda9'); px(g, 152, 51, 3, 2, '#d8cda9'); px(g, 148, 53, 1, 1, '#d8cda9');
+      // Ferne Stadt am anderen Ufer
       let x = 0;
-      while (x < W) {
-        const bw = 40 + rnd() * 70, bh = 120 + rnd() * 170;
-        g.fillStyle = '#1a0b2e'; g.fillRect(x, GROUND - 120 - bh, bw, bh + 120);
-        for (let wy = GROUND - 110 - bh; wy < GROUND - 140; wy += 16) {
-          for (let wx = x + 6; wx < x + bw - 8; wx += 12) {
-            if (rnd() < 0.35) { g.fillStyle = rnd() < 0.5 ? '#ffd23f99' : '#ff9a3c77'; g.fillRect(wx, wy, 6, 8); }
-          }
+      while (x < LW) {
+        const w = 6 + rnd() * 16, h = 8 + rnd() * 26, top = 100 - h;
+        px(g, x, top, w, h, '#1c1640');
+        if (rnd() < 0.25) px(g, x + w / 2, top - 6, 1, 6, '#1c1640'); // Antenne
+        for (let wy = top + 2; wy < 98; wy += 3) for (let wx = x + 1; wx < x + w - 1; wx += 2) if (rnd() < 0.18) px(g, wx, wy, 1, 1, rnd() < 0.6 ? '#f2c14e' : '#ff8a5b');
+        x += w + rnd() * 3;
+      }
+      // Hafenkräne (Silhouetten)
+      const crane = (cx, h, flip) => {
+        const c = '#2a2150', base = 100;
+        px(g, cx - 3, base - h, 2, h, c); px(g, cx + 3, base - h, 2, h, c);
+        for (let y = base - h; y < base; y += 4) { px(g, cx - 2, y, 6, 1, c); px(g, cx - 1 + ((y / 4) % 2) * 2, y + 1, 2, 2, c); }
+        const len = 46 * (flip ? -1 : 1);
+        for (let i = 0; i <= Math.abs(len); i++) px(g, cx + (flip ? -i : i), base - h - 1 + (i % 6 === 0 ? 1 : 0), 1, 2, c);
+        px(g, cx - (flip ? -14 : 14), base - h - 1, 1, 2, c);
+        px(g, cx + len * 0.8, base - h + 1, 1, 14, '#3a3070');
+        px(g, cx + len * 0.8 - 2, base - h + 15, 5, 3, '#3a3070');
+      };
+      crane(118, 62, false); crane(214, 50, true);
+      // Wasser
+      for (let y = 100; y < 118; y++) px(g, 0, y, LW, 1, y % 3 === 0 ? '#101a40' : '#0c1535');
+      // Kai-Kante (Mauer zum Wasser) mit Pollern
+      px(g, 0, 118, LW, FL - 118, '#3a3446'); px(g, 0, 118, LW, 1, '#5d5670');
+      for (let yy = 120; yy < FL; yy += 4) { px(g, 0, yy, LW, 1, '#2a2638'); for (let xx = ((yy / 4) % 2) * 6; xx < LW; xx += 12) px(g, xx, yy, 1, 4, '#2a2638'); }
+      for (let bx = 8; bx < LW; bx += 52) { px(g, bx, 112, 5, 7, '#2b2733'); px(g, bx - 1, 111, 7, 2, '#3d3846'); px(g, bx + 1, 113, 1, 4, '#4f4a5c'); }
+      // Kneipe links (Fachwerk-Fassade)
+      px(g, 0, 46, 76, 84, '#3b2533'); px(g, 0, 40, 82, 7, '#24161f'); // Wand & Dach
+      for (let ty = 41; ty < 47; ty += 2) for (let tx = (ty % 4); tx < 82; tx += 4) px(g, tx, ty, 2, 1, '#2f1d28');
+      for (const bx of [0, 25, 50, 74]) px(g, bx, 47, 2, 83, '#1e1218'); // Balken
+      px(g, 0, 86, 76, 2, '#1e1218');
+      for (let i = 0; i < 3; i++) { // Fenster oben
+        const wx = 6 + i * 25; px(g, wx, 54, 13, 14, '#1e1218'); px(g, wx + 1, 55, 11, 12, '#f0b65a'); px(g, wx + 6, 55, 1, 12, '#1e1218'); px(g, wx + 1, 61, 11, 1, '#1e1218');
+        px(g, wx + 1, 55, 11, 3, '#ffd88a');
+      }
+      px(g, 30, 98, 16, 32, '#1e1218'); px(g, 31, 99, 14, 31, '#4a2a1e'); px(g, 42, 113, 2, 2, '#f2c14e'); // Tür
+      px(g, 5, 100, 20, 14, '#1e1218'); px(g, 6, 101, 18, 12, '#e8a24a'); px(g, 54, 100, 18, 14, '#1e1218'); px(g, 55, 101, 16, 12, '#e8a24a');
+      px(g, 76, 46, 6, 84, '#24161f');
+      // Containerstapel rechts
+      const cont = (cx, cy, w, h, col, dark) => {
+        px(g, cx, cy, w, h, col);
+        for (let rx = cx + 2; rx < cx + w - 1; rx += 3) px(g, rx, cy + 1, 1, h - 2, dark);
+        px(g, cx, cy, w, 1, '#00000055'); px(g, cx, cy + h - 1, w, 1, dark); px(g, cx, cy, 1, h, dark); px(g, cx + w - 1, cy, 1, h, dark);
+      };
+      cont(236, 106, 84, 24, '#8c3b2a', '#5e2419'); cont(250, 82, 70, 24, '#2f6f73', '#1d4a4d'); cont(228, 82, 22, 24, '#b4892e', '#7d5d1c');
+      cont(268, 58, 52, 24, '#6b3d6e', '#472849');
+      px(g, 240, 112, 30, 6, '#00000033');
+      // Laterne in der Mitte hinten
+      px(g, 171, 62, 2, 60, '#1b1724'); px(g, 167, 60, 10, 3, '#1b1724'); px(g, 168, 63, 8, 5, '#ffe7a3'); px(g, 167, 68, 10, 1, '#1b1724');
+      px(g, 169, 120, 6, 2, '#1b1724');
+      // Boden: Kopfsteinpflaster mit Perspektive (Reihen werden nach vorn größer)
+      let y = FL, row = 0;
+      while (y < LH) {
+        const rh = Math.round(3 + row * 0.9), sw = Math.round(7 + row * 2.2);
+        const off = (row % 2) * Math.round(sw / 2);
+        for (let sx = -off; sx < LW; sx += sw) {
+          const shade = 0.85 + rnd() * 0.3;
+          const base = [54, 51, 70].map(v => Math.min(255, v * shade) | 0);
+          px(g, sx, y, sw - 1, rh - 1, `rgb(${base})`);
+          px(g, sx, y, sw - 1, 1, `rgb(${base.map(v => Math.min(255, v + 18))})`); // Lichtkante
         }
-        x += bw + 4;
+        px(g, 0, y + rh - 1, LW, 1, '#1d1a26');
+        y += rh; row++;
       }
-      // Backsteinmauer
-      g.fillStyle = '#4a2033'; g.fillRect(0, GROUND - 150, W, 150);
-      g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 2;
-      for (let by = GROUND - 150; by < GROUND; by += 18) {
-        g.beginPath(); g.moveTo(0, by); g.lineTo(W, by); g.stroke();
-        const off = ((by / 18) % 2) * 22;
-        for (let bx = off; bx < W; bx += 44) { g.beginPath(); g.moveTo(bx, by); g.lineTo(bx, by + 18); g.stroke(); }
+      px(g, 0, FL, LW, 1, '#5d5670');
+      // Pfützen
+      for (const [cx, cy, w] of [[60, 150, 26], [228, 140, 18], [130, 170, 34]]) {
+        g.fillStyle = '#1a2348'; g.beginPath(); g.ellipse(cx, cy, w / 2, w / 9, 0, 0, Math.PI * 2); g.fill();
+        px(g, cx - w / 4, cy - 1, w / 3, 1, '#4c5b9a'); px(g, cx + 2, cy + 1, w / 6, 1, '#34407a');
       }
-      // Boden
-      const fl = g.createLinearGradient(0, GROUND, 0, H);
-      fl.addColorStop(0, '#2b2b3a'); fl.addColorStop(1, '#14141c');
-      g.fillStyle = fl; g.fillRect(0, GROUND, W, H - GROUND);
-      g.strokeStyle = 'rgba(255,255,255,0.06)'; g.lineWidth = 2;
-      for (let i = -10; i <= 10; i++) { g.beginPath(); g.moveTo(W / 2 + i * 40, GROUND); g.lineTo(W / 2 + i * 120, H); g.stroke(); }
-      g.fillStyle = '#ff2e9355'; g.fillRect(0, GROUND, W, 3);
+      // Leichte Vignette unten
+      for (let i = 0; i < 6; i++) { g.fillStyle = `rgba(5,3,12,${0.05 * i})`; g.fillRect(0, LH - 6 + i, LW, 1); }
     }
 
     function drawStage(t) {
-      ctx.drawImage(bgCanvas, 0, 0);
-      // Neon-Schild (flackert ab und zu)
-      const flick = (Math.sin(t / 130) > 0.97) ? 0.3 : 1;
-      ctx.save();
-      ctx.globalAlpha = flick;
-      ctx.font = 'bold 34px "Baloo 2", sans-serif'; ctx.textAlign = 'center';
-      ctx.shadowColor = '#ff2e93'; ctx.shadowBlur = 22; ctx.fillStyle = '#ffd1ec';
-      ctx.fillText('HIRNSCHMALZ-ARENA', W / 2, GROUND - 175);
-      ctx.restore();
-      // Publikum (wippt mit)
-      const rnd = seeded(7);
-      for (let i = 0; i < 26; i++) {
-        const cx = 15 + i * 37 + rnd() * 10, bob = Math.abs(Math.sin(t / 220 + i)) * 5;
-        ctx.fillStyle = `rgba(10,5,20,${0.75 + rnd() * 0.2})`;
-        ctx.beginPath(); ctx.arc(cx, GROUND - 18 - bob, 13, 0, Math.PI * 2); ctx.fill();
-        ctx.fillRect(cx - 15, GROUND - 8 - bob, 30, 20);
+      // Statischen Hintergrund + animierte Pixel in Pixel-Auflösung zusammensetzen
+      lf.clearRect(0, 0, LW, LH);
+      lf.drawImage(loStatic, 0, 0);
+      // Sterne funkeln
+      const r = seeded(77);
+      for (let i = 0; i < 14; i++) { const sx = r() * LW, sy = r() * 55, ph = r() * 6; if (Math.sin(t / 400 + ph) > 0.6) px(lf, sx, sy, 1, 1, '#ffffff'); }
+      // Alles auf dem Wasser nur zwischen Kneipe und Containern zeichnen
+      lf.save(); lf.beginPath(); lf.rect(82, 88, 146, 30); lf.clip();
+      // Fähre fährt langsam übers Wasser
+      const fx = ((t / 90) % 230) + 30;
+      px(lf, fx, 103, 46, 5, '#141029'); px(lf, fx + 6, 99, 30, 4, '#1b1636'); px(lf, fx + 14, 95, 8, 4, '#1b1636');
+      for (let i = 0; i < 7; i++) px(lf, fx + 8 + i * 4, 100, 2, 1, i % 3 ? '#ffd88a' : '#9fd2ff');
+      px(lf, fx + 1, 104, 1, 1, Math.sin(t / 300) > 0 ? '#ff4d4d' : '#141029');
+      // Wasser glitzert, Spiegelung von Mond und Laterne
+      const w = seeded(5);
+      for (let i = 0; i < 40; i++) {
+        const wx = (w() * LW + t / (60 + w() * 80)) % LW, wy = 101 + w() * 16;
+        if (Math.sin(t / 250 + i) > 0.2) px(lf, wx, wy, 2 + w() * 4, 1, i % 4 ? '#22336e' : '#3d5299');
       }
+      for (let y = 101; y < 118; y += 2) {
+        const o = Math.round(Math.sin(t / 300 + y) * 2);
+        px(lf, 147 + o, y, 6 - (y % 4), 1, '#c9c3a6');
+        px(lf, 169 - o, y, 4, 1, '#c79a4a');
+      }
+      lf.restore();
+      // Kranlichter blinken
+      if (Math.floor(t / 700) % 2) { px(lf, 117, 37, 2, 2, '#ff3b3b'); px(lf, 213, 49, 2, 2, '#ff3b3b'); }
+      // Laterne flackert manchmal
+      const lampOn = !(Math.sin(t / 97) > 0.985 || Math.sin(t / 53 + 1) > 0.993);
+      if (!lampOn) px(lf, 168, 63, 8, 5, '#6b5a3a');
+      // Blut & Dellen (bleiben liegen)
+      lf.drawImage(decal, 0, 0);
+
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(loFrame, 0, 0, W, H);
+      ctx.imageSmoothingEnabled = true;
+
+      // Lichtkegel der Laterne
+      if (lampOn) {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        const gr = ctx.createRadialGradient(516, 200, 10, 516, 300, 260);
+        gr.addColorStop(0, 'rgba(255,214,140,0.18)'); gr.addColorStop(1, 'rgba(255,214,140,0)');
+        ctx.fillStyle = gr; ctx.fillRect(250, 150, 540, 390);
+        ctx.restore();
+      }
+      // Neon-Schild an der Kneipe
+      const flick = (Math.sin(t / 130) > 0.97) ? 0.35 : 1;
+      ctx.save();
+      ctx.globalAlpha = flick; ctx.textAlign = 'center';
+      ctx.font = 'bold 30px "Baloo 2", sans-serif';
+      ctx.shadowColor = '#ff2e93'; ctx.shadowBlur = 20; ctx.fillStyle = '#ffd1ec';
+      ctx.fillText('HIRNSCHMALZ', 120, 108);
+      ctx.font = 'bold 18px "Baloo 2", sans-serif'; ctx.shadowColor = '#38bdf8'; ctx.fillStyle = '#d6f3ff';
+      ctx.fillText('ARENA', 120, 130);
+      ctx.restore();
+    }
+
+    // --- Blut, Wunden, Dellen ---------------------------------------------------------------
+    const BLOOD = ['#7a0000', '#9e0808', '#c21010', '#e01b1b', '#5c0000'];
+    function clearDecals() { dg.clearRect(0, 0, LW, LH); }
+
+    function spawnBlood(x, y, dir, amount, power) {
+      for (let i = 0; i < amount; i++) {
+        const sp = (0.8 + Math.random() * 6.5) * (power || 1);
+        drops.push({
+          x: x + (Math.random() - 0.5) * 16, y: y + (Math.random() - 0.5) * 16,
+          vx: dir * sp + (Math.random() - 0.5) * 3.5, vy: -1 - Math.random() * 7 * (power || 1),
+          s: Math.random() < 0.3 ? 2 : 1, c: BLOOD[(Math.random() * BLOOD.length) | 0],
+          land: GROUND - 30 + Math.random() * 75,                       // Tiefe auf dem Pflaster
+          wall: Math.random() < 0.25 ? 14 + Math.random() * 30 : 0,     // klatscht hinten an Wand/Container
+          age: 0
+        });
+      }
+    }
+    function stepBlood() {
+      for (const d of drops) {
+        d.age++;
+        d.x += d.vx; d.y += d.vy; d.vy += 0.36; d.vx *= 0.985;
+        if (d.wall && d.age >= d.wall && d.y < FLOOR_Y - 6) { splat(d.x, d.y, d.s + 1, d.c, true); d.dead = true; }
+        else if (d.vy > 0 && d.y >= d.land) { splat(d.x, d.land, d.s, d.c, false); d.dead = true; }
+        else if (d.x < -30 || d.x > W + 30 || d.y > H + 20) d.dead = true;
+      }
+      drops = drops.filter(d => !d.dead);
+      // Wunden tropfen nach, je weniger Leben desto mehr
+      for (const pid in lastFd) {
+        const fd = lastFd[pid], ws = wounds[pid];
+        if (!fd || !ws || !ws.length || fd.y > 5) continue;
+        const hp = fd.hp == null ? START_HP : fd.hp;
+        if (Math.random() < (1 - hp / START_HP) * 0.06) {
+          const wd = ws[(Math.random() * ws.length) | 0];
+          const sc = fd.scale || 1.85;
+          drops.push({ x: fd.x + fd.face * (wd.x - 100) * sc, y: GROUND - (158 - wd.y) * sc, vx: (Math.random() - 0.5) * 0.4, vy: 0.5, s: 1, c: BLOOD[1], land: GROUND + Math.random() * 10, wall: 0, age: 0 });
+        }
+      }
+      // Blutlache unter K.O.-Kämpfern wächst
+      for (const pid in lastFd) {
+        const fd = lastFd[pid];
+        if (!fd || fd.act !== 'ko') continue;
+        const r = koPools[pid] = Math.min(16, (koPools[pid] || 0) + 0.05);
+        if (Math.random() < 0.25) {
+          dg.fillStyle = Math.random() < 0.5 ? '#6e0000' : '#8a0505';
+          dg.beginPath(); dg.ellipse(Math.round((fd.x + fd.face * 45) / LO), Math.round((GROUND + 6) / LO), r, r / 3.2, 0, 0, Math.PI * 2); dg.fill();
+        }
+      }
+    }
+    function splat(x, y, s, c, wall) {
+      const lx = Math.round(x / LO), ly = Math.round(y / LO);
+      dg.fillStyle = c;
+      if (wall) {
+        dg.fillRect(lx - s + 1, ly - s + 1, s * 2 - 1, s * 2 - 1);
+        dg.fillRect(lx - s, ly, s * 2 + 1, 1);
+        const drip = (Math.random() * 7) | 0;            // läuft an der Wand herunter
+        dg.fillRect(lx, ly, 1, drip + s);
+        if (Math.random() < 0.5) dg.fillRect(lx + (Math.random() < 0.5 ? -2 : 2) * s, ly + 1, 1, 1);
+      } else {
+        dg.fillRect(lx - s - 1, ly, s * 2 + 3, Math.max(1, s));  // flach aufs Pflaster
+        if (Math.random() < 0.6) dg.fillRect(lx + ((Math.random() * 8 - 4) | 0), ly + ((Math.random() * 2) | 0), 1, 1);
+        dg.fillStyle = '#4a0000'; dg.fillRect(lx - s, ly + Math.max(1, s) - 1, s * 2 + 1, 1);
+      }
+    }
+    // Delle/Riss: zackige dunkle Linien, ausgehend von einem Einschlagspunkt
+    function crack(lx, ly, size, flat) {
+      dg.fillStyle = '#0e0b14';
+      dg.fillRect(lx - 1, ly - (flat ? 0 : 1), 3, flat ? 1 : 3);
+      const n = 5 + ((Math.random() * 3) | 0);
+      for (let i = 0; i < n; i++) {
+        let a = (i / n) * Math.PI * 2 + Math.random() * 0.6, x = lx, y = ly;
+        const len = size * (0.6 + Math.random() * 0.8);
+        for (let j = 0; j < len; j++) {
+          a += (Math.random() - 0.5) * 0.7;
+          x += Math.cos(a); y += Math.sin(a) * (flat ? 0.35 : 1);
+          dg.fillRect(Math.round(x), Math.round(y), 1, 1);
+        }
+      }
+      dg.fillStyle = 'rgba(255,255,255,0.18)'; dg.fillRect(lx - 2, ly - (flat ? 1 : 2), 1, 1);
+    }
+    function floorCrack(x, y, size) { crack(Math.round(x / LO), Math.round(y / LO), size, true); }
+
+    function onHurt(pid, x, fy, face, hh, dmg, act) {
+      const ko = act === 'ko';
+      const wy = GROUND - (fy || 0) - hh;
+      const amount = Math.round((10 + dmg * 3.5) * (ko ? 2.4 : 1));
+      spawnBlood(x - face * 8, wy, -face, amount, ko ? 1.3 : 1);       // nach hinten weg
+      spawnBlood(x, wy, face, Math.round(amount / 3), 0.7);            // ein bisschen nach vorn
+      spawnSpark(x, wy, '#ff3b3b', 6);
+      // Wunden auf der Figur (Koordinaten im Sprite-Frame: Füße bei x=100, y=158)
+      const sc = (lastFd[pid] && lastFd[pid].scale) || 1.85;
+      const list = wounds[pid] = wounds[pid] || [];
+      const n = ko ? 3 : (dmg >= 9 ? 2 : 1);
+      for (let i = 0; i < n; i++) {
+        list.push({ x: 100 + (Math.random() - 0.5) * 22, y: 158 - (hh + (Math.random() - 0.5) * 30) / sc, r: 1 + Math.random() * 2.2, drip: 2 + Math.random() * 7, kind: Math.random() < 0.35 ? 'bruise' : 'cut' });
+      }
+      if (list.length > 45) list.splice(0, list.length - 45);
+      // Gegen den Rand geprügelt? Dann gibt's eine Delle in Wand/Container
+      if (x < 120 || x > W - 120) {
+        const ex = x < 120 ? 18 : W - 18;
+        crack(Math.round(ex / LO), Math.round(Math.min(FLOOR_Y - 20, wy) / LO), 6 + dmg / 2, false);
+        spawnBlood(ex, wy, x < 120 ? 1 : -1, 10, 0.5);
+      }
+    }
+
+    function drawDrops() {
+      for (const d of drops) {
+        ctx.fillStyle = d.c;
+        ctx.fillRect(Math.round(d.x / LO) * LO, Math.round(d.y / LO) * LO, LO * d.s, LO * d.s);
+      }
+    }
+
+    function drawAura(fd, t) {
+      if (!fd.sp) return;
+      const cx = fd.x, cy = GROUND - (fd.y || 0) - 95;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const pulse = 0.25 + Math.sin(t / 90) * 0.08;
+      const gr = ctx.createRadialGradient(cx, cy, 20, cx, cy, 130);
+      gr.addColorStop(0, `rgba(56,189,248,${pulse})`); gr.addColorStop(1, 'rgba(56,189,248,0)');
+      ctx.fillStyle = gr; ctx.fillRect(cx - 140, cy - 140, 280, 280);
+      for (let i = 0; i < 6; i++) {
+        const a = t / 200 + i, rx = cx + Math.cos(a * 1.7) * 50, ry = cy + 80 - ((t / 6 + i * 40) % 180);
+        ctx.fillStyle = i % 2 ? '#7dd3fc' : '#ffffff'; ctx.fillRect(Math.round(rx / LO) * LO, Math.round(ry / LO) * LO, LO, LO);
+      }
+      ctx.restore();
     }
 
     // --- Comic-Körper ---------------------------------------------------------------------
@@ -1006,9 +1276,11 @@
       const ch = charFor(name);
       const sx = fd.x, sy = GROUND - (fd.y || 0);
 
-      // Schatten am Boden
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.beginPath(); ctx.ellipse(sx, GROUND + 4, 46 - Math.min(30, (fd.y || 0) / 6), 9, 0, 0, Math.PI * 2); ctx.fill();
+      // Schatten am Boden (wird beim Springen kleiner und heller)
+      const air = Math.min(1, (fd.y || 0) / 160);
+      ctx.fillStyle = `rgba(0,0,0,${0.5 - air * 0.3})`;
+      ctx.beginPath(); ctx.ellipse(sx, GROUND + 2, 48 - air * 26, 10 - air * 4, 0, 0, Math.PI * 2); ctx.fill();
+      drawAura(fd, performance.now());
 
       const sprites = FIGHTER_SPRITES[name];
       if (sprites && drawSpriteFighter(fd, name, sprites)) { drawLabel(fd, pid, isMe, sy - (['kd', 'ko'].includes(fd.act) ? 70 : SPRITE_FIGURE_H + 12)); return; }
@@ -1076,6 +1348,8 @@
       drawLabel(fd, pid, isMe, topY);
     }
 
+    const woundCanvas = document.createElement('canvas'); woundCanvas.width = 200; woundCanvas.height = 170;
+    const wg = woundCanvas.getContext('2d');
     function drawSpriteFighter(fd, name, cfg) {
       let anim = fd.act, guard = 0;
       const ready = (n) => cfg.anims[n] && spriteImages[name][n] && spriteImages[name][n].complete && spriteImages[name][n].naturalWidth > 0;
@@ -1106,14 +1380,35 @@
       fi = Math.max(0, Math.min(n - 1, fi | 0));
       const dh = cfg.drawHeight || 230, scale = dh / fh, dw = fw * scale;
       const footPad = (cfg.footPad || 0) * scale;
+      fd.scale = scale;
       // Einzelbild-Stand bekommt ein leichtes Wippen, damit es lebendig wirkt
       const bob = (n === 1 && fd.act === 'idle') ? Math.round(Math.sin(f * 0.12) * 1.5) * 2 : 0;
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       ctx.translate(Math.round(fd.x), Math.round(GROUND - (fd.y || 0) + footPad + bob));
       ctx.scale(fd.face || 1, 1);
+      // Frame + Wunden in einer Zwischenfläche zusammensetzen (Wunden nur auf der Figur selbst)
+      if (woundCanvas.width !== fw || woundCanvas.height !== fh) { woundCanvas.width = fw; woundCanvas.height = fh; }
+      wg.clearRect(0, 0, fw, fh);
+      wg.drawImage(img, fi * fw, 0, fw, fh, 0, 0, fw, fh);
+      const ws = wounds[fd.pid];
+      if (ws && ws.length) {
+        wg.globalCompositeOperation = 'source-atop';
+        for (const w of ws) {
+          const r = Math.round(w.r);
+          if (w.kind === 'bruise') {
+            wg.fillStyle = 'rgba(70,10,50,0.75)'; wg.fillRect(Math.round(w.x - r - 1), Math.round(w.y - r), r * 2 + 3, r * 2 + 1);
+            wg.fillStyle = 'rgba(120,20,40,0.8)'; wg.fillRect(Math.round(w.x - r), Math.round(w.y - r + 1), r * 2 + 1, r * 2 - 1);
+          } else {
+            wg.fillStyle = '#5c0000'; wg.fillRect(Math.round(w.x - r), Math.round(w.y - r), r * 2 + 1, r * 2 + 1);
+            wg.fillStyle = '#d41414'; wg.fillRect(Math.round(w.x - r + 1), Math.round(w.y - r + 1), Math.max(1, r * 2 - 1), Math.max(1, r * 2 - 1));
+            wg.fillStyle = '#9e0808'; wg.fillRect(Math.round(w.x), Math.round(w.y + r), 1, Math.round(w.drip)); // Blutspur nach unten
+          }
+        }
+        wg.globalCompositeOperation = 'source-over';
+      }
       if (fd.act === 'hit' && f < 8) ctx.filter = 'brightness(1.8) saturate(0.4)';
-      ctx.drawImage(img, fi * fw, 0, fw, fh, -dw / 2, -dh, dw, dh);
+      ctx.drawImage(woundCanvas, 0, 0, fw, fh, -dw / 2, -dh, dw, dh);
       ctx.restore();
       return true;
     }
@@ -1236,10 +1531,10 @@
         const ew = 200, ex = left ? 30 : W - 30 - ew, ey = H - 26;
         ctx.fillStyle = '#111'; ctx.fillRect(ex - 3, ey - 3, ew + 6, 16);
         ctx.fillStyle = '#1e3a5f'; ctx.fillRect(ex, ey, ew, 10);
-        ctx.fillStyle = en >= 100 ? (Math.sin(t / 80) > 0 ? '#38bdf8' : '#e0f2fe') : '#38bdf8';
+        ctx.fillStyle = f && f.sp ? (Math.sin(t / 80) > 0 ? '#38bdf8' : '#e0f2fe') : '#38bdf8';
         ctx.fillRect(left ? ex : ex + ew - ew * en / 100, ey, ew * en / 100, 10);
         ctx.font = 'bold 12px "Baloo 2", sans-serif'; ctx.fillStyle = '#e0f2fe'; ctx.textAlign = left ? 'left' : 'right';
-        ctx.fillText(en >= 100 ? 'SUPER BEREIT! (I)' : 'SUPER', left ? ex : ex + ew, ey - 6);
+        ctx.fillText(f && f.sp ? 'SUPERPOWER! (Doppelsprung)' : 'SUPERPOWER', left ? ex : ex + ew, ey - 6);
       };
       side(p1, true, w1 || 0);
       side(p2, false, w2 || 0);
@@ -1320,8 +1615,10 @@
       while (acc >= 1000 / 60) {
         acc -= 1000 / 60;
         if (hitstop > 0) { hitstop--; continue; }
+        if (my) { my.px = my.x; my.py = my.y; }
         stepMe();
         stepParticles();
+        stepBlood();
         if (shake > 0) shake *= 0.85;
       }
       render(t);
@@ -1337,17 +1634,36 @@
         const { p1, p2, rk } = meta.cur;
         for (const pid of [p1, p2]) {
           let fd;
-          if (pid === playerId && my) fd = my;
-          else {
+          if (pid === playerId && my) {
+            // eigene Figur zwischen den 60-Hz-Schritten interpolieren (flüssig auf 120/144-Hz-Monitoren)
+            const al = Math.min(1, acc / (1000 / 60));
+            const ix = my.px == null || Math.abs(my.x - my.px) > 40 ? my.x : my.px + (my.x - my.px) * al;
+            const iy = my.py == null ? my.y : my.py + (my.y - my.py) * al;
+            fd = { x: ix, y: Math.max(0, iy), face: my.face, act: my.act, actF: my.actF + al, cr: my.cr, bc: my.blockCr, sp: my.sp > 0, hp: my.hp };
+          } else {
             const f = remoteF[pid], v = remoteVis[pid];
             if (f && v && f.rk === rk) {
-              v.x += (f.x - v.x) * 0.45; v.y += (f.y - v.y) * 0.45;
-              fd = { x: v.x, y: v.y, face: f.face, act: f.act, actF: (t - v.actStart) / (1000 / 60), cr: f.cr, bc: f.bc };
+              // ~70 ms in der Vergangenheit zeichnen und zwischen zwei empfangenen Positionen interpolieren
+              const rt = t - 70, b = v.buf;
+              let x = f.x, y = f.y;
+              if (b.length) {
+                if (rt <= b[0].t) { x = b[0].x; y = b[0].y; }
+                else {
+                  let i = b.length - 1;
+                  while (i > 0 && b[i - 1].t > rt) i--;
+                  if (i === b.length - 1 && rt >= b[i].t) { x = b[i].x; y = b[i].y; }
+                  else { const a0 = b[i - 1] || b[i], a1 = b[i], k = a1.t > a0.t ? (rt - a0.t) / (a1.t - a0.t) : 1; x = a0.x + (a1.x - a0.x) * k; y = a0.y + (a1.y - a0.y) * k; }
+                }
+              }
+              v.x = x; v.y = y;
+              fd = { x, y: Math.max(0, y), face: f.face, act: f.act, actF: (t - v.actStart) / (1000 / 60), cr: f.cr, bc: f.bc, sp: !!f.sp, hp: f.hp };
             } else {
               fd = { x: pid === p1 ? 300 : 660, y: 0, face: pid === p1 ? 1 : -1, act: 'idle', actF: t / 16, cr: false };
             }
           }
+          fd.pid = pid;
           drawFighter(fd, pid, pid === playerId);
+          lastFd[pid] = fd;
         }
         // Geschosse
         if (myProj) drawProjectile(myProj.x, myProj.dir, charFor(myName).proj, t);
@@ -1358,6 +1674,7 @@
           if (x < -60 || x > W + 60) continue;
           drawProjectile(x, p.dir, charFor(nameOf(pid)).proj, t);
         }
+        drawDrops();
         drawParticles();
         drawHud(t);
       } else {
@@ -1465,14 +1782,14 @@
     </div>
 
     <div class="mt-3 text-xs md:text-sm text-white/75 leading-7">
-      <span class="key">A</span><span class="key">D</span> / <span class="key">←</span><span class="key">→</span> laufen ·
-      <span class="key">W</span>/<span class="key">↑</span> springen ·
-      <span class="key">S</span>/<span class="key">↓</span> ducken ·
-      <span class="key">J</span> Schlag · <span class="key">K</span> Tritt ·
-      zurück halten oder <span class="key">L</span> = blocken ·
-      <span class="key">U</span> oder <span class="key">↓</span><span class="key">→</span>+<span class="key">J</span> Spezialangriff ·
-      <span class="key">I</span> Super (bei voller Energie)
-      <div class="text-white/50">Ducken weicht Schlägen aus · ↓+K ist ein Feger (nur geduckt blockbar) · Sprungtritte nur stehend blockbar</div>
+      <span class="key">←</span><span class="key">→</span> laufen ·
+      <span class="key">↓</span> ducken ·
+      <span class="key">Leertaste</span> springen ·
+      <span class="key">Strg</span> Schlag ·
+      <span class="key">Shift</span> Tritt ·
+      <span class="key">Strg</span>+<span class="key">Shift</span> Spezialangriff ·
+      zurück halten = blocken
+      <div class="text-white/50">Volle Energie = 10 Sek. Superpower (Doppelsprung, härtere Treffer) · ↓+Shift ist ein Feger · A/D/S gehen auch</div>
     </div>
 
     <div class="mt-4 text-left">
