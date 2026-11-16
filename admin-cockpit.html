@@ -750,6 +750,19 @@
       });
     };
 
+    window.launchFighter = function() {
+      if (!confirm("Hirnschmalz-Fighter starten? Alle Spieler werden mitgenommen, ein 1-gegen-1-Turnier wird ausgelost (du leitest es und startest jeden Kampf per Klick).")) return;
+      set(ref(db, 'fighterState'), null).then(() => {
+        set(ref(db, 'gameState'), {
+          status: 'in_game',
+          activeGame: 'fighter.html',
+          startTime: Date.now()
+        }).then(() => {
+          logEvent('🥊 Hirnschmalz-Fighter gestartet');
+        });
+      });
+    };
+
     window.launchSiegerehrung = function() {
       if (!confirm("Zur Siegerehrung wechseln? Alle Spieler werden jetzt dorthin mitgenommen.")) return;
       set(ref(db, 'gameState'), {
@@ -1210,6 +1223,7 @@
           <button onclick="launchGoldregen()" class="mini-launch-btn" style="background:linear-gradient(135deg,#eab308,#fde047);">🪙 Goldregen</button>
           <button onclick="launchPanzer()" class="mini-launch-btn" style="background:linear-gradient(135deg,#4d5f2f,#7a8f4a);">🎖️ Panzerschlacht</button>
           <button onclick="launchOchsVormBerg()" class="mini-launch-btn" style="background:linear-gradient(135deg,#ff2e93,#ff6a3d);">🧍 Ochs vorm Berg</button>
+          <button onclick="launchFighter()" class="mini-launch-btn" style="background:linear-gradient(135deg,#7c3aed,#f43f5e);">🥊 Hirnschmalz-Fighter</button>
         </div>
 
         <button onclick="launchSiegerehrung()" class="admin-btn admin-btn-gold" style="background:linear-gradient(135deg,#d97706,#fbbf24);">
