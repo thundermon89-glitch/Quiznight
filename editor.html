@@ -277,7 +277,7 @@
         groupTieredScoring: true,
         contentPath: "content/spiel3/questions",
         templatesPath: "content/spiel3/templates",
-        blank: () => ({ question: "", options: ["", "", "", ""], correct: [0], points: 150 }),
+        blank: () => ({ question: "", options: ["", "", "", ""], correct: 0, points: 150 }),
         defaults: [
 {
         id: 11,
@@ -1199,7 +1199,7 @@
 
           ${game.groupTieredScoring ? `
           <div class="jax-chip bg-[#f4f1ff] p-3 text-[11px] text-[#1a1a2e]/70">
-            <b>Hinweis:</b> Bei diesem Spiel gibt's kein einstellbares Punktefeld pro Frage - die Punkte richten sich fest danach, wie viele Spieler gemeinsam richtig lagen: 1 Person allein = 400 Pkt., 2-3 Personen = 0 Pkt., 4 = 100 Pkt., 5 = 200 Pkt., alle gemeinsam = 300 Pkt.
+            <b>Hinweis:</b> Bei diesem Spiel gibt's kein einstellbares Punktefeld pro Frage - die Punkte richten sich danach, wie viele Spieler gemeinsam richtig lagen: 1 Person allein = 400 Pkt., alle gemeinsam = 300 Pkt., alle bis auf einen = 200 Pkt., alle bis auf zwei = 100 Pkt., kleinere Gruppen = 0 Pkt. (bei 6 Spielern also: 4 = 100, 5 = 200).
           </div>
           ` : `
           <div class="flex items-center gap-2">

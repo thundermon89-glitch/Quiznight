@@ -222,12 +222,16 @@
       setTimeout(() => modal.classList.add("hidden"), 8200);
     }
 
+    // Punkte richten sich nach der Größe der richtigen Gruppe - relativ zur Spielerzahl,
+    // damit es mit 6, 7, 8 oder mehr Spielern gleich funktioniert (bei 6 Spielern exakt wie
+    // früher: 1 = 400, 2-3 = 0, 4 = 100, 5 = 200, alle 6 = 300).
     function pointsForGroupSize(correctCount, totalActive) {
+      if (correctCount <= 0) return 0;
       if (totalActive > 0 && correctCount === totalActive) return 300; // alle einig
-      if (correctCount === 1) return 400;  // ganz allein richtig
-      if (correctCount === 5) return 200;
-      if (correctCount === 4) return 100;
-      return 0; // 2, 3 oder sonstige Zwischengrößen
+      if (correctCount === 1) return 400;                    // ganz allein richtig
+      if (correctCount === totalActive - 1) return 200;      // alle bis auf einen
+      if (correctCount === totalActive - 2) return 100;      // alle bis auf zwei
+      return 0;                                              // kleine Zwischengruppen
     }
 
     // TIMER / SOUND STATE
@@ -573,10 +577,14 @@
     function getShuffledQuestion(q) {
       if (!q || !Array.isArray(q.options)) return q;
       const order = seededShuffleIndices(q.id || 0, q.options.length);
+      // Die richtige Antwort kann als Zahl (0) oder - so legt der Editor neue Fragen an -
+      // als Liste ([0]) gespeichert sein. Beides wird hier auf eine Zahl gebracht, sonst
+      // findet das Spiel die richtige Antwort nach dem Mischen nicht und niemand punktet.
+      const correctIdx = Array.isArray(q.correct) ? (q.correct[0] ?? 0) : (q.correct ?? 0);
       return {
         ...q,
         options: order.map(i => q.options[i]),
-        correct: order.indexOf(q.correct)
+        correct: order.indexOf(correctIdx)
       };
     }
 
@@ -1443,10 +1451,9 @@
           <div class="font-jax font-extrabold mb-2">Punkte pro richtiger Antwort, je nach Gruppengröße:</div>
           <div class="grid grid-cols-2 gap-x-4 gap-y-1">
             <div>🥇 Ganz allein richtig</div><div class="font-extrabold text-[#7ed957]">400 Punkte</div>
-            <div>👥 Zu zweit richtig</div><div class="font-extrabold text-[#ff2e93]">0 Punkte</div>
-            <div>👥 Zu dritt richtig</div><div class="font-extrabold text-[#ff2e93]">0 Punkte</div>
-            <div>👥 Zu viert richtig</div><div class="font-extrabold text-[#7ed957]">100 Punkte</div>
-            <div>👥 Zu fünft richtig</div><div class="font-extrabold text-[#7ed957]">200 Punkte</div>
+            <div>👥 Kleine Gruppe richtig</div><div class="font-extrabold text-[#ff2e93]">0 Punkte</div>
+            <div>👥 Alle bis auf zwei richtig</div><div class="font-extrabold text-[#7ed957]">100 Punkte</div>
+            <div>👥 Alle bis auf einen richtig</div><div class="font-extrabold text-[#7ed957]">200 Punkte</div>
             <div>🌍 ALLE gemeinsam richtig</div><div class="font-extrabold text-[#7ed957]">300 Punkte</div>
           </div>
         </div>
