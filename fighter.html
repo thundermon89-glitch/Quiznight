@@ -47,6 +47,8 @@
     const WINS_NEEDED = 1;         // Best of 1: eine gewonnene Runde entscheidet den Kampf (bei Unentschieden gibt es eine weitere Runde)
     const START_HP = 100;
     const CHAMPION_POINTS = 150;   // Turniersieger bekommt diese Punkte gutgeschrieben
+    const RETURN_AFTER_TABLE = 10;     // Sekunden Tabelle, dann automatisch zurück ins Cockpit
+    const RETURN_AFTER_CEREMONY = 20;  // Sekunden Siegerehrung, dann zurück ins Cockpit
     const WIN_POINTS = 10;         // jeder gewonnene Kampf (Liga, Halbfinale, Finale)
     const FS = 'fighterState';
 
@@ -370,7 +372,7 @@
     let league = null;
     function arr(x) { return !x ? [] : (Array.isArray(x) ? x : Object.keys(x).sort((a, b) => a - b).map(k => x[k])).filter(Boolean); }
     function normLeague(l) { if (!l) return null; l.ids = arr(l.ids); l.matches = arr(l.matches); l.semis = arr(l.semis); return l; }
-    onValue(ref(db, LEAGUE), (snap) => { league = normLeague(snap.val()); renderBracket(); updateUi(); });
+    onValue(ref(db, LEAGUE), (snap) => { league = normLeague(snap.val()); renderBracket(); if (typeof updateUi === 'function') updateUi(); });
 
     function roundRobin(ids) {
       // Kreis-Methode: verteilt die Paarungen so, dass möglichst niemand zweimal direkt hintereinander kämpft
@@ -431,10 +433,11 @@
       sessionCreating = true;
       let l = normLeague((await get(ref(db, LEAGUE))).val());
       const ids = getParticipantIds();
+      if (l && l.champion) l = null; // letzte Liga ist fertig - neue Liga beginnt automatisch
       if (!l || l.ids.length < 2) {
         if (ids.length < 2) { set(ref(db, FS + '/meta'), { phase: 'bracket', queue: [], qi: -1, tooFew: true }); return; }
         const order = shuffle(ids.slice());
-        l = { created: Date.now(), ids: order, matches: roundRobin(order), semis: [], champion: '' };
+        l = { created: Date.now(), ids: order, matches: roundRobin(order), semis: [], champion: '', lastChampion: (league && (league.champion || league.lastChampion)) || '' };
         await set(ref(db, LEAGUE), l);
         l = normLeague(l);
       }
@@ -515,8 +518,15 @@
         if (cur.w1 >= WINS_NEEDED || cur.w2 >= WINS_NEEDED || forced) {
           const matchWinner = cur.w1 >= cur.w2 ? cur.p1 : cur.p2;
           recordResult(cur, matchWinner);
-          // Weiter geht es erst per Klick des Admins
           update(ref(db, FS + '/meta'), { phase: 'matchEnd', matchWinner });
+          if (isLastFight(cur)) {
+            // Letzter Kampf dieses Starts: kurz den Sieger zeigen, dann Tabelle bzw. Siegerehrung, dann ab ins Cockpit
+            setTimeout(() => {
+              if (!meta || !meta.cur || meta.cur.rk !== cur.rk || meta.phase !== 'matchEnd') return;
+              update(ref(db, FS + '/meta'), cur.kind === 'F' ? { phase: 'done', champion: matchWinner } : { phase: 'sessionDone', cur: null });
+              setTimeout(driverReturnToCockpit, (cur.kind === 'F' ? RETURN_AFTER_CEREMONY : RETURN_AFTER_TABLE) * 1000);
+            }, 4500);
+          }
         } else {
           const next = { ...cur, rn: cur.rn + 1, rk: cur.qi + '_m_' + (cur.rn + 1) };
           update(ref(db, FS + '/meta'), { cur: next, phase: 'intro', roundWinner: '', reason: '' });
@@ -562,6 +572,18 @@
       driverEndRound(winner, 'award');
     };
 
+    function isLastFight(cur) {
+      if (!meta) return false;
+      if (cur && cur.kind === 'F') return true;
+      return (meta.qi == null ? -1 : meta.qi) >= arr(meta.queue).length - 1;
+    }
+    let returning = false;
+    function driverReturnToCockpit() {
+      if (returning || !isDriver()) return;
+      returning = true;
+      update(ref(db, 'gameState'), { status: 'cockpit' }).then(() => set(ref(db, FS), null));
+    }
+
     window.hostEndFighter = function() {
       if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
       set(ref(db, FS), null);
@@ -575,7 +597,7 @@
     onValue(ref(db, FS + '/meta'), (snap) => {
       meta = snap.val();
       if (!meta) {
-        if (isDriver() && playersLoaded) driverCreateSession();
+        if (isDriver() && playersLoaded && !returning) driverCreateSession();
         updateUi();
         return;
       }
@@ -616,6 +638,7 @@
         my = null; myProj = null;
       } else if (meta.phase === 'done' || meta.phase === 'sessionDone') {
         banner = null; my = null; myProj = null; confetti = [];
+        returnStart = performance.now(); returnSecs = meta.phase === 'done' ? RETURN_AFTER_CEREMONY : RETURN_AFTER_TABLE;
       } else if (meta.phase === 'bracket') {
         banner = null;
       }
@@ -1728,6 +1751,12 @@
     }
 
     let confetti = [];
+    let returnStart = null, returnSecs = 0;
+    function returnCountdownText() {
+      if (!returnStart) return '';
+      const left = Math.max(0, Math.ceil(returnSecs - (performance.now() - returnStart) / 1000));
+      return 'Zurück ins Cockpit in ' + left + ' s';
+    }
     function drawWaitingScreen(t) {
       if (meta && meta.phase === 'done') { drawCeremony(t); return; }
       ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
@@ -1740,6 +1769,7 @@
         bigText('Für heute reicht\'s!', 70, '#ffd23f', 42);
         smallText(st === 'league' ? 'Beim nächsten Start geht die Liga weiter.' : st === 'playoff' ? 'Beim nächsten Start: Playoffs im Käfig!' : '', 104, '#fff', 20);
         drawMiniTable(150);
+        smallText(returnCountdownText(), H - 24, '#ffd23f', 18);
         return;
       }
       const title = st === 'league' ? 'LIGA · JEDER GEGEN JEDEN' : st === 'playoff' ? 'PLAYOFFS IM KÄFIG' : 'LIGA BEENDET';
@@ -1816,6 +1846,7 @@
       bigText(name, 124, '#ffffff', 44);
       ctx.font = 'bold 20px "Baloo 2", sans-serif'; ctx.fillStyle = '#ffd23f'; ctx.textAlign = 'center';
       ctx.fillText('+' + CHAMPION_POINTS + ' Punkte', 150, 400);
+      smallText(returnCountdownText(), H - 24, '#ffd23f', 18);
     }
 
     // =====================================================================================
@@ -1920,6 +1951,34 @@
       }
       el.innerHTML = html;
     }
+    // Übersicht für den Admin: was heute noch kommt und wie weit die Liga ist
+    function renderAdminOverview() {
+      const el = document.getElementById('admin-overview');
+      if (!el) return;
+      if (!isHost || !meta || !league) { el.classList.add('hidden'); return; }
+      el.classList.remove('hidden');
+      const q = arr(meta.queue), qi = meta.qi == null ? -1 : meta.qi;
+      const live = meta.cur && ['intro', 'fight', 'roundEnd'].includes(meta.phase);
+      const playedToday = Math.max(0, qi + (live ? 0 : 1));
+      const leftToday = Math.max(0, q.length - playedToday);
+      const total = league.matches.length, done = league.matches.filter(m => m.w).length, rem = total - done;
+      const st = leagueStage(league);
+      let lines = [];
+      if (meta.phase === 'done' || meta.phase === 'sessionDone') lines.push('<b>Heute fertig</b> – gleich geht es automatisch zurück ins Cockpit.');
+      else {
+        const after = live ? q.length - (qi + 1) : leftToday;
+        lines.push(`<b>Heute:</b> ${live ? 'Kampf ' + (qi + 1) + ' von ' + q.length + ' läuft · danach noch' : playedToday + ' von ' + q.length + ' Kämpfen gespielt · noch'} <b>${after}</b> ${after === 1 ? 'Kampf' : 'Kämpfe'} · nach dem letzten geht es automatisch zurück ins Cockpit`);
+      }
+      if (st === 'league') {
+        const starts = Math.ceil(rem / FIGHTS_PER_START);
+        lines.push(`<b>Liga:</b> ${done} von ${total} Kämpfen gespielt · noch <b>${rem}</b> (${starts} ${starts === 1 ? 'Start' : 'Starts'}) · danach 1 Start Playoffs im Käfig (${league.ids.length >= 4 ? '2 Halbfinale + Grand Finale' : 'Grand Finale'})`);
+      } else if (st === 'playoff') {
+        lines.push(`<b>Liga fertig</b> – jetzt Playoffs im Käfig: ${league.ids.length >= 4 ? '2 Halbfinale + Grand Finale' : 'Grand Finale'}`);
+      } else if (st === 'done') {
+        lines.push(`<b>Champion:</b> ${esc(nameOf(league.champion))} · beim nächsten Start beginnt automatisch eine neue Liga`);
+      }
+      el.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+    }
     function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
     function updateUi() {
@@ -1927,7 +1986,9 @@
       const nextBtn = document.getElementById('host-next-btn');
       const awardBox = document.getElementById('host-award-box');
       const phase = meta && meta.phase;
-      nextBtn.classList.toggle('hidden', !(driver && meta && league && !meta.tooFew && (phase === 'bracket' || phase === 'matchEnd')));
+      const autoNext = phase === 'matchEnd' && meta && meta.cur && isLastFight(meta.cur);
+      nextBtn.classList.toggle('hidden', !(driver && meta && league && !meta.tooFew && !autoNext && (phase === 'bracket' || phase === 'matchEnd')));
+      renderAdminOverview();
       if (driver && meta && league) {
         const q = arr(meta.queue), qi = (meta.qi == null ? -1 : meta.qi) + 1;
         const pr = pairFor(q[qi], league);
@@ -1988,6 +2049,7 @@
       🥊 Hirnschmalz-Fighter 🥊
     </h1>
     <div id="my-role" class="text-sm text-white/80 mb-2"></div>
+    <div id="admin-overview" class="hidden text-left text-sm bg-white/10 border-2 border-[#ffd23f]/60 rounded-xl px-3 py-2 mb-2 leading-6"></div>
 
     <canvas id="fight-canvas" width="960" height="540"></canvas>
 

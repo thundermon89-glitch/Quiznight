@@ -750,6 +750,21 @@
       });
     };
 
+    // Stand der Hirnschmalz-Fighter-Liga (jeder gegen jeden, 3 Kämpfe pro Start, danach Playoffs im Käfig)
+    onValue(ref(db, 'fighterLeague'), (snap) => {
+      const el = document.getElementById('fighter-league-info');
+      if (!el) return;
+      const l = snap.val();
+      const list = (x) => !x ? [] : (Array.isArray(x) ? x : Object.values(x)).filter(Boolean);
+      const nm = (id) => (allPlayersCache[id] && allPlayersCache[id].name) || '?';
+      if (!l) { el.textContent = '🥊 Fighter-Liga: noch nicht gestartet - der erste Start lost die Liga aus.'; return; }
+      const matches = list(l.matches), done = matches.filter(m => m.w).length, rem = matches.length - done;
+      const ids = list(l.ids);
+      if (l.champion) el.textContent = '🥊 Fighter-Liga beendet - Champion: ' + nm(l.champion) + '. Nächster Start beginnt eine neue Liga.';
+      else if (rem > 0) el.textContent = '🥊 Fighter-Liga: ' + done + ' von ' + matches.length + ' Kämpfen gespielt - noch ' + rem + ' (' + Math.ceil(rem / 3) + ' Start' + (Math.ceil(rem / 3) === 1 ? '' : 's') + '), danach Playoffs im Käfig.';
+      else el.textContent = '🥊 Fighter-Liga fertig - nächster Start: Playoffs im Käfig (' + (ids.length >= 4 ? '2 Halbfinale + Grand Finale' : 'Grand Finale') + ').';
+    });
+
     window.launchFighter = function() {
       if (!confirm("Hirnschmalz-Fighter starten? Alle Spieler werden mitgenommen, ein 1-gegen-1-Turnier wird ausgelost (du leitest es und startest jeden Kampf per Klick).")) return;
       set(ref(db, 'fighterState'), null).then(() => {
@@ -1225,6 +1240,7 @@
           <button onclick="launchOchsVormBerg()" class="mini-launch-btn" style="background:linear-gradient(135deg,#ff2e93,#ff6a3d);">🧍 Ochs vorm Berg</button>
           <button onclick="launchFighter()" class="mini-launch-btn" style="background:linear-gradient(135deg,#7c3aed,#f43f5e);">🥊 Hirnschmalz-Fighter</button>
         </div>
+        <div id="fighter-league-info" class="text-xs opacity-80 mt-1"></div>
 
         <button onclick="launchSiegerehrung()" class="admin-btn admin-btn-gold" style="background:linear-gradient(135deg,#d97706,#fbbf24);">
           <span>🏆</span><span>Zur Siegerehrung</span>
