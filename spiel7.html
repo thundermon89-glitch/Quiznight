@@ -219,6 +219,23 @@
     const ANSWER_DURATION_MS = 60000; // 1 Minute
     let timerInterval = null;
     let timerExpiredHandled = false;
+    // Zeit-Ablauf sperrt nur die Antworten - aufgelöst wird erst, wenn der Spielleiter klickt.
+    let currentOptionsShownAt = null;  // Startzeit der aktuell laufenden Antwortphase
+    let answerTimeOverFor = null;      // für welche Antwortphase die Zeit schon abgelaufen ist
+    function isAnswerTimeOver() {
+      return currentOptionsShownAt !== null && answerTimeOverFor === currentOptionsShownAt;
+    }
+    function lockAnswersAfterTimeout() {
+      document.getElementById("time-over-hint")?.classList.remove("hidden");
+      if (isHost) return;
+      document.querySelectorAll('[id^="opt-btn-"]').forEach((btn) => {
+        btn.disabled = true;
+        btn.classList.add("cursor-not-allowed");
+        btn.classList.remove("cursor-pointer");
+      });
+      const secEl = document.getElementById("timer-seconds");
+      if (secEl) secEl.innerText = "Zeit um!";
+    }
     let audioCtx = null;
 
     // FRAGEN-KATALOG (Standard-Fragen als Rückfallebene, falls im Editor noch nichts angelegt wurde)
@@ -586,6 +603,8 @@
     function startAnswerTimer(startTimestamp) {
       stopAnswerTimer();
       timerExpiredHandled = false;
+      currentOptionsShownAt = startTimestamp;
+      if (answerTimeOverFor !== startTimestamp) document.getElementById("time-over-hint")?.classList.add("hidden");
       let lastTickAt = 0;
       const timerWrap = document.getElementById("timer-display");
       if (timerWrap) timerWrap.classList.remove("hidden");
@@ -610,19 +629,24 @@
 
         if (remaining <= 0 && !timerExpiredHandled) {
           timerExpiredHandled = true;
-          playAlarm();
           clearInterval(timerInterval);
           timerInterval = null;
-          // Zeit abgelaufen: Lösung automatisch anzeigen (nur der Host schreibt den Status)
-          if (isHost) {
-            update(ref(db, 'game7State'), { stage: 'result' });
+          // Zeit abgelaufen: Antworten werden gesperrt. Aufgelöst wird NICHT automatisch,
+          // sondern erst, wenn der Spielleiter auf "Auflösen" klickt. Alarm nur einmal.
+          if (answerTimeOverFor !== startTimestamp) {
+            answerTimeOverFor = startTimestamp;
+            playAlarm();
           }
+          lockAnswersAfterTimeout();
         }
       }, 100);
     }
 
     function stopAnswerTimer() {
-      if (timeTickingEl_updateTimerUI) { timeTickingEl_updateTimerUI.remove(); timeTickingEl_updateTimerUI = null; }
+      // "Time is ticking"-Bild ausblenden (vorher stand hier eine nicht existierende Variable,
+      // wodurch der Timer in diesem Spiel gar nicht erst startete)
+      const tickingImg = document.getElementById("time-ticking-img");
+      if (tickingImg) { tickingImg.classList.add("hidden"); tickingImg.style.transform = "scale(1)"; }
       timeTickingStep_updateTimerUI = -1;
       if (timerInterval) {
         clearInterval(timerInterval);
@@ -772,10 +796,8 @@
     }
 
     // Haken-Benachrichtigung für den Host: sobald ALLE aktiven Spieler mindestens eine
-    // Antwort ausgewählt haben, wird das direkt am Feld angezeigt - zudem löst der Host die
-    // Runde jetzt automatisch auf, sobald wirklich alle eingeloggt haben (kein manueller
-    // Klick mehr nötig, genau wie beim Ablauf der Zeit).
-    let allAnsweredAutoResolveTriggered = false;
+    // Antwort ausgewählt haben, wird das direkt am Feld angezeigt. Aufgelöst wird erst,
+    // wenn der Spielleiter klickt.
     function updateAllAnsweredBadge(state) {
       const badge = document.getElementById("all-answered-badge");
       if (!badge) return;
@@ -789,12 +811,8 @@
       const allDone = activeIds.length > 0 && activeIds.every(id => hasAnswered[id]);
       badge.classList.toggle("hidden", !allDone);
 
-      if (allDone && !allAnsweredAutoResolveTriggered) {
-        allAnsweredAutoResolveTriggered = true;
-        stopAnswerTimer();
-        update(ref(db, 'game7State'), { stage: 'result' });
-      }
-      if (!allDone) allAnsweredAutoResolveTriggered = false;
+      // Kein automatisches Auflösen mehr - das Abzeichen zeigt dem Spielleiter nur an,
+      // dass alle eingeloggt haben. Wann aufgelöst wird, entscheidet er selbst.
     }
 
     function updateUI(state, q) {
@@ -893,6 +911,7 @@
         btn.disabled = isHost || myAnswerLocked;
         btn.className = getButtonBaseStyle(i) + (isHost || myAnswerLocked ? " opacity-50 cursor-not-allowed" : renderSelectionSuffix(i));
       }
+      if (isAnswerTimeOver()) lockAnswersAfterTimeout();
     }
 
     function renderSelectionSuffix(i) {
@@ -988,6 +1007,7 @@
     window.toggleOption = function(idx) {
       if (isHost) return; // Host spielt nicht mit
       if (!currentQuestionData || currentQuestionData.stage !== 'options_shown') return;
+      if (isAnswerTimeOver()) return; // Zeit abgelaufen - keine Änderung mehr
       if (myAnswerLocked) return; // schon eingeloggt - keine Änderung mehr möglich
 
       selectedIndices = [idx];
@@ -1175,6 +1195,7 @@
       </button>
     </div>
     <div id="hc-options_shown" class="hidden">
+      <div id="time-over-hint" class="hidden bg-[#ffd23f] text-[#1a1a2e] rounded-xl p-3 text-center mb-3 font-jax font-bold text-sm">⏰ Zeit abgelaufen - die Antworten sind gesperrt. Du bestimmst, wann aufgelöst wird.</div>
       <button onclick="hostShowResults()" class="w-full py-6 jax-btn bg-[#7017c9] text-white font-jax font-bold text-lg">
         Auflösen
       </button>

@@ -117,9 +117,10 @@
         formType: "quiz4",
         correctLabel: "Richtige Antwort",
         multiCorrect: true,
+        hasFact: true,
         contentPath: "content/spiel1/questions",
         templatesPath: "content/spiel1/templates",
-        blank: () => ({ question: "", options: ["", "", "", ""], correct: [0], points: 100 }),
+        blank: () => ({ question: "", options: ["", "", "", ""], correct: [0], points: 100, fact: "", image: "" }),
         defaults: [
       {
         id: 1,
@@ -1187,6 +1188,14 @@
             `;}).join('')}
           </div>
           <div class="text-[11px] text-[#1a1a2e]/50">Grüner Haken = aktuell "${game.correctLabel || 'richtige Antwort'}". Klick auf einen Buchstaben, um sie ${game.multiCorrect ? 'ein- oder auszuschalten (auch mehrere gleichzeitig möglich)' : 'umzustellen'}.</div>
+
+          ${game.hasFact ? `
+          <div>
+            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Auflösungstext (optional, wird bei der Lösung allen gezeigt)</label>
+            <textarea oninput="updateField(${idx}, 'fact', this.value)" rows="2" placeholder="Kurze Erklärung zur richtigen Antwort..."
+              class="jax-input w-full mt-1 text-sm" style="border-color:#7ed957;">${escapeAttr(q.fact || '')}</textarea>
+          </div>
+          ` : ''}
 
           ${game.groupTieredScoring ? `
           <div class="jax-chip bg-[#f4f1ff] p-3 text-[11px] text-[#1a1a2e]/70">

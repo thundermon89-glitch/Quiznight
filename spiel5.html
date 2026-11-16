@@ -717,8 +717,8 @@
             const idx = s2.imageIdx || 0;
             const curStep2 = s2.stepIndex || 0;
             if (curStep2 >= maxStep) {
-              // Bild komplett aufgedeckt, niemand (mehr) buzzert -> ohne Punkte weiter
-              advanceToNextImageOrFinish(idx, { lastResult: 'skipped' });
+              // Bild komplett aufgedeckt: NICHT automatisch weiter - der Spielleiter
+              // entscheidet per "Überspringen", wann das nächste Bild kommt.
               return;
             }
             update(ref(db, 'game5State'), { stepIndex: curStep2 + 1 }).then(scheduleNextRevealStep);

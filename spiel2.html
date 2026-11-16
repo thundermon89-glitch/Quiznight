@@ -1281,6 +1281,7 @@
 
     function startTurnTimer(startTimestamp) {
       stopTurnTimer();
+      document.getElementById("hc-turn-timeout")?.classList.add("hidden");
       turnTimerInterval = setInterval(() => {
         const elapsed = Date.now() - startTimestamp;
         const remaining = Math.max(0, TURN_DURATION_MS - elapsed);
@@ -1288,7 +1289,9 @@
         if (remaining <= 0) {
           clearInterval(turnTimerInterval);
           turnTimerInterval = null;
-          if (isHost) hostTimeoutPass();
+          // Zeit abgelaufen: NICHT automatisch weitergeben - der Spielleiter entscheidet
+          // per Knopf, wann der nächste Spieler dran ist.
+          if (isHost) document.getElementById("hc-turn-timeout")?.classList.remove("hidden");
         }
       }, 150);
     }
@@ -1568,6 +1571,12 @@
 
     <!-- Stufe: in_progress -->
     <div id="hc-in_progress" class="hidden space-y-2">
+      <div id="hc-turn-timeout" class="hidden space-y-2 bg-yellow-900/30 border border-yellow-500/50 rounded-xl p-2">
+        <div class="text-center text-yellow-300 text-xs font-bold">⏰ Zeit für diesen Spieler abgelaufen</div>
+        <button onclick="hostTimeoutPass()" class="w-full py-3 px-4 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-xs rounded-xl shadow-lg transition active:scale-95">
+          ⏭️ An den nächsten Spieler weitergeben
+        </button>
+      </div>
       <div id="hc-double-badge" class="hidden text-center text-yellow-400 text-xs font-bold bg-yellow-900/20 border border-yellow-700/40 rounded-lg py-1.5"></div>
       <div class="grid grid-cols-2 gap-2">
         <button onclick="hostAnswerJa()" class="py-3 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-sm rounded-xl shadow-lg transition active:scale-95">✅ JA</button>

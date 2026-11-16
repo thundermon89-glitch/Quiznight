@@ -358,17 +358,8 @@
         renderAll(state);
         maybeRevealHalflifeEgg(state);
 
-        // Frühauflösung: sobald alle aktiven Spieler eingeloggt haben, muss der Host nicht
-      // auf die vollen 2 Minuten warten - der Host-Client löst dann sofort auf.
-      if (isHost && state.stage === 'input') {
-        const ids = getActivePlayerIds();
-        const submissions = state.submissions || {};
-        const submittedCount = ids.filter(id => submissions[id] !== undefined).length;
-        if (ids.length > 0 && submittedCount >= ids.length) {
-          stopRoundTimer();
-          hostResolveRound();
-        }
-      }
+        // Kein automatisches Auflösen: auch wenn alle eingeloggt haben, entscheidet der
+        // Spielleiter, wann aufgelöst wird.
       });
     });
     });
@@ -552,6 +543,7 @@
     // ================= SPIELER AKTIONEN =================
 
     window.submitTimelineOrder = function() {
+      if (isRoundTimeOver()) return; // Zeit abgelaufen - keine Abgabe mehr
       update(ref(db, 'game9State/submissions'), { [playerId]: myYearGuesses });
       update(ref(db, 'game9State/submissionTimes'), { [playerId]: Date.now() });
     };
@@ -591,6 +583,7 @@
       show("hc-" + stage);
 
       if (stage === 'input') {
+        document.getElementById("round-time-over-hint")?.classList.toggle("hidden", !isRoundTimeOver());
         const submissions = state.submissions || {};
         const ids = getActivePlayerIds();
         const submittedCount = ids.filter(id => submissions[id] !== undefined).length;
@@ -703,6 +696,7 @@
       if (mySubmission === undefined) {
         attachTimelineDragHandlers();
       }
+      if (isRoundTimeOver()) lockTimelineAfterTimeout();
 
       if (state.inputStartedAt && state.inputStartedAt !== lastRoundTimerStart) {
         lastRoundTimerStart = state.inputStartedAt;
@@ -800,10 +794,27 @@
       });
     }
 
-    // ==== RUNDEN-TIMER (2 Minuten) - läuft bei allen mit, aber nur der Host löst automatisch
-    // auf: entweder wenn die Zeit abläuft, oder sofort, sobald alle abgegeben haben. ====
+    // ==== RUNDEN-TIMER - läuft bei allen mit. Bei Ablauf wird nur die Eingabe gesperrt;
+    // aufgelöst wird erst, wenn der Spielleiter auf "Auflösen" klickt. ====
     let lastRoundTimerStart = null;
     let roundTimerInterval = null;
+    let roundTimeOverFor = null; // inputStartedAt der Runde, deren Zeit schon abgelaufen ist
+
+    function isRoundTimeOver() {
+      return !!(latestState && latestState.inputStartedAt && roundTimeOverFor === latestState.inputStartedAt);
+    }
+
+    function lockTimelineAfterTimeout() {
+      document.getElementById("round-time-over-hint")?.classList.remove("hidden");
+      if (isHost) return;
+      const submissions = (latestState && latestState.submissions) || {};
+      if (submissions[playerId] !== undefined) return; // schon eingeloggt - Anzeige bleibt
+      const widget = document.getElementById("input-widget");
+      if (widget && !widget.dataset.timeOver) {
+        widget.dataset.timeOver = "1";
+        widget.innerHTML = `<div class="text-[#ff2e93] font-jax font-bold text-xl">⏰ Zeit abgelaufen</div><div class="text-[#1a1a2e]/50 text-xs mt-1">Du hast nicht rechtzeitig eingeloggt. Der Spielleiter löst gleich auf...</div>`;
+      }
+    }
 
     function startRoundTimer(startedAt) {
       stopRoundTimer();
@@ -812,7 +823,8 @@
         updateRoundTimerUI(remaining);
         if (remaining <= 0) {
           stopRoundTimer();
-          if (isHost) hostResolveRound();
+          roundTimeOverFor = startedAt;
+          lockTimelineAfterTimeout();
         }
       }, 200);
     }
@@ -1131,6 +1143,7 @@
     </div>
 
     <div id="hc-input" class="hidden space-y-2">
+      <div id="round-time-over-hint" class="hidden bg-[#ffd23f] text-[#1a1a2e] rounded-xl p-3 text-center font-jax font-bold text-sm">⏰ Zeit abgelaufen - die Eingabe ist gesperrt. Du bestimmst, wann aufgelöst wird.</div>
       <div id="hc-submitted-count" class="text-center text-white text-xs font-bold py-1">0 von 0 abgegeben</div>
       <button onclick="hostResolveRound()" class="w-full py-6 jax-btn bg-[#7017c9] text-white font-jax font-bold text-lg flex items-center justify-center gap-2">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M4 20h16"/></svg> Auflösen

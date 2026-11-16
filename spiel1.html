@@ -190,6 +190,23 @@
     const ANSWER_DURATION_MS = 60000; // 1 Minute
     let timerInterval = null;
     let timerExpiredHandled = false;
+    // Zeit-Ablauf sperrt nur die Antworten - aufgelöst wird erst, wenn der Spielleiter klickt.
+    let currentOptionsShownAt = null;  // Startzeit der aktuell laufenden Antwortphase
+    let answerTimeOverFor = null;      // für welche Antwortphase die Zeit schon abgelaufen ist
+    function isAnswerTimeOver() {
+      return currentOptionsShownAt !== null && answerTimeOverFor === currentOptionsShownAt;
+    }
+    function lockAnswersAfterTimeout() {
+      document.getElementById("time-over-hint")?.classList.remove("hidden");
+      if (isHost) return;
+      document.querySelectorAll('[id^="opt-btn-"]').forEach((btn) => {
+        btn.disabled = true;
+        btn.classList.add("cursor-not-allowed");
+        btn.classList.remove("cursor-pointer");
+      });
+      const secEl = document.getElementById("timer-seconds");
+      if (secEl) secEl.innerText = "Zeit um!";
+    }
     let audioCtx = null;
 
     // FRAGEN-KATALOG (Standard-Fragen als Rückfallebene, falls im Editor noch nichts angelegt wurde)
@@ -403,7 +420,7 @@
         return `<div class="${correct ? 'text-[#7ed957] font-black' : 'text-[#1a1a2e]/60'} flex items-center gap-1">${String.fromCharCode(65 + i)}) ${opt}${correct ? icon('check','w-3.5 h-3.5') : ''}</div>`;
       }).join('');
       const multiHint = correctSet.length > 1 ? `<div class="text-[#ff2e93] font-jax font-bold text-xs mb-1">${correctSet.length} richtige Antworten!</div>` : '';
-      box.innerHTML = `<div class="text-[#7017c9] font-jax font-bold mb-2 flex items-center justify-center gap-1">${icon('book','w-4 h-4')} Vorschau (nur du siehst das):</div><div class="font-jax font-extrabold text-[#1a1a2e] text-xl md:text-2xl mb-3">${q.question}</div>${multiHint}<div class="space-y-1 text-base inline-block text-left">${optsHtml}</div>`;
+      box.innerHTML = `<div class="text-[#7017c9] font-jax font-bold mb-2 flex items-center justify-center gap-1">${icon('book','w-4 h-4')} Vorschau (nur du siehst das):</div><div class="font-jax font-extrabold text-[#1a1a2e] text-xl md:text-2xl mb-3">${q.question}</div>${multiHint}<div class="space-y-1 text-base inline-block text-left">${optsHtml}</div>${q.fact ? `<div class="text-left text-sm text-[#1a1a2e]/70 mt-3 border-t border-[#1a1a2e]/10 pt-2"><b class="text-[#7017c9]">Auflösung:</b> ${q.fact}</div>` : ''}`;
     }
 
     // NAVIGATION: sobald der Host das Spiel-Ende einläutet (gameState != 'in_game'), zurück ins Cockpit
@@ -565,6 +582,8 @@
     function startAnswerTimer(startTimestamp) {
       stopAnswerTimer();
       timerExpiredHandled = false;
+      currentOptionsShownAt = startTimestamp;
+      if (answerTimeOverFor !== startTimestamp) document.getElementById("time-over-hint")?.classList.add("hidden");
       let lastTickAt = 0;
       const timerWrap = document.getElementById("timer-display");
       if (timerWrap) timerWrap.classList.remove("hidden");
@@ -585,13 +604,15 @@
 
         if (remaining <= 0 && !timerExpiredHandled) {
           timerExpiredHandled = true;
-          playAlarm();
           clearInterval(timerInterval);
           timerInterval = null;
-          // Zeit abgelaufen: Lösung automatisch anzeigen (nur der Host schreibt den Status)
-          if (isHost) {
-            update(ref(db, 'game1State'), { stage: 'result' });
+          // Zeit abgelaufen: Antworten werden gesperrt. Aufgelöst wird NICHT automatisch,
+          // sondern erst, wenn der Spielleiter auf "Auflösen" klickt. Alarm nur einmal.
+          if (answerTimeOverFor !== startTimestamp) {
+            answerTimeOverFor = startTimestamp;
+            playAlarm();
           }
+          lockAnswersAfterTimeout();
         }
       }, 100);
     }
@@ -863,6 +884,7 @@
         btn.disabled = isHost;
         btn.className = getButtonBaseStyle(i) + (isHost ? " opacity-50 cursor-not-allowed" : renderSelectionSuffix(i));
       }
+      if (isAnswerTimeOver()) lockAnswersAfterTimeout();
     }
 
     function renderSelectionSuffix(i) {
@@ -887,7 +909,7 @@
       const factBox = document.getElementById("fact-box");
       if (factBox) {
         if (q.fact) {
-          factBox.innerHTML = `<div class="text-[#7017c9] text-xs font-bold uppercase tracking-wide mb-1">💡 Hintergrundwissen</div><div class="text-sm text-[#1a1a2e]/80">${q.fact}</div>`;
+          factBox.innerHTML = `<div class="text-[#7017c9] text-xs font-bold uppercase tracking-wide mb-1">💡 Auflösung</div><div class="text-sm text-[#1a1a2e]/80">${q.fact}</div>`;
           factBox.classList.remove("hidden");
         } else {
           factBox.classList.add("hidden");
@@ -933,6 +955,7 @@
     window.toggleOption = function(idx) {
       if (isHost) return; // Host spielt nicht mit
       if (!currentQuestionData || currentQuestionData.stage !== 'options_shown') return;
+      if (isAnswerTimeOver()) return; // Zeit abgelaufen - keine Änderung mehr
 
       const pos = selectedIndices.indexOf(idx);
       if (pos === -1) {
@@ -1160,6 +1183,7 @@
       </button>
     </div>
     <div id="hc-options_shown" class="hidden">
+      <div id="time-over-hint" class="hidden bg-[#ffd23f] text-[#1a1a2e] rounded-xl p-3 text-center mb-3 font-jax font-bold text-sm">⏰ Zeit abgelaufen - die Antworten sind gesperrt. Du bestimmst, wann aufgelöst wird.</div>
       <button onclick="hostShowResults()" class="w-full py-6 jax-btn bg-[#7017c9] text-white font-jax font-bold text-lg">
         Auflösen
       </button>
