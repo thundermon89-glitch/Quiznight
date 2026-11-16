@@ -128,6 +128,7 @@
     let isHost = false;
     let allPlayers = {};
     let latestState = null;
+    let autoResolveTriggered = false; // verhindert doppeltes Auto-Auflösen bei mehrfachem Rendern
 
     let localRoundKey = null;
     let currentSliderValue = null;
@@ -458,11 +459,14 @@
         const submittedCount = ids.filter(id => submissions[id] !== undefined).length;
         document.getElementById("hc-submitted-count").innerText = submittedCount + " von " + ids.length + " abgegeben";
 
-        // Kein automatisches Auflösen: auch wenn alle abgegeben haben, entscheidet der
-        // Spielleiter, wann aufgelöst wird.
-        if (ids.length > 0 && submittedCount === ids.length) {
-          document.getElementById("hc-submitted-count").innerText = "✅ Alle " + ids.length + " haben abgegeben - du kannst auflösen!";
+        // Runde automatisch auflösen, sobald wirklich ALLE aktiven Spieler abgegeben haben -
+        // kein manueller Host-Klick mehr nötig, sobald der Letzte fertig ist.
+        if (isHost && ids.length > 0 && submittedCount === ids.length && !autoResolveTriggered) {
+          autoResolveTriggered = true;
+          window.hostResolveRound();
         }
+      } else {
+        autoResolveTriggered = false;
       }
       if (stage === 'result') {
         const btn = document.getElementById("hc-next-round-btn");

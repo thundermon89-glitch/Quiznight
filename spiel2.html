@@ -1190,7 +1190,7 @@
                   <div id="turn-timer-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-150" style="width: 100%"></div>
                 </div>
               </div>
-              <div class="text-amber-600/50 text-[10px] mt-1">Zeit für diese Frage - danach ist automatisch der Nächste dran</div>
+              <div class="text-amber-600/50 text-[10px] mt-1">Zeit für diese Frage - danach entscheidet der Erzähler, wann der Nächste dran ist</div>
             `}
           </div>
           ${declareHtml}
@@ -1202,7 +1202,9 @@
         // Timeout mitten in die Entscheidung des Hosts (Gelöst/Nicht gelöst) hineinlaufen.
         stopTurnTimer();
         lastTurnStartedAt = null;
+        document.getElementById("hc-turn-timer-wrap")?.classList.add("hidden");
       } else if (state.turnStartedAt && state.turnStartedAt !== lastTurnStartedAt) {
+        document.getElementById("hc-turn-timer-wrap")?.classList.remove("hidden");
         lastTurnStartedAt = state.turnStartedAt;
         startTurnTimer(state.turnStartedAt);
       } else if (state.turnStartedAt) {
@@ -1345,6 +1347,18 @@
     }
 
     function updateTurnTimerUI(remaining, duration) {
+      // Timer zusätzlich im Steuerpult des Spielleiters anzeigen
+      const hcBar = document.getElementById("hc-turn-timer-bar");
+      const hcNum = document.getElementById("hc-turn-timer-seconds");
+      if (hcBar && hcNum) {
+        const s = Math.ceil(remaining / 1000);
+        hcNum.innerText = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, '0');
+        const p = Math.max(0, (remaining / duration) * 100);
+        hcBar.style.width = p + "%";
+        const color = p > 50 ? 'emerald' : p > 20 ? 'yellow' : 'red';
+        hcBar.className = `h-full bg-${color}-500 rounded-full transition-all duration-150`;
+        hcNum.className = `text-base font-black text-${color}-400 tabular-nums${p <= 20 ? ' animate-pulse' : ''}`;
+      }
       maybeShowTimeTicking_updateTurnTimerUI(remaining);
       const barEl = document.getElementById("turn-timer-bar");
       const numEl = document.getElementById("turn-timer-seconds");
@@ -1571,6 +1585,13 @@
 
     <!-- Stufe: in_progress -->
     <div id="hc-in_progress" class="hidden space-y-2">
+      <div id="hc-turn-timer-wrap" class="flex items-center gap-2 bg-black/30 rounded-xl px-3 py-2">
+        <span class="text-amber-400 text-[11px] font-bold">⏱️ Zeit für diese Frage</span>
+        <div class="flex-1 h-2.5 bg-black/40 rounded-full overflow-hidden border border-amber-900/40">
+          <div id="hc-turn-timer-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-150" style="width: 100%"></div>
+        </div>
+        <span id="hc-turn-timer-seconds" class="text-base font-black text-emerald-400 tabular-nums">2:00</span>
+      </div>
       <div id="hc-turn-timeout" class="hidden space-y-2 bg-yellow-900/30 border border-yellow-500/50 rounded-xl p-2">
         <div class="text-center text-yellow-300 text-xs font-bold">⏰ Zeit für diesen Spieler abgelaufen</div>
         <button onclick="hostTimeoutPass()" class="w-full py-3 px-4 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-xs rounded-xl shadow-lg transition active:scale-95">

@@ -234,23 +234,6 @@
     const ANSWER_DURATION_MS = 90000; // 1,5 Minuten - schnell diskutieren, schnell entscheiden
     let timerInterval = null;
     let timerExpiredHandled = false;
-    // Zeit-Ablauf sperrt nur die Antworten - aufgelöst wird erst, wenn der Spielleiter klickt.
-    let currentOptionsShownAt = null;  // Startzeit der aktuell laufenden Antwortphase
-    let answerTimeOverFor = null;      // für welche Antwortphase die Zeit schon abgelaufen ist
-    function isAnswerTimeOver() {
-      return currentOptionsShownAt !== null && answerTimeOverFor === currentOptionsShownAt;
-    }
-    function lockAnswersAfterTimeout() {
-      document.getElementById("time-over-hint")?.classList.remove("hidden");
-      if (isHost) return;
-      document.querySelectorAll('[id^="opt-btn-"]').forEach((btn) => {
-        btn.disabled = true;
-        btn.classList.add("cursor-not-allowed");
-        btn.classList.remove("cursor-pointer");
-      });
-      const secEl = document.getElementById("timer-seconds");
-      if (secEl) secEl.innerText = "Zeit um!";
-    }
     let audioCtx = null;
 
     // FRAGEN-KATALOG (Standard-Fragen als Rückfallebene, falls im Editor noch nichts angelegt wurde)
@@ -822,8 +805,6 @@
     function startAnswerTimer(startTimestamp) {
       stopAnswerTimer();
       timerExpiredHandled = false;
-      currentOptionsShownAt = startTimestamp;
-      if (answerTimeOverFor !== startTimestamp) document.getElementById("time-over-hint")?.classList.add("hidden");
       let lastTickAt = 0;
       const timerWrap = document.getElementById("timer-display");
       if (timerWrap) timerWrap.classList.remove("hidden");
@@ -848,15 +829,13 @@
 
         if (remaining <= 0 && !timerExpiredHandled) {
           timerExpiredHandled = true;
+          playAlarm();
           clearInterval(timerInterval);
           timerInterval = null;
-          // Zeit abgelaufen: Antworten werden gesperrt. Aufgelöst wird NICHT automatisch,
-          // sondern erst, wenn der Spielleiter auf "Auflösen" klickt. Alarm nur einmal.
-          if (answerTimeOverFor !== startTimestamp) {
-            answerTimeOverFor = startTimestamp;
-            playAlarm();
+          // Zeit abgelaufen: Lösung automatisch anzeigen (nur der Host schreibt den Status)
+          if (isHost) {
+            update(ref(db, 'game3State'), { stage: 'result' });
           }
-          lockAnswersAfterTimeout();
         }
       }, 100);
     }
@@ -1142,7 +1121,6 @@
         btn.disabled = isHost;
         btn.className = getButtonBaseStyle(i) + (isHost ? " opacity-50 cursor-not-allowed" : renderSelectionSuffix(i));
       }
-      if (isAnswerTimeOver()) lockAnswersAfterTimeout();
     }
 
     function renderSelectionSuffix(i) {
@@ -1240,7 +1218,6 @@
     window.toggleOption = function(idx) {
       if (isHost) return; // Host spielt nicht mit
       if (!currentQuestionData || currentQuestionData.stage !== 'options_shown') return;
-      if (isAnswerTimeOver()) return; // Zeit abgelaufen - keine Änderung mehr
 
       // Nur EINE Antwort gleichzeitig möglich - ein Klick auf eine andere Option wechselt
       // direkt dorthin, kein separates Abwählen mehr nötig.
@@ -1427,7 +1404,6 @@
       </button>
     </div>
     <div id="hc-options_shown" class="hidden">
-      <div id="time-over-hint" class="hidden bg-[#ffd23f] text-[#1a1a2e] rounded-xl p-3 text-center mb-3 font-jax font-bold text-sm">⏰ Zeit abgelaufen - die Antworten sind gesperrt. Du bestimmst, wann aufgelöst wird.</div>
       <button onclick="hostShowResults()" class="w-full py-6 jax-btn bg-[#7017c9] text-white font-jax font-bold text-lg">
         Auflösen
       </button>

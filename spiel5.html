@@ -492,6 +492,7 @@
         const s = snap.val() || {};
         if (s.buzzes && s.buzzes[playerId]) return; // schon gebuzzert
         const step = s.stepIndex || 0;
+        if (s.stage !== 'revealing' || step >= PIXEL_BLOCK_SIZES.length - 1) return; // Bild schon ganz aufgedeckt - Raten vorbei
         update(ref(db, 'game5State/buzzes'), { [playerId]: { t: serverTimestamp(), step } });
       });
     };
@@ -702,7 +703,7 @@
           revealTimeoutId = setTimeout(scheduleNextRevealStep, 1000);
           return;
         }
-        if (curStep >= maxStep) return; // schon voll aufgedeckt, wartet auf Antwort/Buzzer
+        if (curStep >= maxStep) { finishIfFullyRevealedUnsolved(s); return; }
 
         const delay = REVEAL_STEP_DELAYS[Math.min(curStep, REVEAL_STEP_DELAYS.length - 1)];
         revealTimeoutId = setTimeout(() => {
@@ -716,15 +717,27 @@
             }
             const idx = s2.imageIdx || 0;
             const curStep2 = s2.stepIndex || 0;
-            if (curStep2 >= maxStep) {
-              // Bild komplett aufgedeckt: NICHT automatisch weiter - der Spielleiter
-              // entscheidet per "Überspringen", wann das nächste Bild kommt.
-              return;
-            }
+            if (curStep2 >= maxStep) { finishIfFullyRevealedUnsolved(s2); return; }
             update(ref(db, 'game5State'), { stepIndex: curStep2 + 1 }).then(scheduleNextRevealStep);
           });
         }, delay);
       });
+    }
+
+    // Bild ist komplett aufgedeckt: Ab jetzt kann niemand mehr buzzern. Wer vorher schon
+    // gebuzzert hat, kommt noch dran. Hat danach niemand richtig geraten, endet das Bild
+    // mit 0 Punkten - das NÄCHSTE Bild startet aber erst, wenn der Spielleiter klickt.
+    function finishIfFullyRevealedUnsolved(s) {
+      if (!revealActive || s.stage !== 'revealing') return;
+      const buzzes = s.buzzes || {};
+      const respondedWrong = s.respondedWrong || [];
+      const pending = Object.keys(buzzes).some(id => buzzes[id] && !respondedWrong.includes(id));
+      if (s.activeResponderId || pending) {
+        // Laufende/ausstehende Antworten erst abwarten, dann erneut prüfen
+        revealTimeoutId = setTimeout(scheduleNextRevealStep, 1000);
+        return;
+      }
+      advanceToNextImageOrFinish(s.imageIdx || 0, { lastResult: 'unsolved' });
     }
 
     function stopRevealInterval() {
@@ -913,7 +926,10 @@
             resultBox.innerHTML = `${icon('check','w-4 h-4 inline -mt-1')} ${name} hatte recht (+${state.lastPoints} Pkt.)`;
             resultBox.className = "text-emerald-400 font-bold text-xs mb-2";
           } else if (state.lastResult === 'skipped') {
-            resultBox.innerHTML = `${icon('arrowRight','w-4 h-4 inline -mt-1')} Ohne Punkte weiter (niemand hat rechtzeitig richtig geraten)`;
+            resultBox.innerHTML = `${icon('arrowRight','w-4 h-4 inline -mt-1')} Bild übersprungen - ohne Punkte`;
+            resultBox.className = "text-slate-400 font-bold text-xs mb-2";
+          } else if (state.lastResult === 'unsolved') {
+            resultBox.innerHTML = `Bild komplett aufgedeckt - niemand hat es erraten (0 Punkte)`;
             resultBox.className = "text-slate-400 font-bold text-xs mb-2";
           } else {
             resultBox.innerHTML = `Alle Buzzerer falsch`;
@@ -973,6 +989,15 @@
         resultHtml = `<div class="text-red-400 font-bold mb-3">${icon('cross','w-4 h-4 inline -mt-1')} Niemand hatte am Ende recht...</div>`;
       } else if (state.lastResult === 'skipped') {
         resultHtml = `<div class="text-slate-300 font-bold mb-3">${icon('arrowRight','w-4 h-4 inline -mt-1')} Ohne Punkte weiter zum nächsten Bild.</div>`;
+      } else if (state.lastResult === 'unsolved') {
+        resultHtml = `<div class="text-slate-300 font-bold mb-3">Bild komplett aufgedeckt - niemand hat es erraten. 0 Punkte.</div>`;
+      }
+      // Das gerade gespielte Bild in voller Auflösung mit der Lösung zeigen
+      const prevImage = images[(state.imageIdx || 0) - 1];
+      if (state.lastResult && prevImage) {
+        resultHtml += `<img src="${prevImage.imageUrl}" class="max-h-56 max-w-full mx-auto rounded-xl border-2 border-green-700/60 mb-2" alt="">
+          <div class="text-green-300 text-xs uppercase tracking-wide font-bold">Lösung</div>
+          <div class="font-jax font-extrabold text-xl text-white mb-3">${prevImage.answer}</div>`;
       }
       if (resultEl) resultEl.innerHTML = resultHtml;
       maybeHandleLemming(state);
@@ -1010,6 +1035,8 @@
           .sort((a, b) => (buzzes[a].t || 0) - (buzzes[b].t || 0))
           .indexOf(playerId) + 1;
         interactionHtml = `<div class="text-amber-300 font-bold">${icon('check','w-4 h-4 inline -mt-1')} Gebuzzert! Warteposition: #${queuePos > 0 ? queuePos : '?'}</div>`;
+      } else if ((state.stepIndex || 0) >= PIXEL_BLOCK_SIZES.length - 1) {
+        interactionHtml = `<div class="text-slate-300 font-bold">Das Bild ist komplett aufgedeckt - Raten ist vorbei.</div>`;
       } else if (isArmed) {
         interactionHtml = `
           <button onclick="pressBuzzer()" class="buzzer-btn w-48 h-48 mx-auto rounded-full bg-green-600 text-white font-jax font-extrabold text-2xl flex flex-col items-center justify-center jax-pop">
@@ -1253,7 +1280,7 @@
       <div id="waiting-area" class="hidden jax-card-term p-6 text-center">
         <div id="lemming-track" class="relative w-full bg-black rounded-xl overflow-hidden mb-4" style="height: 60px;"></div>
         <div id="waiting-result-text"></div>
-        <div class="text-green-500/70">Der Moderator bereitet das nächste Bild vor...</div>
+        <div class="text-green-500/70">Das nächste Bild startet, sobald der Moderator weiterklickt...</div>
       </div>
       <div id="image-area" class="hidden"></div>
       <div id="finished-area" class="hidden jax-card-term p-10">

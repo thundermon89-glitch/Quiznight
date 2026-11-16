@@ -553,7 +553,6 @@
             });
           }
           clearInterval(movieTickInterval);
-          document.getElementById("hc-fuse-over-hint")?.classList.add("hidden");
           const tick = () => {
             // Solange das Video bei dieser Person noch gar nicht angesprungen ist, zeigt die
             // Zündschnur die vollen Punkte an und tickt noch nicht runter - fair für alle,
@@ -562,9 +561,7 @@
             const pts = updateFuse(referenceStart);
             if (myVideoPlaybackStartedAt && pts <= 0) {
               clearInterval(movieTickInterval);
-              // Zündschnur abgebrannt: KEIN automatisches Auflösen mehr - der Spielleiter
-              // beendet die Runde selbst, wenn er so weit ist.
-              if (isHost) document.getElementById("hc-fuse-over-hint")?.classList.remove("hidden");
+              if (isHost) update(ref(db, 'game6State'), { stage: 'movie_result' });
             }
           };
           tick();
@@ -674,7 +671,6 @@
     </div>
 
     <div id="hc-playing" class="hidden space-y-3">
-      <div id="hc-fuse-over-hint" class="hidden bg-[#ffd23f] text-[#1a1a2e] rounded-xl p-3 text-center font-jax font-bold text-sm">⏰ Zündschnur abgebrannt - du bestimmst, wann die Runde aufgelöst wird.</div>
       <div id="hc-solved-count" class="text-center text-sm font-bold">0 von 0 haben gelöst</div>
       <button onclick="hostEndMovieRound()" class="w-full py-4 jax-btn bg-white text-[#1a1a2e] font-jax font-bold text-base">
         🏁 Runde jetzt beenden & auflösen
