@@ -91,7 +91,7 @@
         renderPlayerRows();
         return;
       }
-      onValue(ref(db, gameKey + 'State'), (snap) => {
+      onValue(ref(db, gameKey.replace('spiel', 'game') + 'State'), (snap) => {
         lastGameState = snap.val() || {};
         stateBox.innerText = JSON.stringify(lastGameState, null, 2);
         renderPlayerRows();
@@ -102,7 +102,7 @@
       const gs = snap.val() || {};
       const activeGame = gs.activeGame || null;
       const label = document.getElementById("current-game-label");
-      const match = activeGame ? activeGame.match(/^(spiel\d)\.html$/) : null;
+      const match = activeGame ? activeGame.match(/^(spiel\d+)\.html$/) : null;
       const gameKey = match ? match[1] : null;
 
       label.innerText = activeGame

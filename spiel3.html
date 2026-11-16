@@ -1054,6 +1054,7 @@
       // Frage anzeigen oder verstecken
       if (state.stage === 'waiting') {
         qTitle.innerText = "Warten auf Start der nächsten Frage durch den Host...";
+        document.getElementById("question-image")?.classList.add("hidden");
         statusBadge.innerText = "BEREITSTELLUNG";
         statusBadge.className = "jax-chip px-3 py-1 text-xs font-jax font-bold bg-[#ffd23f] text-[#1a1a2e]";
         resetOptionButtons();
@@ -1061,6 +1062,19 @@
       }
 
       qTitle.innerText = q.question;
+      const qImg = document.getElementById("question-image");
+      if (qImg) {
+        // Optionales Bild zur Frage (im Editor hochgeladen oder als Link eingetragen)
+        let imgSrc = q.image || '';
+        const gh = imgSrc.match(/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/(.+)$/);
+        if (gh) imgSrc = `https://raw.githubusercontent.com/${gh[1]}/${gh[2]}/${gh[3]}`;
+        if (imgSrc) {
+          if (qImg.getAttribute('src') !== imgSrc) qImg.src = imgSrc;
+          qImg.classList.remove("hidden");
+        } else {
+          qImg.classList.add("hidden");
+        }
+      }
 
       if (state.stage === 'question_shown') {
         statusBadge.innerText = "FRAGE FREIGEGEBEN - ANTWORTEN GESPERRT";
@@ -1444,6 +1458,7 @@
         <h2 id="question-title" class="font-jax text-3xl md:text-5xl font-extrabold leading-relaxed text-[#1a1a2e]">
           Warten auf Start der nächsten Frage durch den Host...
         </h2>
+        <img id="question-image" src="" class="hidden max-h-72 max-w-full mx-auto mt-4 rounded-2xl border-2 border-[#1a1a2e] object-contain" alt="">
       </div>
 
       <!-- TIMER (nur während 'Antworten Freigeben') -->

@@ -544,12 +544,25 @@
       }
     ]
       },
+      spiel10: {
+        // Name, Emoji und Spielregeln sind im Editor frei einstellbar (content/spiel10/settings)
+        label: "Spiel 10: Zeitreise 2",
+        labelPrefix: "Spiel 10: ",
+        formType: "timeline",
+        contentPath: "content/spiel10/rounds",
+        templatesPath: "content/spiel10/templates",
+        settingsPath: "content/spiel10/settings",
+        settingsDefaults: { name: "Zeitreise 2", emoji: "⏳", rulerStart: 1980, rulerEnd: new Date().getFullYear(), durationSec: 120, tolerance: 8 },
+        blank: () => ({ id: Date.now(), emoji: "⏳", question: "", points: 200,
+          events: [{ id: 'a', label: '', emoji: '', year: 2000, fact: '' }, { id: 'b', label: '', emoji: '', year: 2010, fact: '' }] }),
+        defaults: []
+      },
       spiel2: {
         label: "Spiel 2: Rätselfeuer",
         formType: "story",
         contentPath: "content/spiel2/stories",
         templatesPath: "content/spiel2/templates",
-        blank: () => ({ id: Date.now(), teaser: "", solution: "", image: "", points: 250 }),
+        blank: () => ({ id: Date.now(), teaser: "", solution: "", image: "", solutionImage: "", points: 250, bonus: false }),
         defaults: [
       {
         id: 1,
@@ -569,6 +582,36 @@
         teaser: "Warum helfen Menschen weltweit Fischen in Utrecht?",
         solution: "Weil sie über eine Live-Webcam an einer Schleuse in Utrecht (Niederlande) zusehen können, wie Fische auf ihrer Wanderung zu den Laichgründen feststecken. Sobald genug Fische vor der geschlossenen Schleuse warten, drückt man online einen virtuellen „Klingel\"-Button auf visdeurbel.nl, und ein echter Schleusenwärter öffnet die Schleuse für sie. So kann jeder von überall auf der Welt Fischen aus der Ferne beim Durchkommen helfen.",
         points: 250
+      },
+      // Zusatzfragen: kommen nicht im normalen Ablauf dran, sondern nur, wenn der Host
+      // sie während des Spiels dazubucht
+      {
+        id: 101,
+        teaser: "Welchen ungewöhnlichen Zeugen rief Anwalt Mike McCray 1981 in einer Klage wegen schwerer Körperverletzung an einem 9-jährigen Mädchen in den Zeugenstand?",
+        solution: "Der Anwalt rief Robert Hill, einen Angestellten von Disneyland, in den Zeugenstand, der in seinem Winnie-Pooh-Kostüm beweisen musste, dass es unmöglich war, das Mädchen zu schlagen.",
+        points: 250,
+        bonus: true
+      },
+      {
+        id: 102,
+        teaser: "Welche ungewöhnliche Voraussetzung müssen Masseure in Südkorea erfüllen?",
+        solution: "Sie müssen blind sein.",
+        points: 250,
+        bonus: true
+      },
+      {
+        id: 103,
+        teaser: "Wofür nutzte ein Berliner Künstler 99 Handys und einen Bollerwagen?",
+        solution: "Er hat über Google Maps einen künstlichen Stau produziert.",
+        points: 250,
+        bonus: true
+      },
+      {
+        id: 104,
+        teaser: "Welchen sportlichen Weltrekord solltet ihr besser nicht zu brechen versuchen?",
+        solution: "Den Geschwindigkeitsweltrekord auf dem Wasser. Der Rekord liegt bei 511 km/h, und alle, die versucht haben, ihn zu brechen, sind gestorben.",
+        points: 250,
+        bonus: true
       }
     ],
       },
@@ -947,38 +990,122 @@
     const MAX_UPLOAD_DIMENSION = 900;
     const UPLOAD_JPEG_QUALITY = 0.82;
 
-    window.handleImageUpload = function(idx, inputEl) {
+    // Animierte GIFs würden beim Verkleinern über ein Canvas ihre Animation verlieren -
+    // GIFs bis zu dieser Größe werden deshalb unverändert übernommen.
+    const MAX_GIF_BYTES = 1500000;
+
+    // Liest eine Bilddatei ein und verkleinert sie. Bilder mit Transparenz (PNG/GIF/WebP)
+    // werden als WebP gespeichert, damit freigestellte Bilder ihren durchsichtigen
+    // Hintergrund behalten - alles andere als JPEG.
+    function compressImageFile(file) {
+      return new Promise((resolve, reject) => {
+        if (!file.type || !file.type.startsWith('image/')) { reject(new Error('Das ist keine Bilddatei.')); return; }
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+        reader.onload = (e) => {
+          const original = e.target.result;
+          if (file.type === 'image/gif' && file.size <= MAX_GIF_BYTES) { resolve(original); return; }
+          const img = new Image();
+          img.onload = () => {
+            const scale = Math.min(1, MAX_UPLOAD_DIMENSION / Math.max(img.width, img.height));
+            const width = Math.max(1, Math.round(img.width * scale));
+            const height = Math.max(1, Math.round(img.height * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            const keepAlpha = /png|gif|webp|svg/.test(file.type);
+            resolve(keepAlpha ? canvas.toDataURL('image/webp', 0.85) : canvas.toDataURL('image/jpeg', UPLOAD_JPEG_QUALITY));
+          };
+          img.onerror = () => reject(new Error('Bild konnte nicht gelesen werden.'));
+          img.src = original;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Bild-Felder werden über einen Pfad angesprochen: "3.image" = items[3].image,
+    // "2.events.1.image" = items[2].events[1].image. So funktioniert dasselbe Bildfeld
+    // in jedem Spiel - egal ob das Bild an der Frage oder an einem Ereignis hängt.
+    function resolveImagePath(path) {
+      const parts = path.split('.');
+      const key = parts.pop();
+      let obj = items;
+      for (const p of parts) {
+        if (obj[p] == null) obj[p] = {};
+        obj = obj[p];
+      }
+      return { obj, key };
+    }
+
+    function imagePreviewId(path) { return 'imgp-' + path.replace(/\./g, '-'); }
+
+    function imagePreviewInner(value, emptyText) {
+      return value
+        ? `<img src="${escapeAttr(value)}" class="w-full h-full object-contain" alt="" />`
+        : `<span class="text-[9px] text-[#1a1a2e]/40 text-center px-1">${emptyText || 'Kein Bild'}</span>`;
+    }
+
+    function imageFieldHtml(path, value, label, opts = {}) {
+      const isUploaded = typeof value === 'string' && value.startsWith('data:');
+      const pid = imagePreviewId(path);
+      const size = opts.small ? 'w-14 h-14' : 'w-20 h-20';
+      const placeholder = isUploaded
+        ? 'Hochgeladenes Bild ist gespeichert - ein Link hier ersetzt es'
+        : (opts.placeholder || 'Bild-Link einfügen (https://...) oder hochladen');
+      return `
+        <div class="flex items-center gap-3">
+          <div id="${pid}" class="${size} flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
+            ${imagePreviewInner(value, opts.emptyText)}
+          </div>
+          <div class="flex-1 min-w-0 space-y-1">
+            ${label ? `<label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase block">${label}</label>` : ''}
+            <input type="text" autocomplete="off" value="${isUploaded ? '' : escapeAttr(value || '')}" placeholder="${placeholder}"
+              oninput="setImageByPath('${path}', this.value)" class="jax-input w-full text-xs" />
+            <div class="flex items-center gap-2 flex-wrap">
+              <label class="jax-btn bg-white text-[#1a1a2e] px-2.5 py-1.5 text-[11px] font-jax font-bold inline-block cursor-pointer">
+                Bild hochladen
+                <input type="file" accept="image/*" class="hidden" onchange="uploadImageByPath('${path}', this)" />
+              </label>
+              ${value ? `<button type="button" onclick="clearImageByPath('${path}')" class="jax-btn bg-[#ff2e93] text-white px-2.5 py-1.5 text-[11px] font-jax font-bold">Bild entfernen</button>` : ''}
+              <span id="${pid}-status" class="text-[10px] text-[#1a1a2e]/50"></span>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    window.setImageByPath = function(path, value) {
+      value = normalizeImageUrl((value || '').trim());
+      const { obj, key } = resolveImagePath(path);
+      obj[key] = value;
+      markDirty();
+      // Nur die Vorschau austauschen, nicht alles neu zeichnen - sonst springt der Cursor
+      // beim Eintippen aus dem Feld.
+      const el = document.getElementById(imagePreviewId(path));
+      if (el) el.innerHTML = imagePreviewInner(value);
+    };
+
+    window.clearImageByPath = function(path) {
+      const { obj, key } = resolveImagePath(path);
+      obj[key] = '';
+      markDirty();
+      renderEditor();
+    };
+
+    window.uploadImageByPath = function(path, inputEl) {
       const file = inputEl.files && inputEl.files[0];
       if (!file) return;
-      const statusEl = document.getElementById("upload-status-" + idx);
-      if (statusEl) statusEl.innerText = "Bild wird verkleinert und hochgeladen...";
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          let { width, height } = img;
-          if (width > height && width > MAX_UPLOAD_DIMENSION) {
-            height = Math.round(height * (MAX_UPLOAD_DIMENSION / width));
-            width = MAX_UPLOAD_DIMENSION;
-          } else if (height > MAX_UPLOAD_DIMENSION) {
-            width = Math.round(width * (MAX_UPLOAD_DIMENSION / height));
-            height = MAX_UPLOAD_DIMENSION;
-          }
-          const canvas = document.createElement("canvas");
-          canvas.width = width; canvas.height = height;
-          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL("image/jpeg", UPLOAD_JPEG_QUALITY);
-
-          items[idx].imageUrl = dataUrl;
-          markDirty();
-          renderEditor();
-        };
-        img.onerror = () => { if (statusEl) statusEl.innerText = "Bild konnte nicht gelesen werden."; };
-        img.src = e.target.result;
-      };
-      reader.onerror = () => { if (statusEl) statusEl.innerText = "Datei konnte nicht gelesen werden."; };
-      reader.readAsDataURL(file);
+      const statusEl = document.getElementById(imagePreviewId(path) + '-status');
+      if (statusEl) statusEl.innerText = 'Bild wird verkleinert...';
+      compressImageFile(file).then((dataUrl) => {
+        const { obj, key } = resolveImagePath(path);
+        obj[key] = dataUrl;
+        markDirty();
+        renderEditor();
+        const st = document.getElementById(imagePreviewId(path) + '-status');
+        if (st) st.innerText = 'Hochgeladen - zum Übernehmen speichern';
+      }).catch((err) => {
+        if (statusEl) statusEl.innerText = err.message;
+      });
     };
 
     // ==== RENDERN ====
@@ -1007,21 +1134,7 @@
             </div>
           </div>
 
-          <div class="flex items-center gap-4">
-            <div class="w-24 h-24 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
-              ${q.imageUrl
-                ? `<img id="img-preview-${idx}-imageUrl" src="${escapeAttr(q.imageUrl)}" class="w-full h-full object-cover" />`
-                : `<span id="img-preview-${idx}-imageUrl" class="text-[10px] text-[#1a1a2e]/40 text-center px-1 flex items-center justify-center w-full h-full">Kein Bild</span>`
-              }
-            </div>
-            <div class="flex-1 space-y-1">
-              <label class="jax-btn bg-white text-[#1a1a2e] px-3 py-2 text-xs font-jax font-bold inline-block cursor-pointer">
-                Bild hochladen
-                <input type="file" accept="image/*" class="hidden" onchange="handleImageUpload(${idx}, this)" />
-              </label>
-              <div id="upload-status-${idx}" class="text-[10px] text-[#1a1a2e]/50"></div>
-            </div>
-          </div>
+          ${imageFieldHtml(idx + '.imageUrl', q.imageUrl, 'Bild (wird verpixelt gezeigt)')}
 
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Lösung (nur der Host sieht das zur Kontrolle)</label>
@@ -1052,6 +1165,8 @@
               oninput="updateField(${idx}, 'question', this.value)"
               class="jax-input w-full mt-1 text-base" />
           </div>
+
+          ${imageFieldHtml(idx + '.image', q.image, 'Bild zur Frage (optional)')}
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
             ${[0,1,2,3].map(optIdx => {
@@ -1092,7 +1207,13 @@
       return items.map((q, idx) => `
         <div class="jax-card p-5 space-y-3">
           <div class="flex items-center justify-between">
-            <div class="jax-chip bg-[#7017c9] text-white px-3 py-1 text-xs font-jax font-bold">Story ${idx + 1}</div>
+            <div class="flex items-center gap-2">
+              <div class="jax-chip ${q.bonus ? 'bg-[#ff8a3d]' : 'bg-[#7017c9]'} text-white px-3 py-1 text-xs font-jax font-bold">${q.bonus ? 'Zusatzfrage' : 'Story'} ${idx + 1}</div>
+              <label class="flex items-center gap-1.5 text-[11px] font-jax font-bold text-[#1a1a2e]/70 cursor-pointer" title="Zusatzfragen laufen nicht im normalen Ablauf, der Host kann sie während des Spiels dazubuchen">
+                <input type="checkbox" ${q.bonus ? 'checked' : ''} onchange="updateField(${idx}, 'bonus', this.checked); renderEditor();" />
+                Zusatzfrage
+              </label>
+            </div>
             <div class="flex gap-1.5">
               <button onclick="moveQuestion(${idx}, -1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === 0 ? 'disabled' : ''}>${icon('up', 'w-4 h-4')}</button>
               <button onclick="moveQuestion(${idx}, 1)" class="w-8 h-8 jax-btn bg-white flex items-center justify-center" ${idx === items.length - 1 ? 'disabled' : ''}>${icon('down', 'w-4 h-4')}</button>
@@ -1109,12 +1230,8 @@
             <textarea oninput="updateField(${idx}, 'solution', this.value)" rows="4" placeholder="Die ausführliche Auflösung..."
               class="jax-input w-full mt-1 text-sm" style="border-color:#7ed957;">${escapeAttr(q.solution || '')}</textarea>
           </div>
-          <div>
-            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Bild/GIF bei der Auflösung (optional)</label>
-            <input type="text" autocomplete="off" value="${escapeAttr(q.image || '')}" placeholder="https://..."
-              oninput="updateField(${idx}, 'image', this.value)"
-              class="jax-input w-full mt-1 text-sm" />
-          </div>
+          ${imageFieldHtml(idx + '.image', q.image, 'Bild/GIF zur Frage (optional, wird mit dem Teaser gezeigt)')}
+          ${imageFieldHtml(idx + '.solutionImage', q.solutionImage, 'Bild/GIF zur Lösung (optional, wird bei der Auflösung gezeigt)')}
           <div class="flex items-center gap-2">
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Punkte</label>
             <input type="number" autocomplete="off" value="${q.points ?? 250}" oninput="updateField(${idx}, 'points', parseInt(this.value, 10) || 0)"
@@ -1161,6 +1278,7 @@
               oninput="updateField(${idx}, 'altAnswers', this.value.split(',').map(s => s.trim()).filter(Boolean))"
               class="jax-input w-full mt-1 text-sm" />
           </div>
+          ${imageFieldHtml(idx + '.image', q.image, 'Bild bei der Auflösung (optional, z.B. Filmplakat)')}
         </div>
       `).join('');
     }
@@ -1176,28 +1294,8 @@
               <button onclick="deleteQuestion(${idx})" class="w-8 h-8 jax-btn bg-[#ff2e93] text-white flex items-center justify-center">${icon('trash', 'w-4 h-4')}</button>
             </div>
           </div>
-          <div class="flex items-center gap-4">
-            <div class="w-20 h-20 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
-              ${q.distortedUrl ? `<img id="img-preview-${idx}-distortedUrl" src="${escapeAttr(q.distortedUrl)}" class="w-full h-full object-cover" />` : `<span id="img-preview-${idx}-distortedUrl" class="text-[9px] text-[#1a1a2e]/40 text-center px-1 flex items-center justify-center w-full h-full">Verzerrt</span>`}
-            </div>
-            <div class="flex-1">
-              <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Verzerrtes/verpixeltes Bild (wird zuerst gezeigt)</label>
-              <input type="text" autocomplete="off" value="${escapeAttr(q.distortedUrl || '')}" placeholder="https://..."
-                oninput="updateField(${idx}, 'distortedUrl', this.value)"
-                class="jax-input w-full mt-1 text-sm" />
-            </div>
-          </div>
-          <div class="flex items-center gap-4">
-            <div class="w-20 h-20 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
-              ${q.originalUrl ? `<img id="img-preview-${idx}-originalUrl" src="${escapeAttr(q.originalUrl)}" class="w-full h-full object-cover" />` : `<span id="img-preview-${idx}-originalUrl" class="text-[9px] text-[#1a1a2e]/40 text-center px-1 flex items-center justify-center w-full h-full">Original</span>`}
-            </div>
-            <div class="flex-1">
-              <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Original-Bild (wird bei der Auflösung gezeigt)</label>
-              <input type="text" autocomplete="off" value="${escapeAttr(q.originalUrl || '')}" placeholder="https://..."
-                oninput="updateField(${idx}, 'originalUrl', this.value)"
-                class="jax-input w-full mt-1 text-sm" />
-            </div>
-          </div>
+          ${imageFieldHtml(idx + '.distortedUrl', q.distortedUrl, 'Verzerrtes/verpixeltes Bild (wird zuerst gezeigt)', { emptyText: 'Verzerrt' })}
+          ${imageFieldHtml(idx + '.originalUrl', q.originalUrl, 'Original-Bild (wird bei der Auflösung gezeigt)', { emptyText: 'Original' })}
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Titel (richtige Antwort)</label>
             <input type="text" autocomplete="off" value="${escapeAttr(q.title || '')}" placeholder="z.B. Counter Strike"
@@ -1232,17 +1330,7 @@
               class="jax-input w-full mt-1 text-base" />
           </div>
 
-          <div class="flex items-center gap-4">
-            <div class="w-20 h-20 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
-              ${q.image ? `<img id="img-preview-${idx}-image" src="${escapeAttr(q.image)}" class="w-full h-full object-cover" />` : `<span id="img-preview-${idx}-image" class="text-[9px] text-[#1a1a2e]/40 text-center px-1 flex items-center justify-center w-full h-full">Kein Bild</span>`}
-            </div>
-            <div class="flex-1">
-              <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Bild zur Frage (optional)</label>
-              <input type="text" autocomplete="off" value="${escapeAttr(q.image || '')}" placeholder="https://..."
-                oninput="updateField(${idx}, 'image', this.value)"
-                class="jax-input w-full mt-1 text-sm" />
-            </div>
-          </div>
+          ${imageFieldHtml(idx + '.image', q.image, 'Bild zur Frage (optional)')}
 
           <div class="flex gap-2">
             <button onclick="updateField(${idx}, 'correct', 0)"
@@ -1318,7 +1406,6 @@
                   <div class="flex flex-col items-center gap-1">
                     <input type="text" autocomplete="off" value="${escapeAttr(ev.emoji || '')}" placeholder="🎮" oninput="updateEventField(${rIdx}, ${eIdx}, 'emoji', this.value)"
                       class="jax-input text-sm text-center w-full" title="Wird nur genutzt, wenn kein Bild gesetzt ist" />
-                    ${ev.image ? `<img src="${escapeAttr(ev.image)}" class="w-10 h-10 rounded object-cover border-2 border-[#1a1a2e]" alt="">` : ''}
                   </div>
                   <div class="space-y-1">
                     <input type="text" autocomplete="off" value="${escapeAttr(ev.label || '')}" placeholder="Bezeichnung..." oninput="updateEventField(${rIdx}, ${eIdx}, 'label', this.value)"
@@ -1330,9 +1417,7 @@
                     class="jax-input text-sm" />
                   <button onclick="removeEvent(${rIdx}, ${eIdx})" class="w-9 h-9 jax-btn bg-[#ff2e93] text-white flex items-center justify-center" ${(round.events || []).length <= 2 ? 'disabled title="Mindestens 2 Ereignisse nötig"' : ''}>${icon('trash', 'w-3.5 h-3.5')}</button>
                 </div>
-                <input type="text" autocomplete="off" value="${escapeAttr(ev.image || '')}" placeholder="Bild-Link (optional, ersetzt das Emoji, falls gesetzt)"
-                  oninput="updateEventField(${rIdx}, ${eIdx}, 'image', this.value)"
-                  class="jax-input w-full text-xs" />
+                ${imageFieldHtml(rIdx + '.events.' + eIdx + '.image', ev.image, '', { small: true, placeholder: 'Bild-Link (optional, ersetzt das Emoji) oder hochladen' })}
               </div>
             `).join('')}
           </div>
@@ -1383,20 +1468,7 @@
               class="jax-input w-full mt-1 text-base" />
           </div>
 
-          <div class="flex items-center gap-4">
-            <div class="w-24 h-24 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] bg-[#f4f1ff] flex items-center justify-center overflow-hidden">
-              ${q.image
-                ? `<img id="img-preview-${idx}-image-tf" src="${escapeAttr(q.image)}" class="w-full h-full object-cover" />`
-                : `<span id="img-preview-${idx}-image-tf" class="text-[10px] text-[#1a1a2e]/40 text-center px-1 flex items-center justify-center w-full h-full">Kein Bild</span>`
-              }
-            </div>
-            <div class="flex-1">
-              <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Bild-Link (optional)</label>
-              <input type="text" autocomplete="off" value="${escapeAttr(q.image || '')}" placeholder="https://... (z.B. eBay-Kleinanzeigen-Screenshot)"
-                oninput="updateField(${idx}, 'image', this.value)"
-                class="jax-input w-full mt-1 text-sm" />
-            </div>
-          </div>
+          ${imageFieldHtml(idx + '.image', q.image, 'Bild zur Frage (optional, z.B. eBay-Kleinanzeigen-Screenshot)')}
 
           <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
             <div>
@@ -1434,12 +1506,7 @@
             </div>
           </div>
 
-          <div>
-            <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Bild im Hintergrundtext (optional)</label>
-            <input type="text" autocomplete="off" value="${escapeAttr(q.factImage || '')}" placeholder="https://... (wird über dem Hintergrundtext gezeigt)"
-              oninput="updateField(${idx}, 'factImage', this.value)"
-              class="jax-input w-full mt-1 text-sm" />
-          </div>
+          ${imageFieldHtml(idx + '.factImage', q.factImage, 'Bild im Hintergrundtext (optional, wird über dem Hintergrundtext gezeigt)')}
 
           <div>
             <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Hintergrundtext nach der Auflösung (optional)</label>
@@ -1465,6 +1532,61 @@
       return (str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     }
 
+    // ==== SPIEL-EINSTELLUNGEN (nur für Spiele mit settingsPath, z.B. Spiel 10) ====
+    let currentSettings = null;
+
+    function loadSettings() {
+      const game = GAMES[currentGameKey];
+      const panel = document.getElementById("settings-panel");
+      if (!game.settingsPath) { panel.classList.add("hidden"); currentSettings = null; return; }
+      get(ref(db, game.settingsPath)).then((snap) => {
+        currentSettings = { ...game.settingsDefaults, ...(snap.val() || {}) };
+        document.getElementById("set-name").value = currentSettings.name || '';
+        document.getElementById("set-emoji").value = currentSettings.emoji || '';
+        document.getElementById("set-ruler-start").value = currentSettings.rulerStart;
+        document.getElementById("set-ruler-end").value = currentSettings.rulerEnd;
+        document.getElementById("set-duration").value = currentSettings.durationSec;
+        document.getElementById("set-tolerance").value = currentSettings.tolerance;
+        document.getElementById("settings-status").innerText = '';
+        panel.classList.remove("hidden");
+      });
+    }
+
+    window.saveSettings = function() {
+      const game = GAMES[currentGameKey];
+      if (!game.settingsPath) return;
+      const num = (id, fallback) => { const v = parseInt(document.getElementById(id).value, 10); return isNaN(v) ? fallback : v; };
+      const d = game.settingsDefaults;
+      const cfg = {
+        name: document.getElementById("set-name").value.trim() || d.name,
+        emoji: document.getElementById("set-emoji").value.trim(),
+        rulerStart: num("set-ruler-start", d.rulerStart),
+        rulerEnd: num("set-ruler-end", d.rulerEnd),
+        durationSec: Math.max(10, num("set-duration", d.durationSec)),
+        tolerance: Math.max(1, num("set-tolerance", d.tolerance))
+      };
+      const status = document.getElementById("settings-status");
+      if (cfg.rulerEnd <= cfg.rulerStart) { status.innerText = 'Das End-Jahr muss nach dem Start-Jahr liegen.'; return; }
+      set(ref(db, game.settingsPath), cfg).then(() => {
+        currentSettings = cfg;
+        game.label = game.labelPrefix + cfg.name;
+        renderGameTabs();
+        status.innerText = 'Einstellungen gespeichert';
+      }).catch((err) => { status.innerText = 'Fehler: ' + err.message; });
+    };
+
+    // Eigene Spielnamen schon beim Öffnen in die Reiter übernehmen
+    function loadCustomGameLabels() {
+      Object.keys(GAMES).forEach((key) => {
+        const game = GAMES[key];
+        if (!game.settingsPath) return;
+        get(ref(db, game.settingsPath + '/name')).then((snap) => {
+          const name = snap.val();
+          if (name) { game.label = game.labelPrefix + name; renderGameTabs(); }
+        });
+      });
+    }
+
     window.switchGame = function(key) {
       if (key === currentGameKey) return;
       if (isDirty && !confirm("Du hast ungespeicherte Änderungen bei diesem Spiel - trotzdem wechseln und sie verwerfen?")) return;
@@ -1472,6 +1594,7 @@
       renderGameTabs();
       loadActiveContent();
       loadTemplateList();
+      loadSettings();
     };
 
     function renderGameTabs() {
@@ -1497,6 +1620,8 @@
       renderGameTabs();
       loadActiveContent();
       loadTemplateList();
+      loadSettings();
+      loadCustomGameLabels();
     };
   </script>
 </head>
@@ -1526,6 +1651,44 @@
 
     <!-- SPIEL-AUSWAHL -->
     <div id="game-tabs" class="flex flex-wrap gap-2"></div>
+
+    <!-- SPIEL-EINSTELLUNGEN (nur bei Spielen, die man selbst benennen/anpassen kann) -->
+    <div id="settings-panel" class="hidden jax-card p-5 space-y-3 text-[#1a1a2e]">
+      <div class="font-jax font-extrabold text-sm">Spiel-Einstellungen</div>
+      <div class="grid grid-cols-[1fr_80px] gap-2">
+        <div>
+          <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Name des Spiels</label>
+          <input id="set-name" type="text" autocomplete="off" maxlength="60" placeholder="z.B. Zeitreise: Weltgeschichte" class="jax-input w-full mt-1 text-sm" />
+        </div>
+        <div>
+          <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Emoji</label>
+          <input id="set-emoji" type="text" autocomplete="off" maxlength="8" class="jax-input w-full mt-1 text-sm text-center" />
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div>
+          <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Zeitstrahl von (Jahr)</label>
+          <input id="set-ruler-start" type="number" autocomplete="off" class="jax-input w-full mt-1 text-sm" />
+        </div>
+        <div>
+          <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Zeitstrahl bis (Jahr)</label>
+          <input id="set-ruler-end" type="number" autocomplete="off" class="jax-input w-full mt-1 text-sm" />
+        </div>
+        <div>
+          <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Sekunden pro Runde</label>
+          <input id="set-duration" type="number" min="10" autocomplete="off" class="jax-input w-full mt-1 text-sm" />
+        </div>
+        <div>
+          <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Toleranz (Jahre)</label>
+          <input id="set-tolerance" type="number" min="1" autocomplete="off" class="jax-input w-full mt-1 text-sm" title="Bis zu so vielen Jahren daneben gibt es noch anteilig Punkte" />
+        </div>
+      </div>
+      <div class="text-[11px] text-[#1a1a2e]/50">Alle Ereignisjahre sollten innerhalb des Zeitstrahls liegen. Toleranz = bis zu so vielen Jahren daneben gibt es noch anteilig Punkte.</div>
+      <div class="flex items-center gap-3">
+        <button onclick="saveSettings()" class="jax-btn bg-[#7ed957] text-[#1a1a2e] px-4 py-2 text-xs font-jax font-bold">Einstellungen speichern</button>
+        <span id="settings-status" class="text-[11px] font-jax font-bold text-[#7017c9]"></span>
+      </div>
+    </div>
 
     <!-- VORLAGEN-LEISTE -->
     <div class="jax-card-dark p-4 flex flex-wrap items-center gap-3">

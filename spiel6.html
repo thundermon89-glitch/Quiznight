@@ -578,6 +578,16 @@
         resultArea?.classList.remove("hidden");
         if (isHost) hostControlsResult?.classList.remove("hidden");
         document.getElementById("movie-result-answer").innerText = round.answer;
+        const resImg = document.getElementById("movie-result-image");
+        if (resImg) {
+          // Optionales Bild bei der Auflösung (z.B. Filmplakat), im Editor gepflegt
+          if (round.image) {
+            if (resImg.getAttribute('src') !== round.image) resImg.src = round.image;
+            resImg.classList.remove("hidden");
+          } else {
+            resImg.classList.add("hidden");
+          }
+        }
         renderLeaderboard(state, "movie-leaderboard-final");
         return;
       }
@@ -739,6 +749,7 @@
     <div id="movie-result-area" class="hidden jax-card p-6 text-[#1a1a2e] space-y-4">
       <div class="font-jax font-extrabold text-2xl text-[#ff2e93]">🏁 Auflösung</div>
       <div class="text-sm">Der Film war: <b id="movie-result-answer"></b></div>
+      <img id="movie-result-image" src="" class="hidden max-h-72 max-w-full mx-auto rounded-2xl border-2 border-[#1a1a2e] object-contain" alt="">
       <div class="text-xs text-[#1a1a2e]/50">Endstand dieser Runde:</div>
       <div id="movie-leaderboard-final" class="space-y-1.5 max-w-xs mx-auto"></div>
     </div>

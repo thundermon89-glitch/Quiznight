@@ -634,14 +634,18 @@
 
     // ==== FRAGENKATALOG-QUELLE: für Spiele mit Editor (1, 3, 7) kann der Host vor dem
     // Start wählen, welcher Fragen-Pool genutzt wird. ====
-    const EDITOR_GAMES = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const EDITOR_GAMES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    // Spiele ohne eingebaute Fragen: "Standard" heißt hier = die im Editor gespeicherten Runden
+    const EDITOR_ONLY_GAMES = [10];
 
     function populateSourceSelect(gameNumber) {
       const select = document.getElementById('source-select-' + gameNumber);
       if (!select) return;
       get(ref(db, 'content/spiel' + gameNumber + '/templates')).then((snap) => {
         const templates = snap.val() || {};
-        let html = '<option value="default">Standard-Vorlage</option>';
+        let html = EDITOR_ONLY_GAMES.includes(gameNumber)
+          ? '<option value="default">Im Editor gespeicherte Runden</option>'
+          : '<option value="default">Standard-Vorlage</option>';
         const names = Object.keys(templates);
         if (names.length > 0) {
           html += '<optgroup label="Eigene Vorlagen">';
@@ -650,12 +654,23 @@
         }
         select.innerHTML = html;
       });
+      // Selbst vergebenen Spielnamen (Editor-Einstellungen) im Startmenü anzeigen
+      const labelEl = document.getElementById('game-label-' + gameNumber);
+      if (labelEl) {
+        get(ref(db, 'content/spiel' + gameNumber + '/settings')).then((snap) => {
+          const cfg = snap.val() || {};
+          if (cfg.name) labelEl.innerText = (cfg.emoji ? cfg.emoji + ' ' : '') + 'Spiel ' + gameNumber + ': ' + cfg.name;
+        });
+      }
     }
 
     window.launchGameWithSource = function(gameNumber) {
       const select = document.getElementById('source-select-' + gameNumber);
       const source = select ? select.value : 'custom';
       set(ref(db, 'content/spiel' + gameNumber + '/activeSource'), source).then(() => {
+        // Spiel 10 immer frisch starten, statt im Zustand der letzten Partie
+        if (gameNumber === 10) return set(ref(db, 'game10State'), null);
+      }).then(() => {
         launchGame(gameNumber);
       });
     };
@@ -1344,6 +1359,14 @@
           <div class="flex gap-2">
             <select id="source-select-9" class="flex-1 px-2 py-1.5 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
             <button onclick="launchGameWithSource(9)" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded">Starten</button>
+          </div>
+        </div>
+
+        <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">
+          <div id="game-label-10" class="text-white text-xs font-bold">⏳ Spiel 10: Zeitreise 2</div>
+          <div class="flex gap-2">
+            <select id="source-select-10" class="flex-1 px-2 py-1.5 rounded bg-black border border-yellow-700 text-white text-[11px]"></select>
+            <button onclick="launchGameWithSource(10)" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs rounded">Starten</button>
           </div>
         </div>
       </div>

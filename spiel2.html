@@ -326,6 +326,12 @@
     let lastSeenAnnounceEventId = null;
     let lastSeenResultAnnounceId = null;
 
+    // Wandelt GitHub-"blob"-Ansichtslinks automatisch in echte Rohbild-Links um
+    function normalizeStoryImageUrl(url) {
+      const m = (url || '').match(/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/(.+)$/);
+      return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}` : url;
+    }
+
     // Storys aus dem Editor laden, falls dort welche gepflegt wurden - sonst bleiben die
     // eingebauten Standard-Storys (stories-Array oben) als Rückfallebene aktiv.
     get(ref(db, 'content/spiel2/activeSource')).then((sourceSnap) => {
@@ -340,8 +346,30 @@
       loadWithSource().then((snap) => {
       const custom = snap.val();
       if (Array.isArray(custom) && custom.length > 0) {
-        stories.length = 0;
-        stories.push(...custom);
+        // Jede Story braucht eine eindeutige Zahlen-ID (die Zusatzfragen-Auswahl des Hosts
+        // arbeitet damit) - fehlende oder doppelte IDs werden hier vergeben.
+        const usedIds = new Set();
+        custom.forEach((st, i) => {
+          let id = Number(st.id);
+          if (!Number.isFinite(id) || usedIds.has(id)) id = 100000 + i;
+          st.id = id;
+          usedIds.add(id);
+          if (st.image) st.image = normalizeStoryImageUrl(st.image);
+          if (st.solutionImage) st.solutionImage = normalizeStoryImageUrl(st.solutionImage);
+        });
+        // Als "Zusatzfrage" markierte Storys kommen in den Bonus-Pool, alle anderen in den
+        // normalen Ablauf. Enthält die Vorlage gar keine Zusatzfragen (z.B. ältere Vorlagen),
+        // bleiben die eingebauten Zusatzfragen erhalten.
+        const mainStories = custom.filter(st => !st.bonus);
+        const extraStories = custom.filter(st => st.bonus);
+        if (mainStories.length > 0) {
+          stories.length = 0;
+          stories.push(...mainStories);
+        }
+        if (extraStories.length > 0) {
+          bonusStories.length = 0;
+          bonusStories.push(...extraStories);
+        }
       }
 
       onValue(ref(db, 'game2State'), (snapshot) => {
@@ -901,6 +929,7 @@
         <div class="font-story text-white/90 italic mb-2">${story.teaser}</div>
         <div class="text-amber-400 font-bold text-[11px] uppercase tracking-wide mb-1">Auflösung</div>
         <div class="font-story text-emerald-300/90">${story.solution}</div>
+        ${story.solutionImage ? `<img src="${story.solutionImage}" class="max-h-32 rounded-xl mx-auto mt-2 border-2 border-amber-800/50" alt="">` : ''}
         <div class="text-amber-500/70 text-[10px] mt-2">Punkte bei Lösung: ${story.points} (${story.points * 2} mit Ansage)</div>
       `;
     }
@@ -1194,6 +1223,7 @@
           <div class="story-card rounded-2xl p-5 text-left mt-4">
             <div class="text-amber-500 font-bold text-[11px] uppercase tracking-wide mb-1">Die vollständige Auflösung</div>
             <div class="font-story text-white/90">${story.solution}</div>
+            ${story.solutionImage ? `<img src="${story.solutionImage}" class="max-h-72 max-w-full rounded-2xl mx-auto mt-4 border-2 border-amber-800/50 shadow-xl" alt="">` : ''}
           </div>
         </div>
       `;
