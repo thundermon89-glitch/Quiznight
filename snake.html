@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Snake</title>
@@ -122,6 +123,7 @@
       snake.unshift(head);
       if (head.x === food.x && head.y === food.y) {
         score += POINTS_PER_FOOD;
+        try { window.HSAudio && HSAudio.synth('blip'); } catch (e) {}
         document.getElementById("snake-score").innerText = score;
         placeFood();
       } else {
@@ -156,6 +158,7 @@
     function endMyRound() {
       if (myFinished) return;
       myFinished = true;
+      try { window.HSAudio && HSAudio.play('aufprall'); } catch (e) {}
       gameOver = true;
       clearInterval(tickInterval);
       update(ref(db, 'snakeState/scores'), { [playerId]: score });

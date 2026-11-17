@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Spiel 5: Verpixelt!</title>
@@ -354,6 +355,8 @@
     function startListeningWithImages() {
       onValue(ref(db, 'game5State'), (snapshot) => {
         const state = snapshot.val() || { imageIdx: 0, stage: 'waiting' };
+        try { window.HSAudio && HSAudio.stage(state.stage, state.imageIdx); } catch (e) {}
+        try { if (window.HSAudio && state.activeResponderId && state.activeResponderId !== window._hsLastResponder && window._hsLastResponder !== undefined) HSAudio.play('buzzer'); window._hsLastResponder = state.activeResponderId || null; } catch (e) {}
         latestState = state;
         renderAll(state);
         maybeShowWinnerGif(state);
@@ -1028,6 +1031,7 @@
           <div class="text-white/60 text-xs">Antworte jetzt laut - der Moderator wertet.</div>
         `;
       } else if (hasBuzzed && wasWrong) {
+        try { window.HSAudio && HSAudio.once('s5wrong' + state.imageIdx, () => HSAudio.result(false)); } catch (e) {}
         interactionHtml = `<div class="text-red-400 font-bold">${icon('cross','w-4 h-4 inline -mt-1')} Leider falsch - du bist für dieses Bild raus.</div>`;
       } else if (hasBuzzed) {
         const queuePos = Object.keys(buzzes)

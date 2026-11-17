@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Fragen-Editor</title>
@@ -1625,6 +1626,74 @@
       wrap.innerHTML = activeTabs;
     }
 
+    // ================= SOUNDS: welcher Sound wo läuft (gilt für alle Geräte) =================
+    let soundCfg = { slots: {}, vol: {} };
+    window.toggleSoundPanel = function() {
+      const p = document.getElementById('sound-panel');
+      p.classList.toggle('hidden');
+      if (!p.classList.contains('hidden')) loadSoundPanel();
+    };
+    function loadSoundPanel() {
+      const box = document.getElementById('sound-slots');
+      if (!window.HSAudio) { box.innerHTML = '<div class="text-sm">Audio-System nicht geladen.</div>'; return; }
+      box.innerHTML = '<div class="text-sm">Lade…</div>';
+      get(ref(db, 'soundConfig')).then(snap => {
+        const v = snap.val() || {};
+        soundCfg = { slots: v.slots || {}, vol: v.vol || {} };
+        renderSoundPanel();
+      }).catch(() => { soundCfg = { slots: {}, vol: {} }; renderSoundPanel(); });
+    }
+    function renderSoundPanel() {
+      const H = window.HSAudio, box = document.getElementById('sound-slots');
+      const fileKeys = Object.keys(H.FILES);
+      const groups = {};
+      Object.keys(H.SLOTS).forEach(k => { const g = H.SLOTS[k].group; (groups[g] = groups[g] || []).push(k); });
+      const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+      box.innerHTML = Object.keys(groups).map(g => `
+        <div class="mt-4">
+          <div class="font-jax font-extrabold text-xs uppercase text-[#7017c9] mb-2">${esc(g)}</div>
+          ${groups[g].map(k => {
+            const sl = H.SLOTS[k];
+            const def = Array.isArray(sl.file) ? sl.file : [sl.file];
+            const cur = soundCfg.slots[k] || '';
+            const vol = typeof soundCfg.vol[k] === 'number' ? soundCfg.vol[k] : sl.vol;
+            const defLabel = def.length > 1 ? 'Standard (Zufall aus ' + def.length + ')' : 'Standard – ' + (H.FILES[def[0]] || def[0]);
+            const opts = [`<option value="" ${cur === '' ? 'selected' : ''}>${esc(defLabel)}</option>`, `<option value="-" ${cur === '-' ? 'selected' : ''}>— aus (kein Sound) —</option>`]
+              .concat(fileKeys.filter(fk => sl.music ? /^(musik|atmo)-/.test(fk) : !/^(musik|atmo)-/.test(fk))
+                .map(fk => `<option value="${fk}" ${cur === fk ? 'selected' : ''}>${esc(H.FILES[fk])}</option>`)).join('');
+            return `<div class="grid grid-cols-[1fr_auto] md:grid-cols-[200px_1fr_90px_auto] gap-2 items-center py-1.5 border-b border-[#1a1a2e]/10">
+              <div class="text-sm font-bold">${esc(sl.label)}</div>
+              <select onchange="setSoundSlot('${k}', this.value)" class="jax-input text-xs w-full col-span-2 md:col-span-1">${opts}</select>
+              <input type="range" min="0" max="1" step="0.05" value="${vol}" title="Lautstärke" onchange="setSoundVol('${k}', this.value)" class="w-full">
+              <button onclick="previewSoundSlot('${k}')" class="jax-btn bg-[#ffd23f] text-[#1a1a2e] px-3 py-1 text-xs font-jax font-bold" title="Anhören">▶</button>
+            </div>`;
+          }).join('')}
+        </div>`).join('');
+    }
+    function soundSaved(msg) { const s = document.getElementById('sound-status'); s.innerText = msg; clearTimeout(s._t); s._t = setTimeout(() => s.innerText = '', 2500); }
+    window.setSoundSlot = function(k, v) {
+      soundCfg.slots[k] = v || null;
+      set(ref(db, 'soundConfig/slots/' + k), v || null).then(() => { soundSaved('✔ Gespeichert'); window.HSAudio.setOverrides(soundCfg.slots, soundCfg.vol); }).catch(() => soundSaved('Fehler beim Speichern'));
+    };
+    window.setSoundVol = function(k, v) {
+      soundCfg.vol[k] = parseFloat(v);
+      set(ref(db, 'soundConfig/vol/' + k), parseFloat(v)).then(() => soundSaved('✔ Lautstärke gespeichert')).catch(() => soundSaved('Fehler beim Speichern'));
+    };
+    window.previewSoundSlot = function(k) {
+      const H = window.HSAudio, sl = H.SLOTS[k];
+      const cur = soundCfg.slots[k];
+      if (cur === '-') return;
+      const list = cur ? [cur] : (Array.isArray(sl.file) ? sl.file : [sl.file]);
+      const file = list[Math.floor(Math.random() * list.length)];
+      const vol = typeof soundCfg.vol[k] === 'number' ? soundCfg.vol[k] : sl.vol;
+      const a = H.previewFile(file, vol);
+      if (sl.music) setTimeout(() => { if (H._prev === a) a.pause(); }, 15000); // Musik nur kurz anspielen
+    };
+    window.resetSoundConfig = function() {
+      if (!confirm('Alle Sound-Zuordnungen auf Standard zurücksetzen?')) return;
+      set(ref(db, 'soundConfig'), null).then(() => { soundCfg = { slots: {}, vol: {} }; window.HSAudio.setOverrides({}, {}); renderSoundPanel(); soundSaved('✔ Zurückgesetzt'); });
+    };
+
     window.onload = () => {
       renderGameTabs();
       loadActiveContent();
@@ -1660,6 +1729,21 @@
 
     <!-- SPIEL-AUSWAHL -->
     <div id="game-tabs" class="flex flex-wrap gap-2"></div>
+
+    <!-- SOUNDS: Zuordnung Musik/Effekte -->
+    <button onclick="toggleSoundPanel()" class="jax-btn bg-[#3ecbff] text-[#1a1a2e] px-4 py-2 text-xs font-jax font-bold">🔊 Sounds &amp; Musik zuordnen</button>
+    <div id="sound-panel" class="hidden jax-card p-5 text-[#1a1a2e]">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div class="font-jax font-extrabold text-sm">🔊 Sounds &amp; Musik</div>
+        <div class="flex items-center gap-2">
+          <span id="sound-status" class="text-[11px] font-jax font-bold text-[#7017c9]"></span>
+          <button onclick="HSAudio.stopPreview()" class="jax-btn bg-white text-[#1a1a2e] px-3 py-1 text-xs font-jax font-bold">⏹ Stopp</button>
+          <button onclick="resetSoundConfig()" class="jax-btn bg-white text-[#1a1a2e] px-3 py-1 text-xs font-jax font-bold">Alles auf Standard</button>
+        </div>
+      </div>
+      <div class="text-[11px] text-[#1a1a2e]/60 mt-1">Änderungen werden sofort gespeichert und gelten beim nächsten Laden der Seite auf allen Geräten. ▶ spielt den Sound an (Musik 15 Sekunden).</div>
+      <div id="sound-slots"></div>
+    </div>
 
     <!-- SPIEL-EINSTELLUNGEN (nur bei Spielen, die man selbst benennen/anpassen kann) -->
     <div id="settings-panel" class="hidden jax-card p-5 space-y-3 text-[#1a1a2e]">

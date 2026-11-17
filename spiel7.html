@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Spiel 7: Mythos-Check</title>
@@ -367,6 +368,7 @@
     function startListeningWithQuestions() {
       onValue(ref(db, 'game7State'), (snapshot) => {
         const state = snapshot.val() || { questionIdx: 0, stage: 'intro' }; // intro, waiting, question_shown, options_shown, result
+        try { window.HSAudio && HSAudio.stage(state.stage, state.questionIdx); } catch (e) {}
         const q = questions[state.questionIdx || 0];
         currentQuestionData = { ...q, stage: state.stage, correctOption: state.correctOption };
         latestQuestion = q;
@@ -550,6 +552,7 @@
     document.addEventListener('click', () => ensureAudioContext(), { once: true });
 
     function playTick(volume) {
+      if (window.HSAudio) { if (!HSAudio.sfxOn()) return; volume *= HSAudio.sfxVolume(); }
       try {
         const ctx = ensureAudioContext();
         const osc = ctx.createOscillator();
@@ -565,6 +568,7 @@
     }
 
     function playAlarm() {
+      if (window.HSAudio && !HSAudio.sfxOn()) return;
       try {
         const ctx = ensureAudioContext();
         const now = ctx.currentTime;
@@ -735,6 +739,7 @@
     }
 
     function playSadTrombone() {
+      if (window.HSAudio) { HSAudio.result(false); return; }
       try {
         const ctx = ensureAudioContext();
         const now = ctx.currentTime;
@@ -949,6 +954,7 @@
         const isCorrect = correctPlayerIds.includes(playerId);
 
         if (isCorrect) {
+          try { window.HSAudio && HSAudio.result(true); } catch (e) {}
           fireConfetti();
           onValue(ref(db, 'players/' + playerId + '/score'), (snapshot) => {
             const currentScore = snapshot.val() || 0;

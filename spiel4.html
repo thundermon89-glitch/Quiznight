@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Spiel 4: Pi mal Daumen</title>
@@ -247,6 +248,7 @@
 
       onValue(ref(db, 'game4State'), (snapshot) => {
         const state = snapshot.val() || { roundIdx: 0, stage: 'waiting' };
+        try { window.HSAudio && HSAudio.stage(state.stage, state.roundIdx); } catch (e) {}
         latestState = state;
         renderAll(state);
       });

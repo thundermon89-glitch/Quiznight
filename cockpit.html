@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Cockpit</title>
@@ -413,6 +414,8 @@
     // Bewusst einfach synthetisiert (kein externes Audio nötig): eine schleppende, leicht
     // schiefe Klaviermelodie über Web Audio, die zum Schluss in einen kurzen Schrei übergeht.
     function startBadPianoMusic() {
+      if (window.HSAudio && !HSAudio.sfxOn()) return;
+      try { window.HSAudio && HSAudio.duck(8); } catch (e) {}
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const notes = [261.6, 277.2, 246.9, 233.1, 220.0, 207.7, 196.0]; // absichtlich schief/dissonant
@@ -955,6 +958,7 @@
     }, { once: true });
 
     function playWheelTick() {
+      if (window.HSAudio && !HSAudio.sfxOn()) return;
       try {
         if (!wheelAudioCtx) return;
         const osc = wheelAudioCtx.createOscillator();

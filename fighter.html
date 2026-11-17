@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Hirnschmalz-Fighter</title>
@@ -324,6 +325,17 @@
       try {
         if (!soundOn) return;
         ac(); if (AC.state !== 'running') return;
+        // Echte Sounddateien (sounds/), wo vorhanden - sonst die live erzeugten Töne unten
+        if (window.HSAudio && HSAudio.sfxOn()) {
+          const H = HSAudio;
+          if (kind === 'hit') { H.play('f_schlag', { vol: opt && opt.heavy ? 1 : 0.75 }); if (opt && opt.heavy && Math.random() < 0.6) H.play('f_schmerz'); return; }
+          if (kind === 'ko') { H.play('f_ko_wumms'); setTimeout(() => H.play('f_ko'), 150); return; }
+          if (kind === 'special' && opt === 'laser') { H.play('f_laser'); return; }
+          if (kind === 'special' && opt === 'fireball') { H.play('f_feuerball'); return; }
+          if (kind === 'superpower') H.play('f_superkraft');
+          if (kind === 'fanfare') { H.play('f_champion'); return; }
+          if (kind === 'matchwin') { H.play('f_kampfsieg'); return; }
+        }
         const t = AC.currentTime + 0.005;
         switch (kind) {
           case 'whoosh':   noise(t, 0.12, { f: rv(700), f1: rv(2600), q: 1.2, gain: 0.22, att: 0.03 }); break;
@@ -452,15 +464,32 @@
       };
     })();
 
+    // Musik aus Dateien: Hafen (mit Regen), Käfig, Grand Finale, ruhigere Musik im Turnierplan
+    let fMusicSlot, fAtmoSlot;
+    function fighterMusic(force) {
+      let slot = null, atmo = null;
+      if (musicOn && meta && meta.phase !== 'done') {
+        const inFight = meta.cur && ['intro', 'fight', 'roundEnd'].includes(meta.phase);
+        if (!inFight) slot = 'f_musik_pause';
+        else if (meta.cur.kind === 'F') slot = 'f_musik_finale';
+        else if (isCage()) slot = 'f_musik_kaefig';
+        else { slot = 'f_musik_hafen'; atmo = 'f_atmo_hafen'; }
+      }
+      if (force || slot !== fMusicSlot) { fMusicSlot = slot; HSAudio.music(slot); }
+      if (force || atmo !== fAtmoSlot) { fAtmoSlot = atmo; HSAudio.atmo(atmo); }
+    }
+
     window.toggleSound = function() {
       soundOn = !soundOn; localStorage.setItem('fighter_sound', soundOn ? '1' : '0');
       unlockAudio(); if (sfxBus) sfxBus.gain.value = soundOn ? 1 : 0;
+      if (window.HSAudio && soundOn && !HSAudio.sfxOn()) HSAudio.setMuted(false);
       if (!soundOn && window.speechSynthesis) speechSynthesis.cancel();
       updateSoundButtons();
     };
     window.toggleMusic = function() {
       musicOn = !musicOn; localStorage.setItem('fighter_music', musicOn ? '1' : '0');
       unlockAudio(); if (musicBus) musicBus.gain.value = musicOn ? MUSIC_VOL : 0;
+      if (window.HSAudio) { if (musicOn && !HSAudio.musicOn()) HSAudio.setMuted(false); fighterMusic(true); }
       updateSoundButtons();
     };
     function updateSoundButtons() {
@@ -815,6 +844,7 @@
       } else if (meta.phase === 'matchEnd') {
         banner = { text: nameOf(meta.matchWinner) + ' GEWINNT! +' + WIN_POINTS, sub: isDriver() ? 'Klick auf „Nächster Kampf", wenn alle bereit sind' : 'Gleich geht\'s weiter …', color: '#7ed957', until: performance.now() + 60000 };
         my = null; myProj = null;
+        sfx('matchwin');
         setTimeout(() => say(spokenName(meta.matchWinner) + ' gewinnt!'), 400);
       } else if (meta.phase === 'done' || meta.phase === 'sessionDone') {
         if (meta.phase === 'done') { sfx('fanfare'); setTimeout(() => say('Grand Champion: ' + spokenName(meta.champion) + '!'), 1500); }
@@ -2060,7 +2090,7 @@
     }
 
     function render(t) {
-      music.set(!meta || meta.phase === 'done' ? null : (isCage() ? 'cage' : 'harbor'));
+      if (window.HSAudio) fighterMusic(); else music.set(!meta || meta.phase === 'done' ? null : (isCage() ? 'cage' : 'harbor'));
       ctx.save();
       if (shake > 0.5) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
       drawStage(t);

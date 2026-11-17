@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Goldregen</title>
@@ -122,6 +123,7 @@
       }).then((result) => {
         const val = result && result.snapshot && result.snapshot.val();
         if (result.committed && val && val.caughtBy === playerId) {
+          try { window.HSAudio && HSAudio.synth('coin'); } catch (e) {}
           if (evt && evt.target) {
             const rect = evt.target.getBoundingClientRect();
             const pop = document.createElement("div");
@@ -177,6 +179,7 @@
       if (state.status === 'finished') {
         rainArea.classList.add("hidden");
         resultArea.classList.remove("hidden");
+        try { window.HSAudio && HSAudio.once('grEnd' + (state.startedAt || ''), () => HSAudio.play('spiel_ende')); } catch (e) {}
         renderResults();
         if (isHost) document.getElementById("host-end-btn").classList.remove("hidden");
         return;

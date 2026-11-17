@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Ochs vorm Berg</title>
@@ -158,6 +159,7 @@
     }
     function playMelodyForPhase(phaseMs) {
       stopMelody();
+      if (window.HSAudio) return; // Musik kommt aus der Datei (stoppt bei Rot)
       if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
       const notes = [440, 523.25, 587.33, 659.25]; // kurze, eingängige 4-Ton-Folge
       const noteCount = Math.max(4, Math.floor(phaseMs / 260));
@@ -305,6 +307,7 @@
         if (info.phase === 'red') {
           posAtRedStart = my && !my.eliminated && !my.won ? { x: my.x, y: my.y } : null;
           stopMelody();
+          try { if (window.HSAudio) { HSAudio.level(0, 0.12); HSAudio.play('aufprall'); } } catch (e) {}
           dollEl.style.transform = "translateX(-50%) scaleX(-1)"; // dreht sich zu den Spielern um
           banner.style.background = 'linear-gradient(90deg,#ff2e2e,#ff6a3d)';
           banner.style.boxShadow = '0 0 25px rgba(255,46,46,0.6)';
@@ -315,6 +318,7 @@
           banner.style.boxShadow = '0 0 25px rgba(57,255,140,0.6)';
           document.getElementById("light-label").innerText = "🟢 GRÜNLICHT - LOS!";
           playMelodyForPhase(info.phaseMs);
+          try { window.HSAudio && HSAudio.level(1, 0.15); } catch (e) {}
         }
         lastPhaseSeen = info.phase;
       }
@@ -347,12 +351,14 @@
       img.style.pointerEvents = 'none';
       layer.appendChild(img);
       setTimeout(() => img.remove(), 700);
+      try { window.HSAudio && HSAudio.play('explosion'); } catch (e) {}
       playChildLaughSound();
     }
 
     // Ein bisschen unheimliches, mechanisches Kinderkichern beim Erwischtwerden - passend zur
     // gruseligen Puppen-Stimmung, komplett selbst synthetisiert statt einer echten Audiodatei.
     function playChildLaughSound() {
+      if (window.HSAudio && !HSAudio.sfxOn()) return;
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const gigglePitches = [780, 900, 820, 980, 860, 1050];
@@ -513,6 +519,7 @@
         resultShown = true;
         gameRunning = false;
         stopMelody();
+        try { if (window.HSAudio) { HSAudio.level(1, 1); HSAudio.play(my && my.won ? 'sieg_klein' : 'verloren'); } } catch (e) {}
         showResultScreen();
       }
     });

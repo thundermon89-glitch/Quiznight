@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Spiel 6: Film-Zündschnur</title>
@@ -383,6 +384,7 @@
         input.parentElement?.appendChild(hint);
       }
       hint.innerText = "❌ Leider falsch - versuch's nochmal!";
+      try { window.HSAudio && HSAudio.result(false); } catch (e) {}
       clearTimeout(hint._hideTimeout);
       hint._hideTimeout = setTimeout(() => { hint.innerText = ""; }, 2000);
     }
@@ -619,6 +621,7 @@
 
       onValue(ref(db, 'game6State'), (snapshot) => {
         const state = snapshot.val() || { stage: 'waiting' };
+        try { window.HSAudio && HSAudio.stage(state.stage, state.movieRoundId); } catch (e) {}
         renderAll(state);
       });
     });

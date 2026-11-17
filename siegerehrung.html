@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Siegerehrung</title>
@@ -493,6 +494,10 @@
       const scoreEl = document.getElementById("podium-score-" + rank);
       const photoEl = document.getElementById("podium-photo-" + rank);
       if (!step) return;
+      if (animate && window.HSAudio) {
+        // Trommelwirbel, dann die Fanfare je nach Platz
+        try { HSAudio.play('aufloesung'); setTimeout(() => HSAudio.play(rank === 1 ? 'platz1' : rank === 2 ? 'platz2' : rank === 3 ? 'platz3' : 'platz_rest'), 1600); } catch (e) {}
+      }
 
       step.classList.add("revealed");
       nameEl.innerText = p.name;

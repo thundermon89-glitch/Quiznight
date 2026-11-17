@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Spiel 8: Schriftzug-Salat</title>
@@ -295,6 +296,7 @@
 
       onValue(ref(db, 'game8State'), (snapshot) => {
         const state = snapshot.val() || { coverIdx: 0, stage: 'waiting' };
+        try { window.HSAudio && HSAudio.stage(state.stage, state.coverIdx); } catch (e) {}
         latestState = state;
         renderAll(state);
       });
@@ -614,6 +616,7 @@
       const myLog = (state.guessLog || {})[playerId] || [];
       const myFeedback = (state.guessFeedback || {})[playerId];
       const showFlash = myFeedback && (Date.now() - (myFeedback.at || 0)) < 4000;
+      if (showFlash) { try { window.HSAudio && HSAudio.once('s8fb' + myFeedback.at, () => myFeedback.verdict === 'close' ? HSAudio.play('aufprall') : HSAudio.result(false)); } catch (e) {} }
 
       wrap.innerHTML = `
         <div class="jax-card-print p-6 text-center">

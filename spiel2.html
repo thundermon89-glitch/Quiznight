@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Spiel 2: Rätselfeuer</title>
@@ -374,6 +375,7 @@
 
       onValue(ref(db, 'game2State'), (snapshot) => {
         const state = snapshot.val() || { storyIdx: 0, stage: 'waiting' };
+        try { window.HSAudio && HSAudio.stage(state.stage, state.storyIdx); } catch (e) {}
 
         // Bonus-Storys werden jetzt einzeln und jederzeit vom Host dazugebucht (nicht mehr
         // alle 4 auf einmal per Einmal-Schalter) - state.addedBonusIds ist die vom Host
@@ -1229,7 +1231,7 @@
           </div>
         </div>
       `;
-      if (isWinner) fireConfetti();
+      if (isWinner) { try { window.HSAudio && HSAudio.once('s2win' + state.storyIdx, () => HSAudio.result(true, true)); } catch (e) {} fireConfetti(); }
     }
 
     function renderEvaluationArea(state) {

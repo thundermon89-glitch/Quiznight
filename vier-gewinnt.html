@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Vier Gewinnt</title>
@@ -280,6 +281,7 @@
       if (state.status !== 'finished') { resultArea.classList.add("hidden"); playArea.classList.remove("hidden"); return; }
       playArea.classList.add("hidden");
       resultArea.classList.remove("hidden");
+      try { window.HSAudio && HSAudio.once('c4end' + state.startedAt, () => HSAudio.play(state.winnerId === playerId ? 'sieg_klein' : (state.draw ? 'aufprall' : 'verloren'))); } catch (e) {}
 
       if (state.draw) {
         document.getElementById("result-title").innerText = "🤝 Unentschieden!";
@@ -329,6 +331,7 @@
 
       // Neuen Zug erkennen (letztes gesetztes Feld fürs Anim.-Highlight)
       const board = state.board || [];
+      try { const n = Object.values(board).reduce((a, c) => a + (c ? Object.keys(c).length : 0), 0); if (window.HSAudio && window._hsPieces !== undefined && n > window._hsPieces) HSAudio.synth('drop'); window._hsPieces = n; } catch (e) {}
       let maxCol = -1, maxRow = -1;
       // (grobe Heuristik: höchste zuletzt befüllte Spalte wird nicht exakt getrackt -
       // Tropfen-Animation spielt bei jedem Render einmal für alle aktuellen Steine neu ab,

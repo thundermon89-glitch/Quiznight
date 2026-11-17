@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Admin Cockpit</title>
@@ -380,6 +381,7 @@
     }, { once: true });
 
     function playWheelTick() {
+      if (window.HSAudio && !HSAudio.sfxOn()) return;
       try {
         if (!wheelAudioCtx) return;
         const osc = wheelAudioCtx.createOscillator();

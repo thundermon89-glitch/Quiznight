@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Panzerschlacht</title>
@@ -210,6 +211,7 @@
         vx: Math.sin(rad) * BULLET_SPEED, vy: -Math.cos(rad) * BULLET_SPEED,
         bounces: 0
       };
+      try { window.HSAudio && HSAudio.play('schuss'); } catch (e) {}
       set(ref(db, 'panzerState/bullets/' + bulletId), {
         x: bx, y: by, vx: myBullets[bulletId].vx, vy: myBullets[bulletId].vy,
         bounces: 0, ownerId: playerId, ownerName: myName, createdAt: now
@@ -319,7 +321,7 @@
         if (seenHitEventIds.has(eid)) continue;
         seenHitEventIds.add(eid);
         const ev = events[eid];
-        if (ev && Date.now() - ev.at < 1200) spawnExplosion(ev.x, ev.y, TANK_SIZE * 1.3);
+        if (ev && Date.now() - ev.at < 1200) { spawnExplosion(ev.x, ev.y, TANK_SIZE * 1.3); try { window.HSAudio && HSAudio.play('explosion'); } catch (e) {} }
       }
     });
 
@@ -356,6 +358,8 @@
     onValue(ref(db, 'panzerState/tanks'), (snap) => { allTanks = snap.val() || {}; });
     onValue(ref(db, 'panzerState/bullets'), (snap) => {
       allBullets = snap.val() || {};
+      // Schüsse der anderen leiser hörbar machen
+      try { for (const bid in allBullets) { if (!window._hsSeenBullets) window._hsSeenBullets = new Set(); if (window._hsSeenBullets.has(bid)) continue; window._hsSeenBullets.add(bid); const b = allBullets[bid]; if (window.HSAudio && b && b.ownerId !== playerId && Date.now() - (b.createdAt || 0) < 1500) HSAudio.play('schuss', { vol: 0.5 }); } } catch (e) {}
       // Sicherheitsnetz: falls der Besitzer eines Geschosses mitten im Spiel die Seite
       // schließt, würde es sonst für immer in Firebase hängen bleiben.
       const now = Date.now();
@@ -577,6 +581,7 @@
       if (snap.val() && !resultShown) {
         resultShown = true;
         gameRunning = false;
+        try { if (window.HSAudio) get(ref(db, 'panzerState/winnerId')).then(s => HSAudio.play(s.val() === playerId ? 'sieg_klein' : 'verloren')); } catch (e) {}
         showResultScreen();
       }
     });
