@@ -264,32 +264,209 @@
     function nameOf(pid) { return (allPlayers[pid] && allPlayers[pid].name) || '???'; }
 
     // =====================================================================================
-    // SOUND (kleine, erzeugte Effekte - keine Dateien nötig)
+    // SOUND: alles live erzeugt (Web Audio) - keine Sounddateien nötig.
+    // Effekte, Hintergrundmusik je Arena und ein Ansager (Sprachausgabe des Browsers).
     // =====================================================================================
-    let audioCtx = null;
-    function sfx(kind) {
+    let AC = null, master = null, sfxBus = null, musicBus = null, noiseBuf = null;
+    let soundOn = localStorage.getItem('fighter_sound') !== '0';
+    let musicOn = localStorage.getItem('fighter_music') !== '0';
+    const MUSIC_VOL = 0.3;
+
+    function ac() {
+      if (AC) return AC;
+      AC = new (window.AudioContext || window.webkitAudioContext)();
+      const comp = AC.createDynamicsCompressor();
+      comp.threshold.value = -16; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.2;
+      master = AC.createGain(); master.gain.value = 0.9; master.connect(comp); comp.connect(AC.destination);
+      sfxBus = AC.createGain(); sfxBus.gain.value = soundOn ? 1 : 0; sfxBus.connect(master);
+      musicBus = AC.createGain(); musicBus.gain.value = musicOn ? MUSIC_VOL : 0; musicBus.connect(master);
+      noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+      const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      return AC;
+    }
+    function audioReady() { return AC && AC.state === 'running'; }
+    function unlockAudio() {
+      try { ac(); if (AC.state === 'suspended') AC.resume(); music.ensure(); } catch (e) {}
+    }
+    window.addEventListener('pointerdown', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+
+    // Rauschen durch einen Filter mit Lautstärke-Hüllkurve
+    function noise(t, dur, o = {}) {
+      const src = AC.createBufferSource(); src.buffer = noiseBuf;
+      const f = AC.createBiquadFilter(); f.type = o.type || 'bandpass'; f.Q.value = o.q || 1;
+      f.frequency.setValueAtTime(o.f || 1000, t);
+      if (o.f1) f.frequency.exponentialRampToValueAtTime(o.f1, t + dur);
+      const g = AC.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(o.gain || 0.3, t + (o.att || 0.004));
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(f); f.connect(g); g.connect(o.bus || sfxBus);
+      src.start(t, Math.random() * 1.5); src.stop(t + dur + 0.05);
+    }
+    // Ton mit Tonhöhen-Verlauf
+    function tone(t, dur, o = {}) {
+      const osc = AC.createOscillator(); osc.type = o.type || 'sine';
+      osc.frequency.setValueAtTime(o.f || 440, t);
+      if (o.f1) osc.frequency.exponentialRampToValueAtTime(o.f1, t + (o.glide || dur));
+      const g = AC.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(o.gain || 0.2, t + (o.att || 0.005));
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      let out = g;
+      if (o.lp) { const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = o.lp; g.connect(f); out = f; }
+      osc.connect(g); out.connect(o.bus || sfxBus);
+      osc.start(t); osc.stop(t + dur + 0.05);
+    }
+    const rv = (v, p = 0.1) => v * (1 + (Math.random() - 0.5) * 2 * p); // leichte Zufallsvariation
+
+    function sfx(kind, opt) {
       try {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const t = audioCtx.currentTime;
-        if (kind === 'hit' || kind === 'block' || kind === 'ko') {
-          const len = kind === 'ko' ? 0.5 : 0.15;
-          const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * len, audioCtx.sampleRate);
-          const d = buf.getChannelData(0);
-          for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
-          const src = audioCtx.createBufferSource(); src.buffer = buf;
-          const f = audioCtx.createBiquadFilter(); f.type = 'lowpass';
-          f.frequency.value = kind === 'block' ? 2500 : (kind === 'ko' ? 400 : 900);
-          const g = audioCtx.createGain(); g.gain.value = kind === 'block' ? 0.25 : 0.6;
-          src.connect(f); f.connect(g); g.connect(audioCtx.destination); src.start(t);
-        } else if (kind === 'whoosh' || kind === 'special') {
-          const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
-          o.type = kind === 'special' ? 'sawtooth' : 'triangle';
-          o.frequency.setValueAtTime(kind === 'special' ? 220 : 500, t);
-          o.frequency.exponentialRampToValueAtTime(kind === 'special' ? 880 : 180, t + 0.18);
-          g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-          o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t + 0.22);
+        if (!soundOn) return;
+        ac(); if (AC.state !== 'running') return;
+        const t = AC.currentTime + 0.005;
+        switch (kind) {
+          case 'whoosh':   noise(t, 0.12, { f: rv(700), f1: rv(2600), q: 1.2, gain: 0.22, att: 0.03 }); break;
+          case 'whooshHeavy': noise(t, 0.22, { f: rv(350), f1: rv(1600), q: 1, gain: 0.3, att: 0.05 }); break;
+          case 'hit': {
+            const heavy = opt && opt.heavy;
+            tone(t, heavy ? 0.3 : 0.18, { f: rv(heavy ? 120 : 150), f1: 40, gain: heavy ? 1 : 0.8 });          // dumpfer Körpertreffer
+            noise(t, 0.035, { type: 'highpass', f: 2000, gain: 0.5 });                                       // Knall
+            noise(t + 0.005, heavy ? 0.14 : 0.09, { f: rv(850), q: 1.6, gain: heavy ? 0.6 : 0.45 });       // nasses Klatschen
+            if (heavy) noise(t + 0.02, 0.25, { type: 'lowpass', f: 500, gain: 0.4 });
+            break;
+          }
+          case 'block':
+            tone(t, 0.08, { f: rv(130), f1: 70, gain: 0.45 });
+            noise(t, 0.05, { f: 3200, q: 2, gain: 0.25 });
+            tone(t, 0.05, { type: 'square', f: 330, f1: 290, gain: 0.07 });
+            break;
+          case 'ko':
+            tone(t, 1.3, { f: 95, f1: 28, gain: 1 });
+            noise(t, 0.9, { type: 'lowpass', f: 600, f1: 120, gain: 0.7 });
+            tone(t + 0.28, 1.0, { f: 70, f1: 25, gain: 0.5 });
+            noise(t + 0.28, 0.6, { type: 'lowpass', f: 300, gain: 0.3 });
+            break;
+          case 'jump': tone(t, 0.12, { type: 'triangle', f: 230, f1: 460, gain: 0.12 }); noise(t, 0.08, { f: 1500, gain: 0.08 }); break;
+          case 'land': tone(t, 0.09, { f: 110, f1: 55, gain: 0.3 }); noise(t, 0.05, { type: 'lowpass', f: 400, gain: 0.15 }); break;
+          case 'special': {
+            const k = opt || 'orb';
+            if (k === 'fireball') { noise(t, 0.5, { type: 'lowpass', f: 250, f1: 1800, gain: 0.55, att: 0.05 }); tone(t, 0.35, { type: 'sawtooth', f: 90, f1: 200, gain: 0.12, lp: 800 }); }
+            else if (k === 'laser') { tone(t, 0.28, { type: 'sawtooth', f: 1500, f1: 260, gain: 0.16 }); tone(t, 0.22, { type: 'square', f: 2900, f1: 600, gain: 0.05 }); }
+            else if (k === 'cowbell') { tone(t, 0.35, { type: 'square', f: 540, gain: 0.12, lp: 2600 }); tone(t, 0.35, { type: 'square', f: 800, gain: 0.12, lp: 2600 }); noise(t, 0.12, { f: 900, f1: 2400, gain: 0.12 }); }
+            else if (k === 'bottle') { noise(t, 0.16, { f: 600, f1: 2200, gain: 0.2 }); tone(t + 0.02, 0.18, { f: 2400, gain: 0.08 }); tone(t + 0.02, 0.14, { f: 3600, gain: 0.05 }); }
+            else if (k === 'wrench') { noise(t, 0.16, { f: 500, f1: 2000, gain: 0.2 }); tone(t, 0.25, { type: 'square', f: 910, gain: 0.05 }); tone(t, 0.25, { type: 'square', f: 1370, gain: 0.04 }); }
+            else if (k === 'mustache') {
+              const osc = AC.createOscillator(), g = AC.createGain();
+              osc.frequency.setValueAtTime(180, t); osc.frequency.linearRampToValueAtTime(460, t + 0.12); osc.frequency.linearRampToValueAtTime(200, t + 0.3);
+              g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+              osc.connect(g); g.connect(sfxBus); osc.start(t); osc.stop(t + 0.4);
+            }
+            else { tone(t, 0.3, { type: 'sawtooth', f: 220, f1: 880, gain: 0.12, lp: 2000 }); }
+            break;
+          }
+          case 'superpower':
+            [523, 659, 784, 1047, 1319].forEach((f, i) => tone(t + i * 0.07, 0.25, { type: 'triangle', f, gain: 0.16 }));
+            noise(t, 0.6, { type: 'highpass', f: 5000, gain: 0.08, att: 0.2 });
+            break;
+          case 'gong': // Rundenglocke
+            [[110, 0.35], [166, 0.2], [221, 0.15], [331, 0.08]].forEach(([f, g]) => tone(t, 2.2, { f, gain: g, att: 0.002 }));
+            noise(t, 0.05, { f: 2000, gain: 0.2 });
+            break;
+          case 'bell': // Kampf beginnt
+            [880, 1320, 1760].forEach((f, i) => tone(t, 0.9, { f, gain: 0.12 / (i + 1) }));
+            break;
+          case 'fanfare': {
+            const notes = [[392, 0], [523, 0.16], [659, 0.32], [784, 0.48], [659, 0.72], [784, 0.86], [1047, 1.0]];
+            notes.forEach(([f, d], i) => {
+              const len = i === notes.length - 1 ? 1.4 : 0.22;
+              tone(t + d, len, { type: 'sawtooth', f, gain: 0.13, lp: 2200, att: 0.02 });
+              tone(t + d, len, { type: 'square', f: f / 2, gain: 0.05, lp: 1200, att: 0.02 });
+            });
+            break;
+          }
         }
       } catch (e) { /* Sound ist nur Zugabe */ }
+    }
+
+    // --- Ansager (Sprachausgabe des Browsers, deutsche Stimme wenn vorhanden) ----------------
+    function say(text) {
+      try {
+        if (!soundOn || !window.speechSynthesis) return;
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        const voices = speechSynthesis.getVoices();
+        const v = voices.find(v => /^de/i.test(v.lang) && /male|stefan|conrad|markus|hans|daniel/i.test(v.name)) || voices.find(v => /^de/i.test(v.lang));
+        if (v) u.voice = v;
+        u.lang = 'de-DE'; u.pitch = 0.55; u.rate = 0.95; u.volume = 1;
+        speechSynthesis.speak(u);
+      } catch (e) {}
+    }
+    function spokenName(pid) { return nameOf(pid).replace(/\d+/g, '').replace(/_/g, ' ') || 'Kämpfer'; }
+    const NUM_WORDS = ['null', 'eins', 'zwei', 'drei', 'vier', 'fünf', 'sechs'];
+
+    // --- Hintergrundmusik: kleiner Sequenzer, Hafen ruhiger Beat, Käfig harter Beat -----------
+    const music = (() => {
+      let timer = null, style = null, step = 0, nextT = 0;
+      const N = (m) => 440 * Math.pow(2, (m - 69) / 12); // MIDI -> Hz
+      const STYLES = {
+        harbor: { bpm: 94, root: 45, // A
+          bass: [0, null, 0, 3, null, 7, null, 5, 0, null, 0, 3, null, 10, null, 7],
+          chords: [[0, 3, 7], [-4, 0, 3], [3, 7, 10], [-2, 2, 5]],          // Am F C G
+          kick: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0], snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1], hat: 2 },
+        cage: { bpm: 132, root: 38, // D
+          bass: [0, 0, 12, 0, 0, 0, 10, 0, 0, 0, 12, 0, 3, 0, 5, 7],
+          chords: [[0, 3, 7], [0, 3, 7], [-2, 1, 5], [-4, 0, 3]],
+          kick: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0], snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0], hat: 1 }
+      };
+      function playStep(s, t) {
+        const st = STYLES[style], bar = Math.floor(s / 16) % 4, i = s % 16, sixteenth = 60 / st.bpm / 4;
+        const B = musicBus;
+        if (st.kick[i]) { tone(t, 0.25, { f: 120, f1: 42, gain: style === 'cage' ? 0.9 : 0.7, bus: B }); }
+        if (st.snare[i]) { noise(t, 0.16, { f: 1800, q: 0.8, gain: 0.35, bus: B }); tone(t, 0.1, { f: 200, f1: 150, gain: 0.2, bus: B }); }
+        if (i % st.hat === 0) noise(t, 0.03, { type: 'highpass', f: 7000, gain: (i % 4 === 2) ? 0.1 : 0.05, bus: B });
+        const bn = st.bass[i];
+        if (bn != null) tone(t, sixteenth * 1.8, { type: style === 'cage' ? 'sawtooth' : 'triangle', f: N(st.root + bn + st.chords[bar][0] * 0), gain: style === 'cage' ? 0.16 : 0.22, lp: style === 'cage' ? 900 : 600, bus: B });
+        // Akkord-Arpeggio, leise
+        if (i % 2 === 0) {
+          const ch = st.chords[bar], n = ch[(i / 2) % 3];
+          tone(t, sixteenth * 1.5, { type: 'square', f: N(st.root + 24 + n), gain: style === 'cage' ? 0.03 : 0.04, lp: 1800, bus: B });
+        }
+        if (style === 'cage' && i === 0) st.chords[bar].forEach(n => tone(t, sixteenth * 6, { type: 'sawtooth', f: N(st.root + 12 + n), gain: 0.04, lp: 1400, bus: B }));
+      }
+      function tick() {
+        if (!AC || !style) return;
+        const st = STYLES[style], sixteenth = 60 / st.bpm / 4;
+        while (nextT < AC.currentTime + 0.15) { playStep(step, nextT); nextT += sixteenth; step++; }
+      }
+      return {
+        set(s) { // 'harbor' | 'cage' | null
+          if (s === style) return;
+          style = s; step = 0;
+          if (!AC) return;
+          nextT = AC.currentTime + 0.05;
+          if (!timer && s) timer = setInterval(tick, 25);
+          if (!s && timer) { clearInterval(timer); timer = null; }
+        },
+        ensure() { if (style && !timer && AC) { nextT = AC.currentTime + 0.05; timer = setInterval(tick, 25); } }
+      };
+    })();
+
+    window.toggleSound = function() {
+      soundOn = !soundOn; localStorage.setItem('fighter_sound', soundOn ? '1' : '0');
+      unlockAudio(); if (sfxBus) sfxBus.gain.value = soundOn ? 1 : 0;
+      if (!soundOn && window.speechSynthesis) speechSynthesis.cancel();
+      updateSoundButtons();
+    };
+    window.toggleMusic = function() {
+      musicOn = !musicOn; localStorage.setItem('fighter_music', musicOn ? '1' : '0');
+      unlockAudio(); if (musicBus) musicBus.gain.value = musicOn ? MUSIC_VOL : 0;
+      updateSoundButtons();
+    };
+    function updateSoundButtons() {
+      const a = document.getElementById('btn-sound'), b = document.getElementById('btn-music');
+      if (a) a.innerText = soundOn ? '🔊 Effekte & Ansager an' : '🔇 Effekte aus';
+      if (b) b.innerText = musicOn ? '🎵 Musik an' : '🎵 Musik aus';
     }
 
     // =====================================================================================
@@ -617,7 +794,8 @@
       const cur = meta.cur;
       if (meta.phase === 'intro' && cur) {
         if (amFighting()) resetMyFighter(cur.rk);
-        if (cur.rn === 1 && (cur.kind === 'S' || cur.kind === 'F')) sfx('ko');
+        sfx('gong');
+        say((cur.rn === 1 && cur.kind === 'F' ? 'Grand Finale! ' : cur.rn === 1 && cur.kind === 'S' ? 'Halbfinale! ' : '') + (cur.rn === 1 ? spokenName(cur.p1) + ' gegen ' + spokenName(cur.p2) + '. ' : '') + 'Runde ' + (NUM_WORDS[cur.rn] || cur.rn));
         particles = []; drops = []; koPools = {};
         // Blut & Dellen bleiben den ganzen Kampf über liegen, erst beim nächsten Kampf ist alles sauber
         if (cur.rn === 1) { clearDecals(); wounds = {}; }
@@ -626,17 +804,20 @@
         fightLocalStart = performance.now(); fightRk = cur.rk;
         if (amFighting() && (!my || myRk !== cur.rk)) resetMyFighter(cur.rk);
         banner = { text: 'FIGHT!', color: '#ff2e93', until: performance.now() + 900 };
-        sfx('special');
+        sfx('bell'); say('Kämpft!');
       } else if (meta.phase === 'roundEnd' && cur) {
         const txt = meta.reason === 'ko' ? 'K.O.!' : meta.reason === 'time' ? 'ZEIT!' : meta.reason === 'draw' ? 'DOPPEL-K.O.!' : 'ENTSCHIEDEN';
         const sub = meta.roundWinner ? nameOf(meta.roundWinner) + ' gewinnt die Runde' : 'Unentschieden';
         banner = { text: txt, sub, color: '#ff4d4d', until: performance.now() + 2800 };
-        if (meta.reason === 'ko') sfx('ko');
+        if (meta.reason === 'ko' || meta.reason === 'draw') sfx('ko');
+        say(meta.reason === 'ko' ? 'K. O.!' : meta.reason === 'time' ? 'Zeit!' : meta.reason === 'draw' ? 'Doppel K. O.!' : '');
         if (my && meta.roundWinner === playerId) setTimeout(() => { if (my && my.act !== 'ko') setAct('win'); }, 900);
       } else if (meta.phase === 'matchEnd') {
         banner = { text: nameOf(meta.matchWinner) + ' GEWINNT! +' + WIN_POINTS, sub: isDriver() ? 'Klick auf „Nächster Kampf", wenn alle bereit sind' : 'Gleich geht\'s weiter …', color: '#7ed957', until: performance.now() + 60000 };
         my = null; myProj = null;
+        setTimeout(() => say(spokenName(meta.matchWinner) + ' gewinnt!'), 400);
       } else if (meta.phase === 'done' || meta.phase === 'sessionDone') {
+        if (meta.phase === 'done') { sfx('fanfare'); setTimeout(() => say('Grand Champion: ' + spokenName(meta.champion) + '!'), 1500); }
         banner = null; my = null; myProj = null; confetti = [];
         returnStart = performance.now(); returnSecs = meta.phase === 'done' ? RETURN_AFTER_CEREMONY : RETURN_AFTER_TABLE;
       } else if (meta.phase === 'bracket') {
@@ -662,7 +843,9 @@
     function setAct(act) {
       if (!my) return;
       my.act = act; my.actF = 0; my.seq++; my.hitDone = false;
-      if (['punch', 'kick', 'cpunch', 'sweep', 'jkick', 'super'].includes(act)) sfx('whoosh');
+      if (['punch', 'cpunch'].includes(act)) sfx('whoosh');
+      else if (['kick', 'sweep', 'jkick', 'super'].includes(act)) sfx('whooshHeavy');
+      else if (act === 'jump') sfx('jump');
       writeMe(true);
     }
 
@@ -738,7 +921,7 @@
         my.sp--; my.en = my.sp / SUPER_FRAMES * 100;
         if (my.sp === 0) { my.en = 0; writeMe(true); }
       } else if (my.en >= 100 && fighting) {
-        my.sp = SUPER_FRAMES; sfx('special');
+        my.sp = SUPER_FRAMES; sfx('superpower');
         banner = { text: 'SUPERPOWER!', sub: 'Doppelsprung & harte Treffer', color: '#38bdf8', until: performance.now() + 1100 };
         writeMe(true);
       }
@@ -751,7 +934,7 @@
         my.vy -= GRAV; my.y += my.vy; my.x += my.vx;
         if (my.y <= 0) {
           my.y = 0; my.vy = 0; my.vx = 0; my.airAtk = false; my.dj = false;
-          if (my.act === 'jump' || my.act === 'jkick') setAct(keysDown.has('down') ? 'crouch' : 'idle');
+          if (my.act === 'jump' || my.act === 'jkick') { sfx('land'); setAct(keysDown.has('down') ? 'crouch' : 'idle'); }
           if (my.act === 'kd' || my.act === 'ko') floorCrack(my.x + my.face * 40, GROUND + 4, 5);
         }
       }
@@ -771,7 +954,7 @@
       if (my.act === 'special' && my.actF === MOVES.special.start) {
         myProj = { x: my.x + my.face * 70, dir: my.face, id: playerId + '_' + (++hitCounter), dead: false };
         set(ref(db, FS + '/proj/' + playerId), { x0: myProj.x, dir: myProj.dir, id: myProj.id, rk: myRk });
-        sfx('special');
+        sfx('special', charFor(myName).proj);
       }
 
       // --- Eingaben ---
@@ -884,7 +1067,7 @@
       if (!my.sp) my.en = Math.min(100, my.en + (mv.en || 0));
       hitstop = 4;
       spawnSpark(opp.x - dir * 10, GROUND - (opp.y || 0) - (opp.cr ? 70 : 120), '#fff3a0', 12);
-      sfx('hit');
+      sfx('hit', { heavy: dmg >= 9 });
     }
 
     // Treffer, die mich erreichen: ICH entscheide, ob ich geblockt habe (mein Zustand ist exakt)
@@ -936,7 +1119,7 @@
         const hh = { high: 150, mid: 100, low: 28, overhead: 135 }[h.type] || 110;
         my.hid++; my.hh = my.cr ? Math.min(hh, 85) : hh; my.hd = h.dmg;
         onHurt(playerId, my.x, my.y, my.face, my.hh, h.dmg, my.act);
-        sfx('hit');
+        sfx('hit', { heavy: h.dmg >= 9 || my.hp <= 0 });
       }
       writeMe(true);
     }
@@ -958,10 +1141,17 @@
           // Neuer Treffer bei diesem Kämpfer: Blut, Wunden, Dellen - bei allen Zuschauern und beim Angreifer
           v.hid = f.hid || 0;
           onHurt(pid, f.x, f.y, f.face, f.hh || 110, f.hd || 6, f.act);
-          if (!amFighting()) sfx('hit');
+          if (!amFighting()) sfx('hit', { heavy: (f.hd || 0) >= 9 || f.act === 'ko' });
         }
         if (v.seq !== f.seq) {
           if (pid !== playerId && f.act === 'block' && v.lastAct !== 'block' && !amFighting()) { spawnSpark(f.x, GROUND - f.y - (f.cr ? 60 : 120), '#7dd3fc', 8); sfx('block'); }
+          if (pid !== playerId && v.seq !== -1) {
+            // Bewegungs-Geräusche des anderen Kämpfers auch hören
+            if (['punch', 'cpunch'].includes(f.act)) sfx('whoosh');
+            else if (['kick', 'sweep', 'jkick'].includes(f.act)) sfx('whooshHeavy');
+            else if (f.act === 'jump') sfx('jump');
+            else if (['jump', 'jkick'].includes(v.lastAct) && ['idle', 'crouch', 'walk', 'walkb'].includes(f.act)) sfx('land');
+          }
           if (pid !== playerId && (f.act === 'kd' || f.act === 'ko') && v.lastAct !== f.act) setTimeout(() => floorCrack(f.x + f.face * 40, GROUND + 4, 5), 320);
           v.seq = f.seq; v.actStart = now; v.lastAct = f.act;
         }
@@ -977,6 +1167,7 @@
         const p = data[pid];
         if (!p) continue;
         const old = remoteProj[pid];
+        if (!(old && old.id === p.id)) sfx('special', charFor(nameOf(pid)).proj);
         next[pid] = (old && old.id === p.id) ? old : { ...p, seenAt: now, owner: pid };
       }
       remoteProj = next;
@@ -1869,6 +2060,7 @@
     }
 
     function render(t) {
+      music.set(!meta || meta.phase === 'done' ? null : (isCage() ? 'cage' : 'harbor'));
       ctx.save();
       if (shake > 0.5) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
       drawStage(t);
@@ -1925,6 +2117,11 @@
         drawWaitingScreen(t);
       }
       drawBanner(t);
+      if ((soundOn || musicOn) && !audioReady()) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(W / 2 - 190, H - 70, 380, 30);
+        ctx.font = 'bold 16px "Baloo 2", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd23f';
+        ctx.fillText('🔊 Klick ins Spiel oder drück eine Taste für Sound', W / 2, H - 49);
+      }
       ctx.restore();
     }
 
@@ -2034,6 +2231,7 @@
         }
         updateUi(); renderBracket();
       });
+      updateSoundButtons();
       requestAnimationFrame(frame);
     };
   </script>
@@ -2049,6 +2247,10 @@
       🥊 Hirnschmalz-Fighter 🥊
     </h1>
     <div id="my-role" class="text-sm text-white/80 mb-2"></div>
+    <div class="flex gap-2 justify-center mb-2">
+      <button id="btn-sound" onclick="toggleSound()" class="py-1 px-3 jax-btn bg-white/90 text-[#1a1a2e] font-bold text-xs">🔊 Effekte & Ansager an</button>
+      <button id="btn-music" onclick="toggleMusic()" class="py-1 px-3 jax-btn bg-white/90 text-[#1a1a2e] font-bold text-xs">🎵 Musik an</button>
+    </div>
     <div id="admin-overview" class="hidden text-left text-sm bg-white/10 border-2 border-[#ffd23f]/60 rounded-xl px-3 py-2 mb-2 leading-6"></div>
 
     <canvas id="fight-canvas" width="960" height="540"></canvas>
