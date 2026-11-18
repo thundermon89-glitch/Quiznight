@@ -84,7 +84,6 @@
   const SLOTS = {
     // Allgemein
     lobby:          { group: 'Allgemein', label: 'Lobby-Musik',                       file: 'musik-lobby-piano',        vol: 0.55, music: true },
-    hub:            { group: 'Allgemein', label: 'Cockpit-Musik (zwischen den Spielen)', file: 'musik-quiz-loop',      vol: 0.45, music: true },
     spiel_start:    { group: 'Allgemein', label: 'Spiel beginnt',                     file: 'fanfare-grand-prix',       vol: 0.8, duck: true },
     neue_frage:     { group: 'Allgemein', label: 'Neue Frage / neue Runde',           file: 'jingle-piano-schnoerkel',  vol: 0.6 },
     aufloesung:     { group: 'Allgemein', label: 'Auflösung (Trommelwirbel)',         file: 'trommelwirbel',            vol: 0.8, duck: true },
@@ -153,8 +152,8 @@
   const QUIZ_ON = { question_shown: 'neue_frage', result: 'aufloesung', finished: 'spiel_ende' };
   const PAGES = {
     index:          { music: 'lobby' },
-    cockpit:        { music: 'hub' },
-    'admin-cockpit':{ music: 'hub' },
+    cockpit:        {},   // bewusst ohne Musik
+    'admin-cockpit':{},
     spiel1:  { music: 'musik_spiel1', active: ['options_shown'], on: QUIZ_ON, start: true },
     spiel2:  { music: 'musik_spiel2', atmo: 'atmo_spiel2', active: ['in_progress', 'story_shown', 'rolling', 'order_set'],
                on: { story_shown: 'neue_frage', solved: 'richtig_gross', evaluation: 'aufloesung' }, start: true },
@@ -431,7 +430,7 @@
     const sync = () => { mv.value = musicVol; sv.value = sfxVol; mb.textContent = muted ? 'Ton einschalten' : 'Alles stumm'; updateWidget(); };
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (!unlocked) { unlock(); if (!muted) return; }
+      unlock();
       panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; sync();
     });
     document.addEventListener('click', (e) => { if (panel.style.display === 'block' && !panel.contains(e.target) && e.target !== btn) panel.style.display = 'none'; });
@@ -469,7 +468,7 @@
     sfxVolume: () => (muted ? 0 : sfxVol),
     musicOn: () => !muted && musicVol > 0,
     isUnlocked: () => unlocked,
-    _debug: () => ({ level, muted, musicVol, sfxVol, tracks: tracks.map(t => t && { slot: t.slot, file: t.file, paused: t.el.paused, time: +t.el.currentTime.toFixed(1), gain: t.g ? +t.g.gain.value.toFixed(2) : t.el.volume }) }),
+    _debug: () => ({ bus: AC ? { music: +musicBus.gain.value.toFixed(2), sfx: +sfxBus.gain.value.toFixed(2), state: AC.state } : null, level, muted, musicVol, sfxVol, tracks: tracks.map(t => t && { slot: t.slot, file: t.file, paused: t.el.paused, time: +t.el.currentTime.toFixed(1), gain: t.g ? +t.g.gain.value.toFixed(2) : t.el.volume }) }),
     setMuted(m) { muted = !!m; LS.set('hs_muted', muted ? '1' : '0'); applyBus(); refreshTracks(0.1); updateWidget(); },
     setOverrides(slots, vols) { overrides = slots || {}; volOverrides = vols || {}; },
     previewFile(file, vol) {          // für den Editor: Datei kurz anhören
