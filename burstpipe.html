@@ -85,12 +85,23 @@
     // ---------- Mehrspieler ----------
     const START_DELAY_MS = 14000;     // 9 s Spiel-Intro (game-intro.js) + Countdown, damit alle Geräte geladen haben
     const JOIN_GRACE_MS = 4000;       // so lange nach "LOS" darf man noch einsteigen
-    const SYNC_MS = 100;              // eigene Position so oft melden
+    const SYNC_MS = 50;               // eigene Position so oft melden (öfter = Mitspieler laufen flüssiger)
     const STALE_MS = 12000;           // wer so lange nichts meldet, gilt als ausgeschieden
     const SPECTATE_DELAY_MS = 1800;   // so lange sieht man das eigene Säurebad, dann wird umgeschaltet
     // ---------- Punkte: nach Platz, gebremst auf höchstens 200 und nie mehr als die erreichten Meter ----------
     const PLACE_POINTS = [200, 140, 100, 70, 50, 35, 25, 20, 15, 10];
     const MAX_POINTS = 200;
+    // ---------- Bonus-Gegenstände: bei diesen Höhen liegt je einer auf einer Plattform, +50 Punkte extra ----------
+    const BONUS_POINTS = 50;
+    const BONUS = [
+      { m: 200,  kind: 'iodine', label: 'Jodtabletten' },
+      { m: 500,  kind: 'helmet', label: 'Strahlenschutzhelm' },
+      { m: 1000, kind: 'iodine', label: 'Jodtabletten' },
+      { m: 1500, kind: 'helmet', label: 'Strahlenschutzhelm' },
+      { m: 2000, kind: 'geiger', label: 'Geigerzähler' }
+    ];
+    // Landen nur, wenn die Füße (mittlerer Teil der Figur) wirklich über der Plattform sind
+    const FOOT_L = 0.38, FOOT_R = 0.62;
     function pointsFor(place, height) {
       if (!height || height < 1) return 0;
       return Math.min(MAX_POINTS, PLACE_POINTS[place] != null ? PLACE_POINTS[place] : 10, height);
@@ -137,9 +148,9 @@
       const x = rand() * (W - w);
       return { x, y, w, h: 14 };
     }
-    let seed = null, tower = [], towerIdx = 0, towerTopY = 0;
+    let seed = null, tower = [], towerIdx = 0, towerTopY = 0, bonusNext = 0;
     function resetTower(s) {
-      seed = s; towerIdx = 0; towerTopY = FLOOR_Y - 60;
+      seed = s; towerIdx = 0; towerTopY = FLOOR_Y - 60; bonusNext = 0;
       tower = [{ x: 0, y: FLOOR_Y, w: W, h: 40, isFloor: true }];
       extendTower(FLOOR_Y - H * 3);
     }
@@ -148,7 +159,10 @@
         const rand = seededRandom(seed + towerIdx * 7919);
         const tier = platformTier(Math.round((FLOOR_Y - towerTopY) / 10));
         towerTopY -= tier.gap(rand);
-        tower.push(makePlatform(towerTopY, rand, tier));
+        const pl = makePlatform(towerTopY, rand, tier);
+        // erste Plattform ab der Bonus-Höhe bekommt den Gegenstand (in allen Türmen gleich)
+        if (bonusNext < BONUS.length && (FLOOR_Y - towerTopY) / 10 >= BONUS[bonusNext].m) { pl.bonus = BONUS[bonusNext]; bonusNext++; }
+        tower.push(pl);
         towerIdx++;
       }
     }
@@ -171,6 +185,8 @@
     const keys = { left: false, right: false };
     let confetti = [], flyingTexts = [], lastMilestone = 0;
 
+    function parseBonus(b) { const o = {}; String(b || '').split(',').filter(Boolean).forEach((m) => { o[m] = true; }); return o; }
+    function bonusStr(o) { return Object.keys(o || {}).join(','); }
     function newMe(snap) {
       const s = snap || {};
       return {
@@ -180,7 +196,8 @@
         grounded: s.g != null ? !!s.g : true, standingOn: null, doubleJumpUsed: false,
         spinStart: null, spinAngle: 0, spinFacing: 1,
         cam: s.cam != null ? s.cam : FLOOR_Y - SPRITE_H, wat: s.wat != null ? s.wat : FLOOR_Y + 120,
-        h: s.h || 0, alive: true, deadAt: 0
+        h: s.h || 0, alive: true, deadAt: 0,
+        bonus: parseBonus(s.b)
       };
     }
 
@@ -205,6 +222,7 @@
       p.vx = Math.max(-MAX_HSPEED, Math.min(MAX_HSPEED, p.vx));
       if (keys.left && !keys.right) p.facing = -1; else if (keys.right && !keys.left) p.facing = 1;
       if (!p.grounded) p.vy += GRAVITY * f;
+      const prevFoot = p.y + SPRITE_H;
       p.x += p.vx * f;
       if (!p.grounded) p.y += p.vy * f;
       if (p.x < 0) { p.x = 0; p.vx = Math.abs(p.vx) * 0.55 + 1.2; }
@@ -212,17 +230,18 @@
 
       if (p.grounded && p.standingOn) {
         const s = p.standingOn;
-        if (!(p.x + SPRITE_W * 0.7 > s.x && p.x + SPRITE_W * 0.3 < s.x + s.w)) { p.grounded = false; p.standingOn = null; }
+        if (!(p.x + SPRITE_W * FOOT_R > s.x && p.x + SPRITE_W * FOOT_L < s.x + s.w)) { p.grounded = false; p.standingOn = null; }
       } else if (p.grounded && !p.standingOn) {
         // nach Neuladen: Plattform unter den Füßen wiederfinden
         const footY = p.y + SPRITE_H; let found = null;
-        forPlatforms(footY - 2, footY + 2, (s) => { if (p.x + SPRITE_W * 0.7 > s.x && p.x + SPRITE_W * 0.3 < s.x + s.w) { found = s; return false; } });
+        forPlatforms(footY - 2, footY + 2, (s) => { if (p.x + SPRITE_W * FOOT_R > s.x && p.x + SPRITE_W * FOOT_L < s.x + s.w) { found = s; return false; } });
         if (found) p.standingOn = found; else p.grounded = false;
       }
       if (!p.grounded && p.vy >= 0) {
         const footY = p.y + SPRITE_H;
-        forPlatforms(footY - 50, footY, (s) => {
-          if (footY >= s.y && footY <= s.y + s.h + 10 && p.x + SPRITE_W * 0.7 > s.x && p.x + SPRITE_W * 0.3 < s.x + s.w) {
+        // nur landen, wenn die Füße in diesem Schritt von oben durch die Plattform-Oberkante gegangen sind
+        forPlatforms(prevFoot - 3, footY + 1, (s) => {
+          if (prevFoot <= s.y + 3 && footY >= s.y && p.x + SPRITE_W * FOOT_R > s.x && p.x + SPRITE_W * FOOT_L < s.x + s.w) {
             p.y = s.y - SPRITE_H; p.vy = 0; p.grounded = true; p.standingOn = s; p.doubleJumpUsed = false;
             return false;
           }
@@ -256,6 +275,13 @@
         try { window.HSAudio && HSAudio.synth('coin', 0.8); } catch (e) {}
       }
 
+      // Bonus-Gegenstände einsammeln
+      forPlatforms(p.y - 60, p.y + SPRITE_H + 10, (s) => {
+        if (!s.bonus || p.bonus[s.bonus.m]) return;
+        const ix = s.x + s.w / 2, iy = s.y - 16;
+        if (ix > p.x + SPRITE_W * 0.2 && ix < p.x + SPRITE_W * 0.8 && iy > p.y && iy < p.y + SPRITE_H + 4) collectBonus(s.bonus, ix, iy - p.cam + H * 0.8);
+      });
+
       p.anim = p.grounded ? (Math.abs(p.vx) > 0.3 ? 'walk' : 'idle') : 'jump';
       animate(p, dt);
       if (p.spinStart != null) {
@@ -265,6 +291,20 @@
 
       if (p.y + SPRITE_H > p.wat) { die(); return; }
       if (p.y - p.cam + H * 0.8 > H + 60) { die(); return; }
+    }
+
+    function collectBonus(b, sx, sy) {
+      me.bonus[b.m] = true;
+      spawnBurst(sx, sy, ['#ffe14d', '#ffffff', '#b6ff3b', '#7dd3fc'], 40);
+      flyingTexts.push({ text: '+' + BONUS_POINTS + ' ' + b.label + '!', x: -260, vx: (W + 520) / (1900 / 16.67), life: 0, maxLife: 1900, small: true });
+      try { window.HSAudio && HSAudio.synth('coin', 1); setTimeout(() => HSAudio.synth('coin', 0.8), 120); } catch (e) {}
+      syncNow();
+      // nur einmal pro Spieler und Höhe gutschreiben (auch nach Neuladen)
+      runTransaction(ref(db, 'burstpipeState/bonus/' + playerId + '/' + b.m), (cur) => (cur ? undefined : true)).then((res) => {
+        if (!res.committed) return;
+        runTransaction(ref(db, 'players/' + playerId + '/score'), (cur) => (cur || 0) + BONUS_POINTS);
+        push(ref(db, 'gameLog'), { text: '☢️ ' + myName + ' fand im Atomschacht ' + b.label + ' (' + b.m + ' m): +' + BONUS_POINTS + ' Punkte', at: Date.now() });
+      }).catch(() => {});
     }
 
     // Fix-Spritesheet: Zeile 1 stehen, Zeile 2 springen/laufen
@@ -294,7 +334,7 @@
     function mySnapshot() {
       return { name: myName, x: r1(me.x), y: r1(me.y), vx: r1(me.vx), vy: r1(me.vy), g: me.grounded ? 1 : 0, f: me.facing,
         a: me.anim === 'jump' ? 2 : me.anim === 'walk' ? 1 : 0, sp: me.spinStart != null ? (me.spinFacing || 1) : 0,
-        cam: r1(me.cam), wat: r1(me.wat), h: me.h, alive: me.alive, t: now() };
+        cam: r1(me.cam), wat: r1(me.wat), h: me.h, alive: me.alive, t: now(), b: bonusStr(me.bonus) };
     }
     let lastSync = 0;
     function syncNow() {
@@ -313,6 +353,7 @@
       r.s = v; r.recvAt = performance.now();
       r.alive = v.alive !== false; r.h = v.h || 0; r.t = v.t || 0;
       r.facing = v.f || 1; r.anim = v.a === 2 ? 'jump' : v.a === 1 ? 'walk' : 'idle'; r.vy = v.vy || 0;
+      r.bonus = parseBonus(v.b);
       if (v.sp && r.spinStart == null && !r.lastSp) { r.spinStart = performance.now(); r.spinFacing = v.sp; }
       r.lastSp = v.sp;
       if (r.x == null) { r.x = v.x; r.y = v.y; r.cam = v.cam; r.wat = v.wat; }
@@ -427,6 +468,55 @@
       ctx.restore();
     }
 
+    // vorgerenderte Leuchtflecken (statt bei jedem Bild neue Verläufe zu berechnen)
+    function makeGlow(r, rgb, a) {
+      const c = document.createElement('canvas'); c.width = c.height = r * 2;
+      const t = c.getContext('2d'), g = t.createRadialGradient(r, r, 1, r, r, r);
+      g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`);
+      t.fillStyle = g; t.fillRect(0, 0, r * 2, r * 2); return c;
+    }
+    const lampGlow = makeGlow(26, '255,60,40', 0.55), bonusGlow = makeGlow(30, '255,230,90', 0.6);
+    const vignette = (() => {
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const t = c.getContext('2d'), g = t.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, 'rgba(0,0,0,.45)'); g.addColorStop(0.5, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.3)');
+      t.fillStyle = g; t.fillRect(0, 0, W, H); return c;
+    })();
+
+    function drawBonus(ctx, b, cx, cy, t) {
+      const bob = Math.round(Math.sin(t / 260 + b.m) * 3);
+      cy += bob;
+      ctx.save();
+      ctx.globalAlpha = 0.7 + 0.3 * Math.sin(t / 180);
+      ctx.drawImage(bonusGlow, cx - 30, cy - 30);
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 2; ctx.strokeStyle = '#111';
+      if (b.kind === 'helmet') {
+        // gelber Schutzhelm mit Strahlenzeichen und Visier
+        ctx.fillStyle = '#ffcc00';
+        ctx.beginPath(); ctx.arc(cx, cy + 4, 12, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillRect(cx - 16, cy + 3, 32, 4); ctx.strokeRect(cx - 16, cy + 3, 32, 4);
+        ctx.fillStyle = 'rgba(120,220,255,0.75)'; ctx.fillRect(cx - 9, cy + 7, 18, 6); ctx.strokeRect(cx - 9, cy + 7, 18, 6);
+        trefoil(ctx, cx, cy - 2, 4);
+      } else if (b.kind === 'iodine') {
+        // Dose Jodtabletten mit blauem Deckel
+        ctx.fillStyle = '#f5f5f0'; ctx.fillRect(cx - 9, cy - 8, 18, 22); ctx.strokeRect(cx - 9, cy - 8, 18, 22);
+        ctx.fillStyle = '#2f6fd6'; ctx.fillRect(cx - 10, cy - 13, 20, 6); ctx.strokeRect(cx - 10, cy - 13, 20, 6);
+        ctx.fillStyle = '#2f6fd6'; ctx.fillRect(cx - 9, cy - 2, 18, 9);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('JOD', cx, cy + 5);
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx + 13, cy + 10, 3, 0, 6.29); ctx.fill(); ctx.stroke();
+      } else {
+        // Geigerzähler
+        ctx.fillStyle = '#e0a800'; ctx.fillRect(cx - 12, cy - 8, 24, 18); ctx.strokeRect(cx - 12, cy - 8, 24, 18);
+        ctx.fillStyle = '#d9ffd0'; ctx.fillRect(cx - 8, cy - 5, 16, 8); ctx.strokeRect(cx - 8, cy - 5, 16, 8);
+        ctx.strokeStyle = '#c00'; ctx.beginPath(); ctx.moveTo(cx - 5, cy + 2); ctx.lineTo(cx + 2 + Math.sin(t / 90) * 4, cy - 4); ctx.stroke();
+        ctx.strokeStyle = '#111'; ctx.beginPath(); ctx.moveTo(cx + 12, cy); ctx.lineTo(cx + 18, cy - 8); ctx.stroke();
+      }
+      ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.fillStyle = '#ffe14d';
+      ctx.strokeText('+' + BONUS_POINTS, cx, cy - 18); ctx.fillText('+' + BONUS_POINTS, cx, cy - 18);
+      ctx.restore();
+    }
+
     function patternFor(ctx, key, img) {
       ctx.__pat = ctx.__pat || {};
       return ctx.__pat[key] || (ctx.__pat[key] = ctx.createPattern(img, 'repeat'));
@@ -472,11 +562,12 @@
       ctx.restore();
     }
 
+    const bonusOnScreen = [];
     function drawView(ctx, v, opts) {
       const t = performance.now();
       ctx.clearRect(0, 0, W, H);
       if (!v) return;
-      const off = -v.cam + H * 0.8;
+      const off = Math.round(-v.cam + H * 0.8);
 
       // Wand
       ctx.save();
@@ -491,9 +582,7 @@
         const wy = FLOOR_Y - k * 230 + off, lx = k % 2 ? 30 : W - 30;
         const on = 0.5 + 0.5 * Math.sin(t / 260 + k * 1.7);
         ctx.fillStyle = '#3a3f39'; ctx.fillRect(lx - 7, wy - 3, 14, 6);
-        const g = ctx.createRadialGradient(lx, wy - 8, 1, lx, wy - 8, 26);
-        g.addColorStop(0, `rgba(255,60,40,${0.55 * on})`); g.addColorStop(1, 'rgba(255,60,40,0)');
-        ctx.fillStyle = g; ctx.fillRect(lx - 26, wy - 34, 52, 52);
+        ctx.globalAlpha = on; ctx.drawImage(lampGlow, lx - 26, wy - 34); ctx.globalAlpha = 1;
         ctx.fillStyle = `rgb(${120 + 135 * on},${30 + 20 * on},20)`; ctx.beginPath(); ctx.arc(lx, wy - 8, 5, 0, 6.29); ctx.fill();
       }
       for (let k = Math.max(1, Math.floor((FLOOR_Y - yBot) / 700)); FLOOR_Y - k * 700 + 330 > yTop; k++) {
@@ -525,7 +614,10 @@
         for (let sx = p.x + 4; sx < p.x + p.w - 2; sx += 5) ctx.fillRect(sx, py + 6, 2, p.h - 8);
         ctx.save(); ctx.translate(p.x, py); ctx.fillStyle = patternFor(ctx, 'stripe', stripeTile); ctx.fillRect(0, 0, p.w, 4); ctx.restore();
         ctx.strokeStyle = '#0d1012'; ctx.lineWidth = 1.5; ctx.strokeRect(p.x + 0.5, py + 0.5, p.w - 1, p.h - 1);
+        if (p.bonus && !(v.bonus && v.bonus[p.bonus.m])) bonusOnScreen.push([p.bonus, p.x + p.w / 2, py - 16]);
       });
+      bonusOnScreen.forEach(([b, bx, by]) => drawBonus(ctx, b, bx, by, t));
+      bonusOnScreen.length = 0;
 
       // Figur + Name
       const sy = v.y + off;
@@ -553,11 +645,11 @@
           ctx.beginPath(); ctx.moveTo(0, H);
           for (let x = 0; x <= W; x += 6) ctx.lineTo(x, ay + Math.sin(x * 0.07 + t / 230) * 3 + Math.sin(x * 0.17 - t / 410) * 1.5);
           ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
-          ctx.save();
-          ctx.shadowColor = '#9dff2e'; ctx.shadowBlur = 14; ctx.strokeStyle = '#eaff8a'; ctx.lineWidth = 2.5;
+          // Leuchtkante ohne teures shadowBlur: breite halbtransparente Linie + helle Linie
           ctx.beginPath();
           for (let x = 0; x <= W; x += 6) { const yy = ay + Math.sin(x * 0.07 + t / 230) * 3 + Math.sin(x * 0.17 - t / 410) * 1.5; x ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); }
-          ctx.stroke(); ctx.restore();
+          ctx.strokeStyle = 'rgba(157,255,46,0.28)'; ctx.lineWidth = 9; ctx.stroke();
+          ctx.strokeStyle = '#eaff8a'; ctx.lineWidth = 2.5; ctx.stroke();
           for (let i = 0; i < 18; i++) {   // aufsteigende Blasen
             const hx = Math.sin(i * 91.7) * 0.5 + 0.5, hs = Math.sin(i * 37.3) * 0.5 + 0.5;
             const ph = ((t / (1400 + hs * 1600)) + hx) % 1;
@@ -573,9 +665,7 @@
       }
 
       // Abdunkeln oben/unten
-      const vg = ctx.createLinearGradient(0, 0, 0, H);
-      vg.addColorStop(0, 'rgba(0,0,0,.45)'); vg.addColorStop(0.5, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.3)');
-      ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(vignette, 0, 0);
 
       if (opts.mine) { drawParticles(ctx); drawFlyingTexts(ctx); }
 
@@ -618,7 +708,7 @@
       flyingTexts.forEach((tx) => {
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, tx.life / 180, (tx.maxLife - tx.life) / 260));
-        ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'left';
+        ctx.font = tx.small ? 'bold 22px sans-serif' : 'bold 34px sans-serif'; ctx.textAlign = 'left';
         ctx.fillStyle = '#d9ff3b'; ctx.strokeStyle = '#0b140b'; ctx.lineWidth = 5;
         ctx.strokeText(tx.text, tx.x, H * 0.3); ctx.fillText(tx.text, tx.x, H * 0.3);
         ctx.restore();
@@ -641,12 +731,14 @@
       $('tower-center').style.width = Math.round(W * c + 8) + 'px';
     }
 
+    const domCache = {};
+    function setText(elId, txt) { if (domCache[elId] === txt) return; domCache[elId] = txt; $(elId).textContent = txt; }
+    function setClass(elId, cls, on) { const k = elId + '.' + cls; if (domCache[k] === on) return; domCache[k] = on; $(elId).classList.toggle(cls, on); }
     function setLabel(elId, id, prefix) {
-      const el = $(elId);
-      if (!id) { el.textContent = ''; return; }
+      if (!id) { setText(elId, ''); return; }
       const dead = !isAlive(id);
-      el.textContent = (prefix || '') + (dead ? '☠️ ' : '') + nameOf(id) + ' · ' + heightOf(id) + ' m';
-      el.classList.toggle('dead', dead);
+      setText(elId, (prefix || '') + (dead ? '☠️ ' : '') + nameOf(id) + ' · ' + heightOf(id) + ' m');
+      setClass(elId, 'dead', dead);
     }
 
     let lastTs = performance.now(), lastCountTxt = '';
@@ -663,17 +755,17 @@
         const mineCenter = v.center === playerId;
         drawView(ctxC, viewOf(v.center), { mine: mineCenter });
         drawView(ctxL, viewOf(v.left), {}); drawView(ctxR, viewOf(v.right), {});
-        $('tower-left').classList.toggle('empty', !v.left);
-        $('tower-right').classList.toggle('empty', !v.right);
+        setClass('tower-left', 'empty', !v.left);
+        setClass('tower-right', 'empty', !v.right);
         setLabel('label-center', v.center, mineCenter ? '' : '👁 ');
         setLabel('label-left', v.left); setLabel('label-right', v.right);
 
         const spectating = !mineCenter && survivors().filter((id) => id !== playerId).length > 1;
-        $('spectate-bar').classList.toggle('show', spectating);
-        $('hud-height').textContent = role === 'player' && me ? me.h : (v.center ? heightOf(v.center) : 0);
+        setClass('spectate-bar', 'show', spectating);
+        setText('hud-height', String(role === 'player' && me ? me.h : (v.center ? heightOf(v.center) : 0)));
         const alive = survivors().length;
-        $('hud-alive').textContent = alive + '/' + joinedIds.length;
-        $('hud-mode').textContent = role === 'player' && me && me.alive ? '' : (alive ? (role === 'player' ? '👁 Du schaust den Überlebenden zu' : '👁 Zuschauer') : '');
+        setText('hud-alive', alive + '/' + joinedIds.length);
+        setText('hud-mode', role === 'player' && me && me.alive ? '' : (alive ? (role === 'player' ? '👁 Du schaust den Überlebenden zu' : '👁 Zuschauer') : ''));
 
         // Countdown
         const left = startAt - t;
@@ -729,12 +821,13 @@
           || '<div class="text-white/50 text-sm">Noch keine Einträge</div>';
       }).catch(() => {});
     }
+    function bonusCount(id) { const v = viewOf(id); return v && v.bonus ? Object.keys(v.bonus).length : 0; }
     function renderResults() {
       if (!resultsShown) return;
       $('results-list').innerHTML = ranking().map((r, i) => `
         <div class="flex items-center justify-between jax-card px-4 py-2 ${r.id === playerId ? 'ring-4 ring-[#b6ff3b]' : ''}">
           <span class="font-extrabold text-[#1a1a2e] truncate">${i === 0 && r.height > 0 ? '👑 ' : (i + 1) + '. '}${esc(r.name)}</span>
-          <span class="text-[#2f6b00] font-extrabold whitespace-nowrap">${r.height} m · +${pointsFor(i, r.height)} Pkt.</span>
+          <span class="text-[#2f6b00] font-extrabold whitespace-nowrap">${r.height} m · +${pointsFor(i, r.height)} Pkt.${bonusCount(r.id) ? ' · 🎁 +' + bonusCount(r.id) * BONUS_POINTS : ''}</span>
         </div>`).join('') || '<div class="text-white/50">Niemand ist geklettert…</div>';
     }
 
@@ -883,7 +976,7 @@
     <button id="tJump" class="jump" aria-label="springen">⤒</button>
     <button id="tRight" aria-label="rechts">▶</button>
   </div>
-  <p class="text-[11px] text-white/50 mt-1 text-center hidden md:block">← → / A D laufen · Leertaste / ↑ / W springen (in der Luft nochmal = Doppelsprung) · nach dem Ausscheiden ← → zum Umschalten</p>
+  <p class="text-[11px] text-white/50 mt-1 text-center hidden md:block">← → / A D laufen · Leertaste / ↑ / W springen (in der Luft nochmal = Doppelsprung) · bei 200 / 500 / 1000 / 1500 / 2000 m liegt ein Bonus (+50) · nach dem Ausscheiden ← → zum Umschalten</p>
 
   <div id="late-note" class="hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-50 bp-chip text-sm">Die Runde läuft schon – du schaust zu 👁</div>
   <div id="no-game" class="hidden fixed inset-0 z-[90] flex items-center justify-center bg-black/70"><div class="bp-chip">Gerade läuft kein Burst Pipe – warte auf den Spielleiter.</div></div>
@@ -892,7 +985,7 @@
     <div class="w-full max-w-md space-y-3 text-center">
       <h2 class="text-2xl md:text-4xl font-extrabold glow-title title-pop">☢️ Alle im Säurebad!</h2>
       <div id="results-list" class="space-y-2"></div>
-      <div class="text-xs text-white/60">Punkte nach Platz (200 / 140 / 100 / 70 / 50 …), höchstens 200 und nie mehr als die erreichten Meter.</div>
+      <div class="text-xs text-white/60">Punkte nach Platz (200 / 140 / 100 / 70 / 50 …), höchstens 200 und nie mehr als die erreichten Meter. Dazu +50 für jeden gefundenen Bonus (200 / 500 / 1000 / 1500 / 2000 m).</div>
       <div class="rounded-2xl border-2 border-[#3b4a1e] bg-black/50 p-3 text-left">
         <div class="text-center font-extrabold text-[#d9ff8a] mb-1">🏆 Hall of Fame (alle Runden)</div>
         <div id="hof-list" class="space-y-0.5"></div>
