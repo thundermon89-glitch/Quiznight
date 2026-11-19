@@ -39,22 +39,32 @@
     }
     .countdown-pop { animation: countdownPop 0.5s cubic-bezier(.34,1.56,.64,1); }
 
+    /* Spielbrett: 14 Spalten nebeneinander, jede Spalte stapelt ihre 12 Löcher von unten nach oben */
     #c4-board {
-      display: grid; grid-template-columns: repeat(14, 1fr); grid-template-rows: repeat(12, 1fr);
-      gap: 2px; background: #1a3a8f; border: 4px solid #1a1a2e; border-radius: 14px; padding: 6px;
-      box-shadow: 5px 5px 0 rgba(0,0,0,0.85);
-      aspect-ratio: 14 / 12; max-height: 58vh; max-width: 100%;
-      margin: 0 auto;
+      display: grid; grid-template-columns: repeat(14, 1fr); grid-template-rows: 1fr;
+      gap: 3px; padding: 8px; margin: 0 auto;
+      background: linear-gradient(180deg, #2f5fe0 0%, #1d46c4 55%, #163aa6 100%);
+      border: 4px solid #1a1a2e; border-radius: 16px;
+      box-shadow: inset 0 3px 0 rgba(255,255,255,.25), inset 0 -4px 0 rgba(0,0,0,.25), 6px 6px 0 rgba(0,0,0,0.85);
+      width: 700px; height: 600px;   /* feste PC-Größe (passt auf 1366x768 und größer) */
     }
-    .c4-col { display: flex; flex-direction: column-reverse; gap: 2px; cursor: pointer; }
+    .c4-col { display: flex; flex-direction: column-reverse; gap: 3px; cursor: pointer; border-radius: 10px; padding: 2px 0; transition: background .15s; }
+    .c4-col:hover { background: rgba(255,255,255,.12); }
     .c4-cell {
-      width: 100%; height: 100%; border-radius: 50%; background: #0a1a4a;
-      border: 1.5px solid rgba(255,255,255,0.15); transition: transform 0.15s ease;
+      flex: 1 1 0; min-height: 0; aspect-ratio: 1 / 1; width: 100%; border-radius: 50%;
+      background: radial-gradient(circle at 50% 35%, #071033 0%, #0c1a52 70%);            /* Loch */
+      box-shadow: inset 0 3px 4px rgba(0,0,0,.65), 0 1px 0 rgba(255,255,255,.25);
     }
-    .c4-col:hover .c4-cell.c4-empty { transform: scale(0.92); }
+    .c4-cell.c4-piece {                                                                    /* Spielstein */
+      background: radial-gradient(circle at 38% 32%, rgba(255,255,255,.55) 0 12%, transparent 13%),
+                  radial-gradient(circle at 50% 50%, var(--c) 0 54%, color-mix(in srgb, var(--c) 70%, #000) 56% 64%, var(--c) 66%);
+      box-shadow: inset 0 -3px 0 rgba(0,0,0,.3), 0 0 0 1.5px #1a1a2e;
+    }
+    .c4-col:hover .c4-cell.c4-empty.c4-next { background: radial-gradient(circle, color-mix(in srgb, var(--hc) 45%, transparent) 0 60%, #0c1a52 62%); }
     @keyframes dropIn {
-      0% { transform: translateY(-260px); }
-      70% { transform: translateY(6px); }
+      0% { transform: translateY(-600%); }
+      70% { transform: translateY(8%); }
+      85% { transform: translateY(-4%); }
       100% { transform: translateY(0); }
     }
     .c4-piece-new { animation: dropIn 0.5s cubic-bezier(.4,0,.2,1); }
@@ -210,14 +220,18 @@
           if (pid) {
             const colorIdx = state.playerOrder.indexOf(pid);
             const isNew = c === lastPlacedCol && r === lastPlacedRow;
-            html += `<div class="c4-cell${isNew ? ' c4-piece-new' : ''}" style="background:${PLAYER_COLORS[colorIdx] || '#888'};"></div>`;
+            html += `<div class="c4-cell c4-piece${isNew ? ' c4-piece-new' : ''}" style="--c:${PLAYER_COLORS[colorIdx] || '#888'};"></div>`;
           } else {
-            html += `<div class="c4-cell c4-empty"></div>`;
+            // nächstes freies Loch dieser Spalte: zeigt beim Drüberfahren die eigene Farbe als Vorschau
+            const next = r === (board[c] || []).length;
+            html += `<div class="c4-cell c4-empty${next ? ' c4-next' : ''}"></div>`;
           }
         }
         html += `</div>`;
       }
       boardEl.innerHTML = html;
+      const myIdx = (state.playerOrder || []).indexOf(playerId);
+      boardEl.style.setProperty('--hc', PLAYER_COLORS[myIdx] || '#ffffff');
     }
 
     let lastPlacedCol = -1, lastPlacedRow = -1;
