@@ -224,9 +224,13 @@
       }
     }
 
+    function gifFirework(cx, cy) {
+      playFx(FX.firework, cx, cy, 369, 174, 950, { flip: Math.random() < 0.5, z: 45 });
+    }
     function fireworksShow(rounds) {
       let i = 0;
       const interval = setInterval(() => {
+        gifFirework(window.innerWidth * (0.15 + Math.random() * 0.7), window.innerHeight * (0.12 + Math.random() * 0.45));
         burstFirework(
           window.innerWidth * (0.2 + Math.random() * 0.6),
           window.innerHeight * (0.15 + Math.random() * 0.35)
@@ -374,7 +378,18 @@
     // Eigenes Raketenbild: einfach props/rocket.png ins Repo legen - fehlt es, kommt die SVG-Rakete.
     // ROCKET_WINDOW = Lage des runden Bullauges im Bild (in Prozent der Bildbreite/-höhe).
     const ROCKET_IMG = 'props/rocket.png';
-    const ROCKET_WINDOW = { left: 33, top: 26, w: 34 };
+    const ROCKET_WINDOW = { left: 32, top: 34.6, w: 34.4 };   // vermessen an props/rocket.png (360x560)
+    const ROCKET_IMG_W = 150, ROCKET_IMG_H = 233;              // Seitenverhältnis wie das Bild
+    const FX = { flame: 'props/fx_flame.gif', impact: 'props/fx_impact.gif', firework: 'props/fx_firework.gif', twinkle: 'props/fx_twinkle.gif', smoke: 'props/fx_smoke.gif' };
+    Object.values(FX).forEach(u => { const i = new Image(); i.src = u; });   // vorladen
+    // GIF-Effekt einmal an einer Bildschirmstelle abspielen (Query-Zusatz startet das GIF von vorn)
+    function playFx(url, cx, cy, w, h, ms, opts = {}) {
+      const el = document.createElement('img');
+      el.src = url + '?r=' + Math.random().toString(36).slice(2);
+      el.style.cssText = `position:fixed; left:${cx - w / 2}px; top:${cy - h / 2}px; width:${w}px; height:${h}px; pointer-events:none; z-index:${opts.z || 65}; image-rendering:pixelated; ${opts.flip ? 'transform:scaleX(-1);' : ''}`;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), ms);
+    }
     let rocketImgOk = false;
     { const im = new Image(); im.onload = () => { rocketImgOk = true; }; im.src = ROCKET_IMG; }
 
@@ -406,18 +421,27 @@
     // Fliegt die Rakete quer über den GANZEN Bildschirm (echte Viewport-Koordinaten, nicht mehr
     // nur lokal um den Zielrahmen herum) - startet weit außerhalb in einer zufälligen Ecke,
     // macht einen großen Bogen samt Schleife und landet am Ende exakt im Zielrahmen.
-    function flyRocketAcrossScreen(photoUrl, targetEl, onArrive) {
+    function flyRocketAcrossScreen(photoUrl, targetEl, onArrive, initial) {
       const layer = document.getElementById("rocket-fly-layer");
       const rocket = document.createElement("div");
       rocket.className = "rocket-wrap-abs";
-      rocket.innerHTML = rocketMarkup(photoUrl);
+      rocket.innerHTML = rocketMarkup(photoUrl, initial);
+      // Rauchspur: in kurzen Abständen Rauchwölkchen an der Düse ausstoßen
+      const smokeEmit = (big) => {
+        const f = rocket.querySelector('.rocket-flame') || rocket;
+        const r = f.getBoundingClientRect();
+        const sz = (big ? 70 : 34) + Math.random() * 22;
+        playFx(FX.smoke, r.left + r.width / 2 + (Math.random() * 16 - 8), r.top + r.height / 2 + (Math.random() * 16 - 8), sz, sz, 800, { z: 59 });
+      };
+      const smokeTimer = setInterval(() => smokeEmit(false), 110);
+      if (rocketImgOk) { rocket.style.width = ROCKET_IMG_W + 'px'; rocket.style.height = ROCKET_IMG_H + 'px'; }
       layer.appendChild(rocket);
 
       const vw = window.innerWidth, vh = window.innerHeight;
       const rect = targetEl.getBoundingClientRect();
       const targetX = rect.left + rect.width / 2;
       const targetY = rect.top + rect.height / 2;
-      const HALF_W = 65, HALF_H = 85;
+      const HALF_W = rocketImgOk ? ROCKET_IMG_W / 2 : 65, HALF_H = rocketImgOk ? ROCKET_IMG_H * 0.73 : 85;
 
       const corners = [
         { x: -90, y: vh + 90 },
@@ -435,7 +459,7 @@
         { x: vw * 0.62, y: vh * 0.28, rot: -300, scale: 1.0, dur: 550 },
         { x: vw * 0.46, y: vh * 0.46, rot: -420, scale: 1.05, dur: 500 },
         { x: vw * 0.56, y: vh * 0.36, rot: -540, scale: 1.0, dur: 450 },
-        { x: targetX, y: targetY, rot: -565, scale: 0.45, dur: 700 }
+        { x: targetX, y: targetY, rot: -565, scale: rocketImgOk ? 0.38 : 0.45, dur: 700 }
       ];
 
       function place(i) {
@@ -448,34 +472,32 @@
       let i = 1;
       function step() {
         if (i >= waypoints.length) {
+          clearInterval(smokeTimer);
+          playFx(FX.impact, targetX, targetY, 300, 180, 1600, { z: 66 });
           setTimeout(() => { rocket.remove(); onArrive(); }, 150);
           return;
         }
         const w = waypoints[i];
         rocket.style.transition = `transform ${w.dur}ms cubic-bezier(.42,.05,.32,1)`;
         place(i);
-        if (i === 2 || i === 5) triggerEngineSputter(rocket);
+        if (i === 2 || i === 5) { triggerEngineSputter(rocket); for (let k = 0; k < 4; k++) setTimeout(() => smokeEmit(true), k * 70); }
         i++;
         setTimeout(step, w.dur);
       }
       requestAnimationFrame(() => setTimeout(step, 30));
     }
 
-    function rocketMarkup(photoUrl) {
+    function rocketMarkup(photoUrl, initial) {
       if (rocketImgOk) {
         return `
-        <svg viewBox="0 0 100 130" style="position:absolute; inset:0; width:100%; height:100%; overflow:visible;">
-          <g transform="translate(0,14)">
-            <circle class="smoke-puff" style="--sx:-7px;" cx="40" cy="118" r="7" fill="#999" opacity="0.5"/>
-            <circle class="smoke-puff" style="--sx:8px; animation-delay:0.15s;" cx="58" cy="122" r="5.5" fill="#bbb" opacity="0.4"/>
-            <g class="rocket-flame">
-              <path d="M38,98 Q29,113 42,119 Q46,108 50,119 Q63,114 56,98 Q50,105 46,98 Q44,105 38,98 Z" fill="#ff8a3d" stroke="#1a1006" stroke-width="1.8" stroke-linejoin="round"/>
-              <path d="M42,101 Q39,109 45,112 Q47,105 49,112 Q54,110 51,101 Z" fill="#ffd23f"/>
-            </g>
-          </g>
-        </svg>
+        <div class="rocket-flame" style="position:absolute; left:28%; top:86%; width:44%; height:44%;">
+          <img src="${FX.flame}" style="width:100%; height:100%; transform:scaleY(-1); image-rendering:pixelated;">
+        </div>
+        <div class="rocket-flame" style="position:absolute; left:41%; top:84%; width:18%; height:30%; opacity:.85;">
+          <img src="${FX.flame}" style="width:100%; height:100%; transform:scaleY(-1) scaleX(-1); image-rendering:pixelated;">
+        </div>
         <img src="${ROCKET_IMG}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:contain;">
-        <div class="rocket-photo-window" style="left:${ROCKET_WINDOW.left}%; top:${ROCKET_WINDOW.top}%; width:${ROCKET_WINDOW.w}%; height:auto; aspect-ratio:1;">${photoUrl ? `<img src="${photoUrl}">` : ''}</div>`;
+        <div class="rocket-photo-window" style="left:${ROCKET_WINDOW.left}%; top:${ROCKET_WINDOW.top}%; width:${ROCKET_WINDOW.w}%; height:auto; aspect-ratio:1; display:flex; align-items:center; justify-content:center;">${photoUrl ? `<img src="${photoUrl}">` : `<span style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:30px; color:#ffd23f;">${initial || '?'}</span>`}</div>`;
       }
       return `
         <svg viewBox="0 0 100 130" style="width:100%; height:100%; overflow:visible;">
@@ -571,7 +593,7 @@
         if (photoEl) {
           photoEl.classList.remove("empty");
           photoEl.classList.add("settled");
-          photoEl.innerHTML = '<div class="relative inline-block">' + photoHtml(img, p) + (rank === 1 ? '<div class="podium-crown">👑</div>' : '') + '</div>';
+          photoEl.innerHTML = '<div class="relative inline-block">' + (rank === 1 ? `<img src="${FX.twinkle}" style="position:absolute; left:50%; top:45%; width:270px; height:205px; transform:translate(-50%,-50%); pointer-events:none; image-rendering:pixelated; z-index:6; max-width:none; max-height:none;">` : '') + photoHtml(img, p) + (rank === 1 ? '<div class="podium-crown">👑</div>' : '') + '</div>';
           if (withShow) photoEl.classList.add("photo-settle");
         }
         nameEl.innerText = p.name;
@@ -589,7 +611,8 @@
         if (!withShow) return;
         const rect = step.getBoundingClientRect();
         burstConfetti(rank === 1 ? 140 : 45);
-        if (rank === 1) fireworksShow(12); else burstFirework(rect.left + rect.width / 2, rect.top);
+        if (rank === 1) fireworksShow(12);
+        else { burstFirework(rect.left + rect.width / 2, rect.top); for (let k = 0; k < 3; k++) setTimeout(() => gifFirework(window.innerWidth * (0.15 + Math.random() * 0.7), window.innerHeight * (0.15 + Math.random() * 0.3)), k * 300); }
       };
 
       if (!animate) { step.classList.add("revealed"); finish(false); return; }
@@ -605,7 +628,7 @@
       showRevealAnnounce(rank, n, annMs);
       setTimeout(() => {
         step.classList.add("revealed");
-        if (photoEl) flyRocketAcrossScreen(img, photoEl, () => finish(true)); else finish(true);
+        if (photoEl) flyRocketAcrossScreen(img, photoEl, () => finish(true), (p.name || '?').charAt(0).toUpperCase()); else finish(true);
       }, annMs);
     }
 
