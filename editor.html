@@ -3,6 +3,7 @@
 <head>
   <script src="gif-keep.js"></script>
   <script src="sounds/hs-audio.js"></script>
+  <script src="game-intro.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Fragen-Editor</title>
@@ -1001,7 +1002,7 @@
     // Liest eine Bilddatei ein und verkleinert sie. Bilder mit Transparenz (PNG/GIF/WebP)
     // werden als WebP gespeichert, damit freigestellte Bilder ihren durchsichtigen
     // Hintergrund behalten - alles andere als JPEG.
-    function compressImageFile(file) {
+    function compressImageFile(file, maxDim) {
       return new Promise((resolve, reject) => {
         if (!file.type || !file.type.startsWith('image/')) { reject(new Error('Das ist keine Bilddatei.')); return; }
         const reader = new FileReader();
@@ -1014,7 +1015,7 @@
           }
           const img = new Image();
           img.onload = () => {
-            const scale = Math.min(1, MAX_UPLOAD_DIMENSION / Math.max(img.width, img.height));
+            const scale = Math.min(1, (maxDim || MAX_UPLOAD_DIMENSION) / Math.max(img.width, img.height));
             const width = Math.max(1, Math.round(img.width * scale));
             const height = Math.max(1, Math.round(img.height * scale));
             const canvas = document.createElement('canvas');
@@ -1699,6 +1700,88 @@
       set(ref(db, 'soundConfig'), null).then(() => { soundCfg = { slots: {}, vol: {} }; window.HSAudio.setOverrides({}, {}); renderSoundPanel(); soundSaved('✔ Zurückgesetzt'); });
     };
 
+
+    // ================= INTROS: Bild, Titel und Spruch je Spiel (gilt für alle Geräte) =================
+    // Gespeichert unter introConfig/<seite>. Das Intro selbst steckt in game-intro.js.
+    let introCfg = {};
+    window.toggleIntroPanel = function() {
+      const p = document.getElementById('intro-panel');
+      p.classList.toggle('hidden');
+      if (!p.classList.contains('hidden')) loadIntroPanel();
+    };
+    function loadIntroPanel() {
+      const box = document.getElementById('intro-list');
+      if (!window.HSIntro) { box.innerHTML = '<div class="text-sm">Intro-System nicht geladen.</div>'; return; }
+      box.innerHTML = '<div class="text-sm">Lade…</div>';
+      get(ref(db, 'introConfig')).then(snap => { introCfg = snap.val() || {}; renderIntroPanel(); })
+        .catch(() => { introCfg = {}; renderIntroPanel(); });
+    }
+    function renderIntroPanel() {
+      const box = document.getElementById('intro-list');
+      const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+      box.innerHTML = Object.keys(HSIntro.GAMES).map(k => {
+        const c = introCfg[k] || {};
+        const def = HSIntro.GAMES[k];
+        const uploaded = typeof c.image === 'string' && c.image.startsWith('data:');
+        return `<div class="py-3 border-b border-[#1a1a2e]/10">
+          <div class="flex items-start gap-3">
+            <div class="w-28 h-16 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] overflow-hidden flex items-center justify-center text-[9px] text-center px-1"
+              style="${c.image ? `background:#1a1a2e url('${esc(c.image)}') center/${c.fit === 'contain' ? 'contain' : 'cover'} no-repeat` : 'background:linear-gradient(120deg,#2b0f54,#7017c9,#ff2e93,#ff8a3d);color:#fff'}">${c.image ? '' : 'Kein Bild<br>(Farbverlauf)'}</div>
+            <div class="flex-1 min-w-0 space-y-1.5">
+              <div class="flex items-center justify-between gap-2 flex-wrap">
+                <div class="font-jax font-extrabold text-sm">${esc(def)}</div>
+                <div class="flex items-center gap-2">
+                  <label class="text-[11px] font-bold flex items-center gap-1 cursor-pointer"><input type="checkbox" ${c.off ? '' : 'checked'} onchange="setIntroField('${k}','off', this.checked ? null : true)"> Intro zeigen</label>
+                  <button onclick="previewIntro('${k}')" class="jax-btn bg-[#ffd23f] text-[#1a1a2e] px-3 py-1 text-xs font-jax font-bold">▶ Vorschau</button>
+                </div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                <input type="text" autocomplete="off" value="${esc(c.title)}" placeholder="Titel (leer = ${esc(def)})" onchange="setIntroField('${k}','title', this.value.trim())" class="jax-input w-full text-xs" />
+                <input type="text" autocomplete="off" value="${esc(c.subtitle)}" placeholder="Spruch unter dem Titel (optional)" onchange="setIntroField('${k}','subtitle', this.value.trim())" class="jax-input w-full text-xs" />
+              </div>
+              <input type="text" autocomplete="off" value="${uploaded ? '' : esc(c.image)}" placeholder="${uploaded ? 'Hochgeladenes Bild ist gespeichert - ein Link hier ersetzt es' : 'Bild-Link einfügen (https://...) oder hochladen'}"
+                onchange="setIntroField('${k}','image', this.value.trim())" class="jax-input w-full text-xs" />
+              <div class="flex items-center gap-2 flex-wrap">
+                <label class="jax-btn bg-white text-[#1a1a2e] px-2.5 py-1.5 text-[11px] font-jax font-bold inline-block cursor-pointer">
+                  Bild hochladen<input type="file" accept="image/*" class="hidden" onchange="uploadIntroImage('${k}', this)" />
+                </label>
+                ${c.image ? `<button type="button" onclick="setIntroField('${k}','image', null)" class="jax-btn bg-[#ff2e93] text-white px-2.5 py-1.5 text-[11px] font-jax font-bold">Bild entfernen</button>` : ''}
+                <select onchange="setIntroField('${k}','fit', this.value === 'contain' ? 'contain' : null)" class="jax-input text-[11px] py-1">
+                  <option value="cover" ${c.fit === 'contain' ? '' : 'selected'}>Bild füllt den Schirm (Ränder evtl. abgeschnitten)</option>
+                  <option value="contain" ${c.fit === 'contain' ? 'selected' : ''}>Ganzes Bild zeigen (unscharfer Rand)</option>
+                </select>
+                <span id="intro-status-${k}" class="text-[10px] text-[#1a1a2e]/50"></span>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+    function introSaved(k, msg) {
+      const el = document.getElementById('intro-status-' + k) || document.getElementById('intro-status');
+      if (!el) return; el.innerText = msg; clearTimeout(el._t); el._t = setTimeout(() => el.innerText = '', 2500);
+    }
+    window.setIntroField = function(k, field, value) {
+      introCfg[k] = introCfg[k] || {};
+      if (field === 'image' && value && !value.startsWith('data:')) value = normalizeImageUrl(value);
+      if (value === '' || value == null) delete introCfg[k][field]; else introCfg[k][field] = value;
+      set(ref(db, 'introConfig/' + k + '/' + field), (value === '' || value == null) ? null : value)
+        .then(() => { if (field === 'image' || field === 'fit') renderIntroPanel(); introSaved(k, '✔ Gespeichert'); })
+        .catch((err) => introSaved(k, 'Fehler: ' + err.message));
+    };
+    window.uploadIntroImage = function(k, input) {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      introSaved(k, 'Wird verkleinert und gespeichert…');
+      compressImageFile(file, 1600).then((dataUrl) => setIntroField(k, 'image', dataUrl))
+        .catch((err) => { alert(err.message); introSaved(k, ''); });
+      input.value = '';
+    };
+    window.previewIntro = function(k) {
+      if (!window.HSIntro) return;
+      HSIntro.play(Object.assign({ page: k }, introCfg[k] || {}));
+    };
+
     window.onload = () => {
       renderGameTabs();
       loadActiveContent();
@@ -1748,6 +1831,14 @@
       </div>
       <div class="text-[11px] text-[#1a1a2e]/60 mt-1">Änderungen werden sofort gespeichert und gelten beim nächsten Laden der Seite auf allen Geräten. ▶ spielt den Sound an (Musik 15 Sekunden).</div>
       <div id="sound-slots"></div>
+    </div>
+
+    <!-- INTROS: eigenes Bild + Ladebalken mit den Fighter-Figuren je Spiel -->
+    <button onclick="toggleIntroPanel()" class="jax-btn bg-[#ffd23f] text-[#1a1a2e] px-4 py-2 text-xs font-jax font-bold">🎬 Intros (Bild je Spiel)</button>
+    <div id="intro-panel" class="hidden jax-card p-5 text-[#1a1a2e]">
+      <div class="font-jax font-extrabold text-sm">🎬 Spiel-Intros</div>
+      <div class="text-[11px] text-[#1a1a2e]/60 mt-1">Startet der Admin ein Spiel, sieht jeder zuerst ~9 Sekunden dieses Intro: dein Bild als Vollbild, der Titel und unten der Ladebalken, über den unsere Fighter laufen und Zombies umhauen. Änderungen werden sofort gespeichert. Am besten Querformat-Bilder (z.B. 1600×900).</div>
+      <div id="intro-list"></div>
     </div>
 
     <!-- SPIEL-EINSTELLUNGEN (nur bei Spielen, die man selbst benennen/anpassen kann) -->

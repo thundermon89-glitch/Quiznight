@@ -3,6 +3,7 @@
 <head>
   <script src="gif-keep.js"></script>
   <script src="sounds/hs-audio.js"></script>
+  <script src="game-intro.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hirnschmalz-Arena - Goldregen</title>
@@ -100,7 +101,7 @@
     const COIN_POINTS = 2;          // normale Münze
     const BONUS_POINTS = 6;         // seltene, große, schnelle Glitzer-Münze
     const RAIN_DURATION_MS = 30000;
-    const START_DELAY_MS = 4000;    // 3-2-1-Countdown, damit alle Geräte die Seite geladen haben
+    const START_DELAY_MS = 13000;   // 9 s Spiel-Intro (game-intro.js) + 3-2-1-Countdown
 
     let playerId = localStorage.getItem("quiz_player_id");
     let isHost = false;

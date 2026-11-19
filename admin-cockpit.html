@@ -693,7 +693,7 @@
       if (!confirm("Snake starten? Alle Spieler werden 2 Minuten lang zum Zwischenspiel mitgenommen.")) return;
       set(ref(db, 'snakeState'), {
         status: 'active',
-        startedAt: Date.now(),
+        startedAt: Date.now() + 9000,   // erst nach dem Spiel-Intro (game-intro.js, 9 s) loslegen
         scores: null,
         finished: null
       }).then(() => {
