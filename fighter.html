@@ -45,6 +45,14 @@
     // EINSTELLUNGEN
     // =====================================================================================
     const W = 960, H = 540, GROUND = 468;
+    // Größere Arena: die Welt ist breiter als der Bildschirm, die Kamera folgt beiden Kämpfern
+    const WORLD_W = 1620;
+    const START_L = WORLD_W / 2 - 260, START_R = WORLD_W / 2 + 260;
+    const MAX_SEP = W - 150;           // weiter auseinander geht nicht (beide bleiben im Bild)
+    // Kisten: am Rand und in der Mitte. Man kann draufspringen, sie zerschlagen oder hochheben und werfen.
+    const CRATE_W = 84, CRATE_H = 78, CRATE_HP = 30;
+    const CRATES = [{ x: 150 }, { x: WORLD_W / 2 - 42 }, { x: WORLD_W / 2 + 42 }, { x: WORLD_W - 150 }];
+    const CRATE_THROW = { dmg: 14, type: 'mid', stun: 20, bstun: 12, kb: 9, en: 8, kd: true };
     const ROUND_SECONDS = 60;      // Zeit pro Runde
     const WINS_NEEDED = 1;         // Best of 1: eine gewonnene Runde entscheidet den Kampf (bei Unentschieden gibt es eine weitere Runde)
     const START_HP = 100;
@@ -248,7 +256,9 @@
     const SUPER_FRAMES = 600;          // Superpower hält 10 Sekunden
     const SUPER_DMG = 1.5;             // Schaden während der Superpower
     const FLOOR_Y = 390;               // ab hier beginnt der Boden (Kai) im Hintergrund
-    const LO = 3, LW = 320, LH = 180;  // Pixel-Auflösung des Hintergrunds (wird 3-fach vergrößert)
+    const LO = 3, LW = WORLD_W / 3, LH = 180;  // Pixel-Auflösung des Hintergrunds (wird 3-fach vergrößert), so breit wie die Welt
+    // Positionen im Hintergrund (Pixel-Auflösung, Welt ist LW breit)
+    const MOON_X = 290, LAMP_X = Math.round(LW / 2), CRANES = [[150, 62, false], [300, 50, true], [410, 58, false]];
 
     const headImgCache = {};
     // Pixel-Porträts (aus Spiel 3) für Anzeige & Siegerehrung - keine 3D-Köpfe mehr
@@ -857,15 +867,98 @@
     }
 
     // =====================================================================================
+    // KISTEN
+    // Jeder Kämpfer schickt mit, wie viel Schaden er an welcher Kiste gemacht hat (cdm), welche er
+    // geworfen hat (cg, Bitmaske), welche er gerade trägt (ch) und wo seine geworfene Kiste fliegt (ct).
+    // Daraus ergibt sich auf allen Geräten derselbe Zustand.
+    // =====================================================================================
+    function crateState() {
+      const res = CRATES.map(c => ({ x: c.x, dmg: 0, gone: false, heldBy: null }));
+      if (!meta || !meta.cur) return res;
+      const rk = meta.cur.rk;
+      for (const pid of [meta.cur.p1, meta.cur.p2]) {
+        let src = null;
+        if (pid === playerId && my && myRk === rk) src = my;
+        else { const f = remoteF[pid]; if (f && f.rk === rk) src = f; }
+        if (!src) continue;
+        res.forEach((c, i) => {
+          c.dmg += (src.cdm && src.cdm[i]) || 0;
+          if ((src.cg || 0) & (1 << i)) c.gone = true;
+          if (src.ch === i) c.heldBy = pid;
+        });
+      }
+      res.forEach(c => { if (c.dmg >= CRATE_HP) c.gone = true; });
+      return res;
+    }
+    function crateSolid(c) { return !c.gone && !c.heldBy; }
+    // Höhe, auf der man an Stelle x steht (Kistendeckel oder Boden)
+    function supportAt(x, crates) {
+      for (const c of crates) if (crateSolid(c) && Math.abs(x - c.x) <= CRATE_W / 2 + 12) return CRATE_H;
+      return 0;
+    }
+    // Trifft ein Angriff eine Kiste? (gibt den Index zurück oder -1)
+    function crateHitBy(x, face, reach, h1, h2, crates) {
+      const ax1 = Math.min(x + face * 20, x + face * reach), ax2 = Math.max(x + face * 20, x + face * reach);
+      let best = -1, bd = 1e9;
+      crates.forEach((c, i) => {
+        if (!crateSolid(c)) return;
+        if (ax2 < c.x - CRATE_W / 2 || ax1 > c.x + CRATE_W / 2) return;
+        if (!(h2 > 0 && h1 < CRATE_H)) return;
+        const d = Math.abs(c.x - x); if (d < bd) { bd = d; best = i; }
+      });
+      return best;
+    }
+    // Kiste neben mir (zum Hochheben)
+    function nearCrate(crates) {
+      let best = -1, bd = 1e9;
+      crates.forEach((c, i) => {
+        if (!crateSolid(c) || my.y > 5) return;
+        const d = Math.abs(c.x - my.x);
+        if (d < CRATE_W / 2 + HALF_W + 34 && d < bd) { bd = d; best = i; }
+      });
+      return best;
+    }
+    // Kiste zerbricht: Holzsplitter fliegen
+    function crateBurst(x, y, big) {
+      const cols = ['#8a5a2b', '#b07a3c', '#5e3b1a', '#d9a86a'];
+      for (let i = 0; i < (big ? 26 : 8); i++) {
+        const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * (big ? 8 : 4);
+        particles.push({ x: x + (Math.random() - 0.5) * 40, y: y + (Math.random() - 0.5) * 30, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 3, life: 24 + Math.random() * 18, color: cols[i % cols.length] });
+      }
+      if (big) { shake = Math.max(shake, 6); sfx('hit', { heavy: true }); } else sfx('block');
+    }
+    // Effekte für Kisten, die andere zerstört haben (läuft bei allen Geräten, auch bei Zuschauern)
+    let crateSeen = { rk: null, broken: [], ct: {}, ch: {} };
+    function crateFxStep() {
+      if (!meta || !meta.cur) return;
+      const rk = meta.cur.rk;
+      if (crateSeen.rk !== rk) crateSeen = { rk, broken: CRATES.map(() => false), ct: {}, ch: {} };
+      crateState().forEach((c, i) => {
+        if (c.dmg >= CRATE_HP && !crateSeen.broken[i]) { crateSeen.broken[i] = true; crateBurst(c.x, GROUND - CRATE_H / 2, true); }
+      });
+      for (const pid of [meta.cur.p1, meta.cur.p2]) {
+        if (pid === playerId && my) continue;
+        const f = remoteF[pid]; if (!f || f.rk !== rk) continue;
+        const prevCt = crateSeen.ct[pid];
+        if (prevCt && !f.ct) crateBurst(prevCt.x, GROUND - Math.max(prevCt.y, 36), true);   // geworfene Kiste ist aufgeschlagen
+        crateSeen.ct[pid] = f.ct || null;
+        const ch = f.ch == null ? -1 : f.ch, prevCh = crateSeen.ch[pid];
+        if (prevCh != null && prevCh >= 0 && ch < 0 && !f.ct) crateBurst(f.x, GROUND - (f.y || 0) - 200, true); // beim Treffer fallen gelassen
+        crateSeen.ch[pid] = ch;
+      }
+    }
+
+    // =====================================================================================
     // EIGENER KÄMPFER
     // =====================================================================================
     function resetMyFighter(rk) {
       const cur = meta.cur;
       const left = cur.p1 === playerId;
       const keepEn = my && myRk && myRk.split('_').slice(0, 2).join('_') === rk.split('_').slice(0, 2).join('_') ? my.en : 0;
-      my = { x: left ? 300 : 660, y: 0, vx: 0, vy: 0, face: left ? 1 : -1, act: 'idle', actF: 0, seq: (my ? my.seq + 1 : 1),
+      my = { x: left ? START_L : START_R, y: 0, vx: 0, vy: 0, face: left ? 1 : -1, act: 'idle', actF: 0, seq: (my ? my.seq + 1 : 1),
              hp: START_HP, en: keepEn, cr: false, hitDone: false, airAtk: false, stunF: 0, kbv: 0, spCd: 0, blockCr: false,
-             sp: 0, dj: false, hid: 0, hh: 0, hd: 0, px: left ? 300 : 660, py: 0 };
+             sp: 0, dj: false, hid: 0, hh: 0, hd: 0, px: left ? START_L : START_R, py: 0,
+             cdm: CRATES.map(() => 0), cg: 0, ch: -1, ct: null, thr: false };
       myRk = rk; myProj = null;
       set(ref(db, FS + '/proj/' + playerId), null);
       writeMe(true);
@@ -873,7 +966,7 @@
 
     function setAct(act) {
       if (!my) return;
-      my.act = act; my.actF = 0; my.seq++; my.hitDone = false;
+      my.act = act; my.actF = 0; my.seq++; my.hitDone = false; my.thr = false;
       if (['punch', 'cpunch'].includes(act)) sfx('whoosh');
       else if (['kick', 'sweep', 'jkick', 'super'].includes(act)) sfx('whooshHeavy');
       else if (act === 'jump') sfx('jump');
@@ -888,15 +981,18 @@
       set(ref(db, FS + '/f/' + playerId), {
         x: Math.round(my.x * 10) / 10, y: Math.round(my.y * 10) / 10, face: my.face, act: my.act, seq: my.seq,
         hp: my.hp, en: Math.round(my.en), cr: my.cr, bc: my.blockCr, rk: myRk,
-        sp: my.sp > 0 ? 1 : 0, hid: my.hid, hh: my.hh, hd: my.hd
+        sp: my.sp > 0 ? 1 : 0, hid: my.hid, hh: my.hh, hd: my.hd,
+        // Kisten: Schaden je Kiste, geworfene (Bitmaske), getragene, fliegende
+        cdm: my.cdm, cg: my.cg, ch: my.ch, ct: my.ct ? { x: Math.round(my.ct.x), y: Math.round(my.ct.y), r: Math.round(my.ct.r * 10) / 10 } : null
       });
     }
 
-    // Steuerung: Pfeile/A-D laufen, ↓/S ducken, Leertaste springen, Strg Schlag, Y Tritt, Strg+Y Spezial
+    // Steuerung: Pfeile/A-D laufen, ↓/S ducken, Leertaste springen, Strg Schlag, Y Tritt, Strg+Y Spezial, E Kiste heben/werfen
     const CODEMAP = {
       ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowDown: 'down', KeyS: 'down',
       Space: 'up', ArrowUp: 'up', ControlLeft: 'punch', ControlRight: 'punch',
-      KeyZ: 'kick', KeyY: 'kick', IntlBackslash: 'kick', KeyX: 'kick' // Y (dt. Tastatur), Z (US), < und X - kein Shift wegen Windows-Einrastfunktion
+      KeyZ: 'kick', KeyY: 'kick', IntlBackslash: 'kick', KeyX: 'kick', // Y (dt. Tastatur), Z (US), < und X - kein Shift wegen Windows-Einrastfunktion
+      KeyE: 'grab' // Kiste hochheben / werfen
     };
     window.addEventListener('keydown', (e) => {
       const k = CODEMAP[e.code];
@@ -918,7 +1014,7 @@
       const f = remoteF[oid];
       if (!f || f.rk !== myRk) {
         const left = meta.cur.p1 === oid;
-        return { x: left ? 300 : 660, y: 0, cr: false, act: 'idle', face: left ? 1 : -1 };
+        return { x: left ? START_L : START_R, y: 0, cr: false, act: 'idle', face: left ? 1 : -1 };
       }
       return f;
     }
@@ -931,7 +1027,11 @@
       const opp = oppState();
       const forwardKey = my.face === 1 ? 'right' : 'left';
       const backKey = my.face === 1 ? 'left' : 'right';
-      const grounded = my.y <= 0 && my.vy <= 0;
+      const crates = crateState();
+      const sup = supportAt(my.x, crates);                 // Boden oder Kistendeckel unter mir
+      const grounded = my.y <= sup + 0.01 && my.vy <= 0;
+      // Von der Kiste runtergelaufen (oder Kiste unter mir zerbrochen): fallen
+      if (my.y > sup + 0.01 && my.vy === 0 && ['idle', 'walk', 'walkb', 'crouch'].includes(my.act)) setAct('jump');
 
       // Angriffstasten 3 Frames puffern: Strg + Y zusammen = Spezialangriff
       if (keysPressed.has('punch') || keysPressed.has('kick')) {
@@ -961,12 +1061,15 @@
       my.actF++;
 
       // --- Physik ---
-      if (!grounded || my.vy > 0) {
+      if (!grounded || my.vy > 0 || my.y > sup + 0.01) {
+        const prevY = my.y;
         my.vy -= GRAV; my.y += my.vy; my.x += my.vx;
-        if (my.y <= 0) {
-          my.y = 0; my.vy = 0; my.vx = 0; my.airAtk = false; my.dj = false;
+        const s2 = supportAt(my.x, crates);
+        const floor = s2 > 0 && prevY >= s2 - 2 ? s2 : 0;   // auf eine Kiste nur von oben landen
+        if (my.y <= floor) {
+          my.y = floor; my.vy = 0; my.vx = 0; my.airAtk = false; my.dj = false;
           if (my.act === 'jump' || my.act === 'jkick') { sfx('land'); setAct(keysDown.has('down') ? 'crouch' : 'idle'); }
-          if (my.act === 'kd' || my.act === 'ko') floorCrack(my.x + my.face * 40, GROUND + 4, 5);
+          if ((my.act === 'kd' || my.act === 'ko') && floor === 0) floorCrack(my.x + my.face * 40, GROUND + 4, 5);
         }
       }
       if (my.kbv) { my.x += my.kbv; my.kbv *= 0.82; if (Math.abs(my.kbv) < 0.3) my.kbv = 0; }
@@ -982,10 +1085,26 @@
       if (my.act === 'super' && my.actF < MOVES.super.start + MOVES.super.active) my.x += my.face * 8;
 
       // --- Geschoss abfeuern ---
+      if (my.act === 'punch' && my.actF === MOVES.punch.start && my.thr) {
+        // Kiste werfen (statt Spezialgeschoss)
+        if (my.ch >= 0) {
+          my.ct = { i: my.ch, x: my.x + my.face * 40, y: my.y + 175, vx: my.face * 10.5, vy: 3.5, r: 0, dir: my.face };
+          my.cg |= 1 << my.ch; my.ch = -1; writeMe(true);
+        }
+      }
       if (my.act === 'special' && my.actF === MOVES.special.start) {
         myProj = { x: my.x + my.face * 70, dir: my.face, id: playerId + '_' + (++hitCounter), dead: false };
         set(ref(db, FS + '/proj/' + playerId), { x0: myProj.x, dir: myProj.dir, id: myProj.id, rk: myRk });
         sfx('special', charFor(myName).proj);
+      }
+
+      // --- Kisten: E hebt eine Kiste neben dir hoch, E oder ein Angriff wirft sie ---
+      const freeNow = ['idle', 'walk', 'walkb', 'crouch'].includes(my.act) && grounded;
+      if (fighting && freeNow && my.ch >= 0 && (keysPressed.has('grab') || atk)) {
+        my.cr = false; setAct('punch'); my.thr = true; atk = null; sfx('whooshHeavy');
+      } else if (fighting && freeNow && my.ch < 0 && !my.ct && keysPressed.has('grab')) {
+        const ci = nearCrate(crates);
+        if (ci >= 0) { my.ch = ci; my.cr = false; setAct('idle'); sfx('block'); writeMe(true); }
       }
 
       // --- Eingaben ---
@@ -1000,7 +1119,18 @@
         } else if (keysDown.has('up')) {
           my.cr = false; my.vy = JUMP_V; my.dj = false;
           my.vx = keysDown.has('right') ? JUMP_VX : keysDown.has('left') ? -JUMP_VX : 0;
-          my.y = 0.01; setAct('jump');
+          // Steht eine Kiste in Sprungrichtung nah genug? Dann genau auf ihren Deckel springen (draufsteigen)
+          if (my.vx && sup === 0) {
+            const dir = Math.sign(my.vx), airT = 2 * JUMP_V / GRAV;
+            let tgt = null;
+            for (const c of crates) {
+              if (!crateSolid(c)) continue;
+              const d = (c.x - my.x) * dir;
+              if (d > 0 && d < 230 && (!tgt || d < (tgt.x - my.x) * dir)) tgt = c;
+            }
+            if (tgt) my.vx = (tgt.x - my.x) / airT;
+          }
+          my.y = sup + 0.01; setAct('jump');
         } else if (keysDown.has('down')) {
           my.cr = true; if (my.act !== 'crouch') setAct('crouch');
         } else if (keysDown.has(forwardKey)) {
@@ -1030,26 +1160,43 @@
       }
 
       // --- Wegschieben: Kämpfer können nicht ineinander stehen (außer beim Drüberspringen) ---
-      if (opp && my.y < 90 && (opp.y || 0) < 90 && !['kd', 'ko'].includes(opp.act)) {
+      if (opp && Math.abs(my.y - (opp.y || 0)) < 60 && !['kd', 'ko'].includes(opp.act)) {
         const dx = my.x - opp.x;
         if (Math.abs(dx) < PUSH_DIST) {
           const dir = dx === 0 ? -my.face : Math.sign(dx);
           my.x = opp.x + dir * PUSH_DIST;
         }
       }
-      my.x = Math.max(isCage() ? 70 : 45, Math.min(W - (isCage() ? 70 : 45), my.x));
+      // Kisten sind Hindernisse: seitlich kommt man nicht durch, nur drüber
+      for (const c of crates) {
+        if (!crateSolid(c)) continue;
+        const half = CRATE_W / 2 + 20;
+        if (my.y < CRATE_H - 6 && !(my.vy > 0) && Math.abs(my.x - c.x) < half) my.x =   // beim Hochspringen nicht, sonst kommt man nie hinauf
+           (my.px != null ? my.px : my.x) <= c.x ? c.x - half : c.x + half;
+      }
+      // Beide Kämpfer bleiben im Bild, und niemand verlässt die Arena
+      if (opp) my.x = Math.max(opp.x - MAX_SEP, Math.min(opp.x + MAX_SEP, my.x));
+      my.x = Math.max(isCage() ? 70 : 45, Math.min(WORLD_W - (isCage() ? 70 : 45), my.x));
       // Wer am Boden liegt, soll komplett sichtbar bleiben (nicht halb aus dem Bild ragen)
       if (['kd', 'ko', 'getup'].includes(my.act)) {
-        my.x = my.face === 1 ? Math.max(235, my.x) : Math.min(W - 235, my.x);
+        my.x = my.face === 1 ? Math.max(235, my.x) : Math.min(WORLD_W - 235, my.x);
       }
 
       // --- Treffer prüfen (der Angreifer entscheidet, ob er trifft) ---
       const mv = MOVES[my.act];
-      if (fighting && mv && mv.dmg && !my.hitDone && my.actF >= mv.start && my.actF < mv.start + mv.active && opp) {
-        const baseH = mv.air ? my.y : 0;
-        if (overlapsOpponent(my.x, my.face, mv.reach, baseH + mv.h1, baseH + mv.h2, opp)) {
+      if (fighting && mv && mv.dmg && !my.thr && !my.hitDone && my.actF >= mv.start && my.actF < mv.start + mv.active) {
+        const baseH = my.y;   // auf einer Kiste schlägt man von dort oben
+        if (opp && overlapsOpponent(my.x, my.face, mv.reach, baseH + mv.h1, baseH + mv.h2, opp)) {
           my.hitDone = true;
           sendHit(mv, my.face, opp);
+        } else {
+          const ci = crateHitBy(my.x, my.face, mv.reach, baseH + mv.h1, baseH + mv.h2, crates);
+          if (ci >= 0) {
+            my.hitDone = true; hitstop = 3;
+            my.cdm[ci] += Math.round(mv.dmg * (my.sp > 0 ? SUPER_DMG : 1));
+            crateBurst(CRATES[ci].x - my.face * 20, GROUND - CRATE_H * 0.6, false);
+            writeMe(true);
+          }
         }
       }
 
@@ -1060,9 +1207,25 @@
           sendHit(PROJ, myProj.dir, opp);
           spawnSpark(myProj.x, GROUND - 110, '#ffd23f', 18);
           myProj = null; set(ref(db, FS + '/proj/' + playerId), null);
-        } else if (myProj.x < -60 || myProj.x > W + 60) {
+        } else if (myProj.x < -60 || myProj.x > WORLD_W + 60) {
           myProj = null; set(ref(db, FS + '/proj/' + playerId), null);
         }
+      }
+
+      // --- Geworfene Kiste fliegt, trifft den Gegner oder zerschellt ---
+      if (my.ct) {
+        const c = my.ct;
+        c.x += c.vx; c.vy -= 0.55; c.y += c.vy; c.r += 0.16 * c.dir;
+        let done = false;
+        if (fighting && opp && Math.abs(c.x - opp.x) < HALF_W + 36) {
+          const oh = oppHeight(opp), oy = opp.y || 0;
+          if (oh > 0 && c.y + 36 >= oy && c.y - 36 <= oy + oh) { sendHit(CRATE_THROW, c.dir, opp); done = true; }
+        }
+        if (!done) {
+          const j = crates.findIndex(k => crateSolid(k) && Math.abs(k.x - c.x) < CRATE_W - 6 && c.y - 36 < CRATE_H);
+          if (j >= 0) { my.cdm[j] += 20; done = true; }   // Kiste auf Kiste
+        }
+        if (done || c.y <= 36 || c.x < -40 || c.x > WORLD_W + 40) { crateBurst(c.x, GROUND - Math.max(c.y, 36), true); my.ct = null; writeMe(true); }
       }
 
       keysPressed.clear();
@@ -1113,7 +1276,7 @@
     function receiveHit(h) {
       if (['kd', 'ko', 'getup'].includes(my.act)) return;
       if (h.type === 'high' && my.cr) return; // drunter weggeduckt
-      const grounded = my.y <= 0;
+      const grounded = my.y <= supportAt(my.x, crateState()) + 0.01;
       const backKey = my.face === 1 ? 'left' : 'right';
       const wantsBlock = keysDown.has(backKey) || keysDown.has('block');
       const canBlock = grounded && wantsBlock && ['idle', 'walk', 'walkb', 'crouch', 'block'].includes(my.act);
@@ -1133,6 +1296,8 @@
         spawnSpark(my.x - my.face * 25, GROUND - (crouching ? 60 : 120), '#7dd3fc', 8);
         sfx('block');
       } else {
+        // Wer getroffen wird, lässt seine Kiste fallen - sie zerbricht
+        if (my.ch >= 0) { my.cg |= 1 << my.ch; my.ch = -1; crateBurst(my.x, GROUND - my.y - 200, true); }
         my.hp = Math.max(0, my.hp - h.dmg);
         if (!my.sp) my.en = Math.min(100, my.en + 4);
         my.kbv = h.dir * h.kb;
@@ -1240,9 +1405,9 @@
       // Sterne
       for (let i = 0; i < 70; i++) px(g, rnd() * LW, rnd() * 60, 1, 1, rnd() < 0.3 ? '#fff6d5' : '#8f8fc9');
       // Mond mit Hof
-      for (let r = 16; r > 10; r -= 2) { g.fillStyle = `rgba(255,240,200,${0.04})`; g.beginPath(); g.arc(150, 50, r, 0, Math.PI * 2); g.fill(); }
-      g.fillStyle = '#f3ead0'; g.beginPath(); g.arc(150, 50, 8, 0, Math.PI * 2); g.fill();
-      px(g, 147, 46, 2, 2, '#d8cda9'); px(g, 152, 51, 3, 2, '#d8cda9'); px(g, 148, 53, 1, 1, '#d8cda9');
+      for (let r = 16; r > 10; r -= 2) { g.fillStyle = `rgba(255,240,200,${0.04})`; g.beginPath(); g.arc(MOON_X, 50, r, 0, Math.PI * 2); g.fill(); }
+      g.fillStyle = '#f3ead0'; g.beginPath(); g.arc(MOON_X, 50, 8, 0, Math.PI * 2); g.fill();
+      px(g, MOON_X - 3, 46, 2, 2, '#d8cda9'); px(g, MOON_X + 2, 51, 3, 2, '#d8cda9'); px(g, MOON_X - 2, 53, 1, 1, '#d8cda9');
       // Ferne Stadt am anderen Ufer
       let x = 0;
       while (x < LW) {
@@ -1263,7 +1428,7 @@
         px(g, cx + len * 0.8, base - h + 1, 1, 14, '#3a3070');
         px(g, cx + len * 0.8 - 2, base - h + 15, 5, 3, '#3a3070');
       };
-      crane(118, 62, false); crane(214, 50, true);
+      CRANES.forEach(([cx, h, flip]) => crane(cx, h, flip));
       // Wasser
       for (let y = 100; y < 118; y++) px(g, 0, y, LW, 1, y % 3 === 0 ? '#101a40' : '#0c1535');
       // Kai-Kante (Mauer zum Wasser) mit Pollern
@@ -1288,12 +1453,13 @@
         for (let rx = cx + 2; rx < cx + w - 1; rx += 3) px(g, rx, cy + 1, 1, h - 2, dark);
         px(g, cx, cy, w, 1, '#00000055'); px(g, cx, cy + h - 1, w, 1, dark); px(g, cx, cy, 1, h, dark); px(g, cx + w - 1, cy, 1, h, dark);
       };
-      cont(236, 106, 84, 24, '#8c3b2a', '#5e2419'); cont(250, 82, 70, 24, '#2f6f73', '#1d4a4d'); cont(228, 82, 22, 24, '#b4892e', '#7d5d1c');
-      cont(268, 58, 52, 24, '#6b3d6e', '#472849');
-      px(g, 240, 112, 30, 6, '#00000033');
+      const CO = LW - 320; // Container stehen am rechten Ende der Welt
+      cont(CO + 236, 106, 84, 24, '#8c3b2a', '#5e2419'); cont(CO + 250, 82, 70, 24, '#2f6f73', '#1d4a4d'); cont(CO + 228, 82, 22, 24, '#b4892e', '#7d5d1c');
+      cont(CO + 268, 58, 52, 24, '#6b3d6e', '#472849');
+      px(g, CO + 240, 112, 30, 6, '#00000033');
       // Laterne in der Mitte hinten
-      px(g, 171, 62, 2, 60, '#1b1724'); px(g, 167, 60, 10, 3, '#1b1724'); px(g, 168, 63, 8, 5, '#ffe7a3'); px(g, 167, 68, 10, 1, '#1b1724');
-      px(g, 169, 120, 6, 2, '#1b1724');
+      px(g, LAMP_X, 62, 2, 60, '#1b1724'); px(g, LAMP_X - 4, 60, 10, 3, '#1b1724'); px(g, LAMP_X - 3, 63, 8, 5, '#ffe7a3'); px(g, LAMP_X - 4, 68, 10, 1, '#1b1724');
+      px(g, LAMP_X - 2, 120, 6, 2, '#1b1724');
       // Boden: Kopfsteinpflaster mit Perspektive (Reihen werden nach vorn größer)
       let y = FL, row = 0;
       while (y < LH) {
@@ -1310,7 +1476,7 @@
       }
       px(g, 0, FL, LW, 1, '#5d5670');
       // Pfützen
-      for (const [cx, cy, w] of [[60, 150, 26], [228, 140, 18], [130, 170, 34]]) {
+      for (const [cx, cy, w] of [[60, 150, 26], [228, 140, 18], [130, 170, 34], [330, 156, 24], [430, 168, 30], [500, 145, 16]]) {
         g.fillStyle = '#1a2348'; g.beginPath(); g.ellipse(cx, cy, w / 2, w / 9, 0, 0, Math.PI * 2); g.fill();
         px(g, cx - w / 4, cy - 1, w / 3, 1, '#4c5b9a'); px(g, cx + 2, cy + 1, w / 6, 1, '#34407a');
       }
@@ -1325,15 +1491,15 @@
       for (let y = 0; y < FL; y++) px(g, 0, y, LW, 1, y < 20 ? '#0b0b10' : `rgb(${22 + y / 12 | 0},${20 + y / 14 | 0},${28 + y / 10 | 0})`);
       for (let i = 0; i < 260; i++) px(g, rnd() * LW, 20 + rnd() * (FL - 20), 1 + rnd() * 3, 1, 'rgba(0,0,0,0.25)');
       // Stahlträger
-      for (const bx of [20, 100, 212, 292]) { px(g, bx, 14, 8, FL - 14, '#2c2a33'); px(g, bx + 1, 14, 1, FL - 14, '#45424f'); px(g, bx - 2, 14, 12, 3, '#3a3743'); px(g, bx - 2, FL - 4, 12, 4, '#3a3743');
+      for (let bx = 20; bx < LW; bx += 90) { px(g, bx, 14, 8, FL - 14, '#2c2a33'); px(g, bx + 1, 14, 1, FL - 14, '#45424f'); px(g, bx - 2, 14, 12, 3, '#3a3743'); px(g, bx - 2, FL - 4, 12, 4, '#3a3743');
         for (let ry = 22; ry < FL - 6; ry += 10) px(g, bx + 3, ry, 2, 1, '#55525f'); }
       // Fachwerk unter der Decke
       px(g, 0, 12, LW, 3, '#33303b'); px(g, 0, 24, LW, 2, '#2a2731');
       for (let x = 0; x < LW; x += 12) for (let i = 0; i < 12; i++) { px(g, x + i, 14 + i, 1, 1, '#2a2731'); }
       // Hängende Scheinwerfer
-      for (const lx of [70, 160, 250]) { px(g, lx, 15, 1, 8, '#1a1820'); px(g, lx - 5, 23, 11, 5, '#1a1820'); px(g, lx - 4, 27, 9, 2, '#fff2c4'); }
+      for (let lx = 70; lx < LW; lx += 100) { px(g, lx, 15, 1, 8, '#1a1820'); px(g, lx - 5, 23, 11, 5, '#1a1820'); px(g, lx - 4, 27, 9, 2, '#fff2c4'); }
       // Banner "GRAND FINALE"-Fahnen
-      for (const [bx, col] of [[46, '#9e1b1b'], [262, '#9e1b1b'], [132, '#c9a227'], [180, '#c9a227']]) {
+      for (const [bx, col] of [[46, '#9e1b1b'], [LW - 58, '#9e1b1b'], [LW / 2 - 40, '#c9a227'], [LW / 2 + 26, '#c9a227'], [160, '#c9a227'], [LW - 174, '#c9a227']]) {
         px(g, bx, 30, 14, 26, col); px(g, bx, 30, 14, 2, '#00000055');
         for (let i = 0; i < 7; i++) px(g, bx + i, 56 + (i / 2 | 0), 1, 3 - (i / 2 | 0), col), px(g, bx + 13 - i, 56 + (i / 2 | 0), 1, 3 - (i / 2 | 0), col);
         px(g, bx + 4, 38, 6, 6, '#ffffff33');
@@ -1350,8 +1516,8 @@
       while (y < LH) { const rh = Math.round(3 + row * 0.9); px(g, 0, y, LW, rh, row % 2 ? '#24232e' : '#282733'); y += rh; row++; }
       px(g, 0, FL, LW, 1, '#5d5670');
       g.strokeStyle = '#c9a227'; g.lineWidth = 1;
-      g.beginPath(); g.ellipse(LW / 2, 156, 140, 20, 0, 0, Math.PI * 2); g.stroke();
-      g.strokeStyle = '#7a1010'; g.beginPath(); g.ellipse(LW / 2, 156, 148, 22, 0, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.ellipse(LW / 2, 156, LW / 2 - 30, 20, 0, 0, Math.PI * 2); g.stroke();
+      g.strokeStyle = '#7a1010'; g.beginPath(); g.ellipse(LW / 2, 156, LW / 2 - 22, 22, 0, 0, Math.PI * 2); g.stroke();
       // Logo auf der Matte
       g.fillStyle = 'rgba(201,162,39,0.22)'; g.beginPath(); g.ellipse(LW / 2, 158, 34, 8, 0, 0, Math.PI * 2); g.fill();
       for (let i = 0; i < 6; i++) { g.fillStyle = `rgba(0,0,0,${0.06 * i})`; g.fillRect(0, LH - 6 + i, LW, 1); }
@@ -1367,12 +1533,12 @@
       }
       lf.drawImage(decal, 0, 0);
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(loFrame, 0, 0, W, H);
+      ctx.drawImage(loFrame, 0, 0, WORLD_W, H);
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(decalHi, 0, 0);
       // Scheinwerferkegel (schwenken leicht)
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      [[210, 0.9], [480, 1.3], [750, 1.1]].forEach(([lx, sp], i) => {
+      [[300, 0.9], [810, 1.3], [1320, 1.1]].forEach(([lx, sp], i) => {
         const tx = lx + Math.sin(t / (1400 * sp) + i) * 90;
         const gr = ctx.createLinearGradient(0, 85, 0, GROUND + 40);
         gr.addColorStop(0, 'rgba(255,240,200,0.22)'); gr.addColorStop(1, 'rgba(255,240,200,0.02)');
@@ -1381,15 +1547,15 @@
         ctx.fillStyle = 'rgba(255,240,200,0.10)'; ctx.beginPath(); ctx.ellipse(tx, GROUND + 8, 120, 22, 0, 0, Math.PI * 2); ctx.fill();
       });
       ctx.restore();
-      if (meta && meta.cur && meta.phase !== 'done') bigText(meta.cur.kind === 'S' ? 'HALBFINALE' : 'GRAND FINALE', 128, '#c9a227', 26);
     }
     // Vordere Käfigpfosten werden ÜBER die Kämpfer gezeichnet - so stehen sie wirklich im Käfig
     function drawCageForeground() {
-      ctx.fillStyle = '#0d0c10'; ctx.fillRect(0, 150, 24, H - 150); ctx.fillRect(W - 24, 150, 24, H - 150);
-      ctx.fillStyle = '#7a1010'; ctx.fillRect(0, 300, 27, 80); ctx.fillRect(W - 27, 300, 27, 80);
+      const WW = WORLD_W;
+      ctx.fillStyle = '#0d0c10'; ctx.fillRect(0, 150, 24, H - 150); ctx.fillRect(WW - 24, 150, 24, H - 150);
+      ctx.fillStyle = '#7a1010'; ctx.fillRect(0, 300, 27, 80); ctx.fillRect(WW - 27, 300, 27, 80);
       ctx.fillStyle = 'rgba(170,175,190,0.25)';
-      for (let y = 150; y < H; y += 9) { ctx.fillRect(24, y, 30, 3); ctx.fillRect(W - 54, y, 30, 3); }
-      ctx.fillStyle = '#141318'; ctx.fillRect(0, H - 18, W, 18); ctx.fillStyle = '#3a3843'; ctx.fillRect(0, H - 18, W, 3);
+      for (let y = 150; y < H; y += 9) { ctx.fillRect(24, y, 30, 3); ctx.fillRect(WW - 54, y, 30, 3); }
+      ctx.fillStyle = '#141318'; ctx.fillRect(0, H - 18, WW, 18); ctx.fillStyle = '#3a3843'; ctx.fillRect(0, H - 18, WW, 3);
     }
 
     function drawStage(t) {
@@ -1401,9 +1567,9 @@
       const r = seeded(77);
       for (let i = 0; i < 14; i++) { const sx = r() * LW, sy = r() * 55, ph = r() * 6; if (Math.sin(t / 400 + ph) > 0.6) px(lf, sx, sy, 1, 1, '#ffffff'); }
       // Alles auf dem Wasser nur zwischen Kneipe und Containern zeichnen
-      lf.save(); lf.beginPath(); lf.rect(82, 88, 146, 30); lf.clip();
+      lf.save(); lf.beginPath(); lf.rect(82, 88, LW - 92 - 82, 30); lf.clip();
       // Fähre fährt langsam übers Wasser
-      const fx = ((t / 90) % 230) + 30;
+      const fx = ((t / 90) % (LW - 110)) + 30;
       px(lf, fx, 103, 46, 5, '#141029'); px(lf, fx + 6, 99, 30, 4, '#1b1636'); px(lf, fx + 14, 95, 8, 4, '#1b1636');
       for (let i = 0; i < 7; i++) px(lf, fx + 8 + i * 4, 100, 2, 1, i % 3 ? '#ffd88a' : '#9fd2ff');
       px(lf, fx + 1, 104, 1, 1, Math.sin(t / 300) > 0 ? '#ff4d4d' : '#141029');
@@ -1415,29 +1581,30 @@
       }
       for (let y = 101; y < 118; y += 2) {
         const o = Math.round(Math.sin(t / 300 + y) * 2);
-        px(lf, 147 + o, y, 6 - (y % 4), 1, '#c9c3a6');
-        px(lf, 169 - o, y, 4, 1, '#c79a4a');
+        px(lf, MOON_X - 3 + o, y, 6 - (y % 4), 1, '#c9c3a6');
+        px(lf, LAMP_X - 2 - o, y, 4, 1, '#c79a4a');
       }
       lf.restore();
       // Kranlichter blinken
-      if (Math.floor(t / 700) % 2) { px(lf, 117, 37, 2, 2, '#ff3b3b'); px(lf, 213, 49, 2, 2, '#ff3b3b'); }
+      if (Math.floor(t / 700) % 2) CRANES.forEach(([cx, h]) => px(lf, cx - 1, 100 - h - 1, 2, 2, '#ff3b3b'));
       // Laterne flackert manchmal
       const lampOn = !(Math.sin(t / 97) > 0.985 || Math.sin(t / 53 + 1) > 0.993);
-      if (!lampOn) px(lf, 168, 63, 8, 5, '#6b5a3a');
+      if (!lampOn) px(lf, LAMP_X - 3, 63, 8, 5, '#6b5a3a');
       // Blut & Dellen (bleiben liegen)
       lf.drawImage(decal, 0, 0);
 
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(loFrame, 0, 0, W, H);
+      ctx.drawImage(loFrame, 0, 0, WORLD_W, H);
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(decalHi, 0, 0);
 
       // Lichtkegel der Laterne
       if (lampOn) {
         ctx.save(); ctx.globalCompositeOperation = 'lighter';
-        const gr = ctx.createRadialGradient(516, 200, 10, 516, 300, 260);
+        const lx = LAMP_X * LO + 3;
+        const gr = ctx.createRadialGradient(lx, 200, 10, lx, 300, 260);
         gr.addColorStop(0, 'rgba(255,214,140,0.18)'); gr.addColorStop(1, 'rgba(255,214,140,0)');
-        ctx.fillStyle = gr; ctx.fillRect(250, 150, 540, 390);
+        ctx.fillStyle = gr; ctx.fillRect(lx - 266, 150, 540, 390);
         ctx.restore();
       }
       // Neon-Schild an der Kneipe
@@ -1454,10 +1621,10 @@
 
     // --- Blut, Wunden, Dellen ---------------------------------------------------------------
     // Blut auf dem Boden in voller Auflösung (feiner als der Pixel-Hintergrund), Risse im Pixel-Raster
-    const decalHi = document.createElement('canvas'); decalHi.width = W; decalHi.height = H;
+    const decalHi = document.createElement('canvas'); decalHi.width = WORLD_W; decalHi.height = H;
     const dh = decalHi.getContext('2d');
     const BLOOD = ['#5e0505', '#740808', '#8c0b0b', '#a31212'];
-    function clearDecals() { dg.clearRect(0, 0, LW, LH); dh.clearRect(0, 0, W, H); }
+    function clearDecals() { dg.clearRect(0, 0, LW, LH); dh.clearRect(0, 0, WORLD_W, H); }
 
     // Tropfen fliegen kurz und landen nahe beim Getroffenen auf dem Boden
     function spawnBlood(x, y, dir, amount, power) {
@@ -1476,7 +1643,7 @@
       for (const d of drops) {
         d.x += d.vx; d.y += d.vy; d.vy += 0.32; d.vx *= 0.97;
         if (d.vy > 0 && d.y >= d.land) { splat(d.x, d.land, d.s, d.c, d.vx); d.dead = true; }
-        else if (d.x < -30 || d.x > W + 30 || d.y > H + 20) d.dead = true;
+        else if (d.x < -30 || d.x > WORLD_W + 30 || d.y > H + 20) d.dead = true;
       }
       drops = drops.filter(d => !d.dead);
       for (const pid in lastFd) {
@@ -1550,8 +1717,8 @@
       }
       if (list.length > 40) list.splice(0, list.length - 40);
       // Gegen den Rand geprügelt? Dann gibt's eine Delle in Wand/Käfig
-      if (x < 120 || x > W - 120) {
-        const ex = x < 120 ? 18 : W - 18;
+      if (x < 120 || x > WORLD_W - 120) {
+        const ex = x < 120 ? 18 : WORLD_W - 18;
         crack(Math.round(ex / LO), Math.round(Math.min(FLOOR_Y - 20, wy) / LO), 6 + dmg / 2, false);
       }
     }
@@ -1687,9 +1854,10 @@
       const sx = fd.x, sy = GROUND - (fd.y || 0);
 
       // Schatten am Boden (wird beim Springen kleiner und heller)
-      const air = Math.min(1, (fd.y || 0) / 160);
+      const supY = (fd.y || 0) >= CRATE_H - 2 ? supportAt(fd.x, crateState()) : 0;   // steht er auf einer Kiste?
+      const air = Math.min(1, Math.max(0, (fd.y || 0) - supY) / 160);
       ctx.fillStyle = `rgba(0,0,0,${0.5 - air * 0.3})`;
-      ctx.beginPath(); ctx.ellipse(sx, GROUND + 2, 48 - air * 26, 10 - air * 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(sx, GROUND - supY + 2, 48 - air * 26, 10 - air * 4, 0, 0, Math.PI * 2); ctx.fill();
       drawAura(fd, performance.now());
 
       const sprites = FIGHTER_SPRITES[name];
@@ -2082,6 +2250,7 @@
         if (hitstop > 0) { hitstop--; continue; }
         if (my) { my.px = my.x; my.py = my.y; }
         stepMe();
+        crateFxStep();
         stepParticles();
         stepBlood();
         if (shake > 0) shake *= 0.85;
@@ -2090,14 +2259,59 @@
       requestAnimationFrame(frame);
     }
 
+    // Kamera: folgt der Mitte zwischen beiden Kämpfern (die Welt ist breiter als der Bildschirm)
+    let camX = (WORLD_W - W) / 2, camRk = null;
+    function updateCamera(inMatch) {
+      let target = (WORLD_W - W) / 2;
+      if (inMatch) {
+        const { p1, p2, rk } = meta.cur;
+        if (camRk !== rk) { camRk = rk; camX = (START_L + START_R) / 2 - W / 2; }
+        const a = lastFd[p1], b = lastFd[p2];
+        if (a && b) target = (a.x + b.x) / 2 - W / 2;
+      }
+      target = Math.max(0, Math.min(WORLD_W - W, target));
+      camX += (target - camX) * 0.15;
+    }
+
+    // Holzkiste (Pixel-Look) - unten mittig bei (x, bottomY)
+    function drawCrate(x, bottomY, rot, dmgFrac) {
+      const w = CRATE_W, h = CRATE_H, x0 = -w / 2, y0 = -h / 2;
+      ctx.save(); ctx.translate(Math.round(x), Math.round(bottomY - h / 2)); if (rot) ctx.rotate(rot);
+      ctx.fillStyle = '#2a1708'; ctx.fillRect(x0, y0, w, h);
+      ctx.fillStyle = '#9a6430'; ctx.fillRect(x0 + 4, y0 + 4, w - 8, h - 8);
+      ctx.fillStyle = '#82521f'; for (let i = 1; i < 4; i++) ctx.fillRect(x0 + 4, y0 + 4 + i * (h - 8) / 4 - 1, w - 8, 2);
+      ctx.fillStyle = '#6b4219';
+      ctx.fillRect(x0 + 4, y0 + 4, w - 8, 9); ctx.fillRect(x0 + 4, y0 + h - 13, w - 8, 9); ctx.fillRect(x0 + 4, y0 + 4, 9, h - 8); ctx.fillRect(x0 + w - 13, y0 + 4, 9, h - 8);
+      ctx.strokeStyle = '#6b4219'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(x0 + 11, y0 + h - 11); ctx.lineTo(x0 + w - 11, y0 + 11); ctx.stroke();
+      ctx.fillStyle = '#b57a3e'; ctx.fillRect(x0 + 4, y0 + 4, w - 8, 2);
+      ctx.fillStyle = '#d9d2bf'; [[7, 7], [w - 10, 7], [7, h - 10], [w - 10, h - 10]].forEach(([a, b]) => ctx.fillRect(x0 + a, y0 + b, 3, 3));
+      // Risse je nach Schaden
+      ctx.strokeStyle = '#1a0d04'; ctx.lineWidth = 2.5;
+      if (dmgFrac > 0.15) { ctx.beginPath(); ctx.moveTo(x0 + w * 0.3, y0 + 5); ctx.lineTo(x0 + w * 0.42, y0 + h * 0.35); ctx.lineTo(x0 + w * 0.33, y0 + h * 0.55); ctx.stroke(); }
+      if (dmgFrac > 0.45) { ctx.beginPath(); ctx.moveTo(x0 + w - 5, y0 + h * 0.55); ctx.lineTo(x0 + w * 0.7, y0 + h * 0.62); ctx.lineTo(x0 + w * 0.62, y0 + h - 5); ctx.stroke(); ctx.fillStyle = '#1a0d04'; ctx.fillRect(x0 + w * 0.6, y0 + h * 0.22, 11, 8); }
+      if (dmgFrac > 0.7) { ctx.beginPath(); ctx.moveTo(x0 + 5, y0 + h * 0.7); ctx.lineTo(x0 + w * 0.25, y0 + h * 0.64); ctx.lineTo(x0 + w * 0.45, y0 + h * 0.86); ctx.stroke(); ctx.fillStyle = '#1a0d04'; ctx.fillRect(x0 + w * 0.15, y0 + h * 0.3, 8, 10); }
+      ctx.restore();
+    }
+    function drawCrates() {
+      crateState().forEach(c => {
+        if (!crateSolid(c)) return;
+        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(c.x, GROUND + 2, CRATE_W / 2 + 8, 9, 0, 0, Math.PI * 2); ctx.fill();
+        drawCrate(c.x, GROUND, 0, c.dmg / CRATE_HP);
+      });
+    }
+
     function render(t) {
       if (window.HSAudio) fighterMusic(); else music.set(!meta || meta.phase === 'done' ? null : (isCage() ? 'cage' : 'harbor'));
       ctx.save();
       if (shake > 0.5) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
-      drawStage(t);
       const inMatch = meta && meta.cur && ['intro', 'fight', 'roundEnd', 'matchEnd'].includes(meta.phase);
+      updateCamera(inMatch);
+      ctx.fillStyle = '#1d1a26'; ctx.fillRect(-20, -20, W + 40, H + 40);   // Fugen im Pflaster dunkel (sonst scheint das alte Bild durch)
+      ctx.save(); ctx.translate(-Math.round(camX), 0);   // ab hier: Welt-Koordinaten
+      drawStage(t);
       if (inMatch) {
         const { p1, p2, rk } = meta.cur;
+        drawCrates();
         for (const pid of [p1, p2]) {
           let fd;
           if (pid === playerId && my) {
@@ -2124,12 +2338,23 @@
               v.x = x; v.y = y;
               fd = { x, y: Math.max(0, y), face: f.face, act: f.act, actF: (t - v.actStart) / (1000 / 60), cr: f.cr, bc: f.bc, sp: !!f.sp, hp: f.hp };
             } else {
-              fd = { x: pid === p1 ? 300 : 660, y: 0, face: pid === p1 ? 1 : -1, act: 'idle', actF: t / 16, cr: false };
+              fd = { x: pid === p1 ? START_L : START_R, y: 0, face: pid === p1 ? 1 : -1, act: 'idle', actF: t / 16, cr: false };
             }
           }
           fd.pid = pid;
           drawFighter(fd, pid, pid === playerId);
           lastFd[pid] = fd;
+          // Getragene Kiste über dem Kopf
+          const rf = remoteF[pid];
+          const held = pid === playerId && my ? my.ch : (rf && rf.rk === rk && rf.ch != null ? rf.ch : -1);
+          if (held >= 0 && !['kd', 'ko'].includes(fd.act)) drawCrate(fd.x + fd.face * 6, GROUND - fd.y - 176, 0, 0);
+        }
+        // Fliegende Kisten
+        if (my && my.ct) drawCrate(my.ct.x, GROUND - my.ct.y + CRATE_H / 2, my.ct.r, 0);
+        for (const pid of [p1, p2]) {
+          if (pid === playerId && my) continue;
+          const rf = remoteF[pid];
+          if (rf && rf.rk === rk && rf.ct) drawCrate(rf.ct.x, GROUND - rf.ct.y + CRATE_H / 2, rf.ct.r, 0);
         }
         // Geschosse
         if (myProj) drawProjectile(myProj.x, myProj.dir, charFor(myName).proj, t);
@@ -2137,12 +2362,16 @@
           const p = remoteProj[pid];
           if (p.rk !== rk) continue;
           const x = p.x0 + p.dir * PROJ.speed * (t - p.seenAt) / (1000 / 60);
-          if (x < -60 || x > W + 60) continue;
+          if (x < -60 || x > WORLD_W + 60) continue;
           drawProjectile(x, p.dir, charFor(nameOf(pid)).proj, t);
         }
         drawDrops();
         drawParticles();
         if (isCage()) drawCageForeground();
+      }
+      ctx.restore();                                       // ab hier: Bildschirm-Koordinaten
+      if (inMatch) {
+        if (isCage() && meta.phase !== 'done') bigText(meta.cur.kind === 'S' ? 'HALBFINALE' : 'GRAND FINALE', 128, '#c9a227', 26);
         drawHud(t);
       } else {
         drawWaitingScreen(t);
@@ -2256,7 +2485,12 @@
           get(ref(db, FS + '/f/' + playerId)).then((s) => {
             resetMyFighter(meta.cur.rk);
             const old = s.val();
-            if (old && old.rk === meta.cur.rk) { my.hp = old.hp; my.x = old.x; my.en = old.en || 0; writeMe(true); }
+            if (old && old.rk === meta.cur.rk) {
+              my.hp = old.hp; my.x = old.x; my.en = old.en || 0;
+              my.cdm = CRATES.map((c, i) => (old.cdm && old.cdm[i]) || 0);
+              my.cg = (old.cg || 0) | (old.ch >= 0 ? 1 << old.ch : 0);   // Kiste in der Hand ist beim Neuladen weg
+              writeMe(true);
+            }
             if (meta.phase === 'fight') { fightLocalStart = performance.now(); fightRk = meta.cur.rk; }
           });
         }
@@ -2303,6 +2537,7 @@
       <span class="key">Strg</span> Schlag ·
       <span class="key">Y</span> Tritt ·
       <span class="key">Strg</span>+<span class="key">Y</span> Spezialangriff ·
+      <span class="key">E</span> Kiste heben / werfen ·
       zurück halten = blocken
       <div class="text-white/50">Volle Energie = 10 Sek. Superpower (Doppelsprung, härtere Treffer) · ↓+Y ist ein Feger · A/D/S gehen auch, statt Y auch X</div>
     </div>
