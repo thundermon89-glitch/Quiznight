@@ -295,6 +295,17 @@
     else if (kind === 'blip') { tone(660, 0, 0.09, 'square', 0.1, 1320); }
     else if (kind === 'drop') { tone(220, 0, 0.18, 'triangle', 0.35, 70); tone(1400, 0, 0.03, 'square', 0.05); }
     else if (kind === 'tick') { tone(1000, 0, 0.05, 'square', 0.08); }
+    else if (kind === 'shot' || kind === 'boom') {
+      // kurzer Knall aus Rauschen (Schuss) bzw. etwas tiefer/länger (Treffer-Explosion)
+      const big = kind === 'boom', len = big ? 0.28 : 0.12;
+      const n = Math.floor(AC.sampleRate * len), buf = AC.createBuffer(1, n, AC.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, big ? 2.2 : 3.5);
+      const src = AC.createBufferSource(); src.buffer = buf;
+      const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(big ? 1800 : 3800, t); lp.frequency.exponentialRampToValueAtTime(big ? 200 : 600, t + len);
+      const g = AC.createGain(); g.gain.value = (big ? 0.55 : 0.32) * v;
+      src.connect(lp); lp.connect(g); g.connect(sfxBus); src.start(t);
+      if (big) tone(140, 0, 0.18, 'sine', 0.35, 50);
+    }
   }
   function preload(slots) { slots.forEach(s => { const sl = SLOTS[s]; if (sl && !sl.music) slotFiles(s).forEach(f => loadBuf(f).catch(() => {})); }); }
 

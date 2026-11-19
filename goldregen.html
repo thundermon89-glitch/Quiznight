@@ -24,25 +24,43 @@
     .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
     .jax-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
 
-    @keyframes coinFallDown {
-      from { transform: translateY(-60px) rotate(0deg); }
-      to   { transform: translateY(110vh) rotate(720deg); }
-    }
-    .falling-coin {
-      position: fixed; top: 0; width: 54px; height: 54px;
-      z-index: 30; animation: coinFallDown linear forwards;
-      pointer-events: none; /* nur die Klickfläche unten soll klickbar sein, nicht das Bild */
-    }
-    .falling-coin img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
-    .coin-hitbox {
-      position: absolute; top: -18px; left: -18px; right: -18px; bottom: -18px;
-      cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="11" fill="none" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="18" y1="1" x2="18" y2="9" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="18" y1="27" x2="18" y2="35" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="1" y1="18" x2="9" y2="18" stroke="%23ff1a1a" stroke-width="2.5"/><line x1="27" y1="18" x2="35" y2="18" stroke="%23ff1a1a" stroke-width="2.5"/></svg>') 18 18, crosshair;
-      pointer-events: auto; z-index: 31;
-      border-radius: 50%;
-      /* unsichtbar, aber deutlich größer als die Münze selbst - leichter zu treffen,
-         auch wenn mehrere gleichzeitig danach klicken */
-    }
-
+    html, body { touch-action: none; overscroll-behavior: none; }
+    .gr-coin { position: fixed; left: 0; top: 0; z-index: 30; pointer-events: none; will-change: transform; }
+    .gr-coin img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+    .gr-bonus { filter: drop-shadow(0 0 10px #fff6a0) drop-shadow(0 0 22px #ffd23f) saturate(1.4); }
+    .gr-burst { position: fixed; z-index: 45; pointer-events: none; width: 0; height: 0; }
+    .gr-burst .gr-ring { position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; border-radius: 50%;
+      border: 3px solid #ffb347; animation: grRing .35s ease-out forwards; }
+    .gr-burst .gr-flash { position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; border-radius: 50%;
+      background: radial-gradient(circle, #fff 0%, #ffd23f 40%, rgba(255,120,0,0) 70%); animation: grFlash .22s ease-out forwards; }
+    .gr-burst.gr-hit .gr-ring { border-color: #ffd23f; border-width: 4px; animation-duration: .45s; }
+    .gr-burst.gr-hit .gr-flash { left: -38px; top: -38px; width: 76px; height: 76px; animation-duration: .32s; }
+    .gr-burst.gr-big .gr-flash { left: -60px; top: -60px; width: 120px; height: 120px; }
+    .gr-burst.gr-big .gr-ring { animation-name: grRingBig; }
+    .gr-burst i { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--c);
+      box-shadow: 0 0 6px var(--c); animation: grSpark .55s ease-out forwards; }
+    .gr-burst.gr-hit i { width: 8px; height: 8px; left: -4px; top: -4px; }
+    @keyframes grRing { from { transform: scale(.3); opacity: 1; } to { transform: scale(2.6); opacity: 0; } }
+    @keyframes grRingBig { from { transform: scale(.3); opacity: 1; } to { transform: scale(4.5); opacity: 0; } }
+    @keyframes grFlash { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+    @keyframes grSpark { from { transform: translate(0,0) scale(1); opacity: 1; } to { transform: translate(var(--dx), var(--dy)) scale(.2); opacity: 0; } }
+    #gr-hud { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 50; pointer-events: none; display: flex; gap: 10px; align-items: center; }
+    #gr-hud.hidden { display: none; }
+    .gr-chip { background: rgba(10,5,24,.75); border: 3px solid #ffd23f; border-radius: 16px; padding: 4px 14px; font-weight: 800; font-size: 20px; color: #ffd23f; transition: transform .1s; }
+    .gr-chip.bump { animation: grBump .18s ease-out; }
+    @keyframes grBump { 50% { transform: scale(1.18); } }
+    #gr-timebar { position: fixed; top: 0; left: 0; right: 0; height: 6px; background: rgba(255,255,255,.12); z-index: 50; pointer-events: none; }
+    #hud-bar { height: 100%; width: 100%; background: linear-gradient(90deg, #ff2e93, #ffd23f); }
+    #gr-combo { position: fixed; top: 64px; left: 50%; transform: translateX(-50%) scale(.5); z-index: 50; pointer-events: none; opacity: 0;
+      font-weight: 800; font-size: 28px; color: #ff2e93; text-shadow: 2px 2px 0 #1a1006, -2px -2px 0 #1a1006, 2px -2px 0 #1a1006, -2px 2px 0 #1a1006; }
+    #gr-combo.show { animation: grCombo .8s ease-out forwards; }
+    @keyframes grCombo { 0% { opacity: 0; transform: translateX(-50%) scale(.5); } 20% { opacity: 1; transform: translateX(-50%) scale(1.25); } 100% { opacity: 0; transform: translateX(-50%) scale(1); } }
+    .coin-points-pop.big { font-size: 34px; color: #fff6a0; }
+    #gr-countdown { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 55; pointer-events: none;
+      font-weight: 800; font-size: 120px; color: #ffd23f; opacity: 0;
+      text-shadow: 5px 5px 0 #1a1006, -5px -5px 0 #1a1006, 5px -5px 0 #1a1006, -5px 5px 0 #1a1006; }
+    #gr-countdown.show { animation: grCount .9s ease-out forwards; }
+    @keyframes grCount { 0% { opacity: 0; transform: scale(2); } 25% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.8); } }
     @keyframes coinPointsPop {
       0%   { transform: translateY(0) scale(0.6); opacity: 0; }
       20%  { transform: translateY(-10px) scale(1.2); opacity: 1; }
@@ -73,19 +91,23 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
+    // ==== GOLDREGEN ====
+    // Jeder Spieler hat seine EIGENEN Münzen, die nur auf seinem Gerät fallen. Treffer werden
+    // sofort lokal ausgewertet (kein Warten auf die Datenbank, kein Wettrennen um dieselbe
+    // Münze) - die Punkte werden im Hintergrund gesammelt an Firebase gemeldet.
     const COIN_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/mario-coins.gif";
-    const COIN_POINTS = 2;
+    const COIN_POINTS = 2;          // normale Münze
+    const BONUS_POINTS = 6;         // seltene, große, schnelle Glitzer-Münze
     const RAIN_DURATION_MS = 30000;
-    const COIN_FALL_MS = 4200;
-    const SPAWN_INTERVAL_MS = 380;
+    const START_DELAY_MS = 4000;    // 3-2-1-Countdown, damit alle Geräte die Seite geladen haben
 
     let playerId = localStorage.getItem("quiz_player_id");
     let isHost = false;
     let allPlayers = {};
-    let renderedCoinIds = new Set();
-    let spawnIntervalHandle = null;
-    let endTimeoutHandle = null;
+    let serverOffset = 0;            // Uhrenabgleich mit Firebase, damit alle gleichzeitig enden
+    const now = () => Date.now() + serverOffset;
 
+    onValue(ref(db, '.info/serverTimeOffset'), (snap) => { serverOffset = snap.val() || 0; });
     onValue(ref(db, 'players/'), (snap) => { allPlayers = snap.val() || {}; });
 
     // NAVIGATION: sobald der Host alle zurückholt, folgen alle automatisch
@@ -96,76 +118,216 @@
       }
     });
 
-    function renderCoin(coinId, coinData) {
-      if (renderedCoinIds.has(coinId)) return;
-      renderedCoinIds.add(coinId);
-      const layer = document.getElementById("coin-layer");
-      if (!layer) return;
+    // ---------- Zustand dieser Runde (nur lokal) ----------
+    let startedAt = null, running = false, finishedShown = false;
+    let coins = [];                  // { el, x, y, vy, swayAmp, swayFreq, phase, rot, vr, size, bonus, born }
+    let myCoins = 0, myPoints = 0;   // komplett
+    let pendingPoints = 0;           // noch nicht an Firebase gemeldet
+    let combo = 0, lastHitAt = 0, nextSpawnAt = 0, lastFrame = 0;
+    let layer, hudCoins, hudPoints, hudTime, hudBar, comboEl, countdownEl;
 
-      const elapsed = Date.now() - coinData.spawnedAt;
-      if (elapsed >= COIN_FALL_MS || coinData.caughtBy) return; // schon vorbei, keiner hat sie gefangen
+    function vw() { return window.innerWidth; }
+    function vh() { return window.innerHeight; }
 
-      const el = document.createElement("div");
-      el.className = "falling-coin";
-      el.style.left = coinData.x + "%";
-      el.style.animationDuration = (COIN_FALL_MS - elapsed) + "ms";
-      el.innerHTML = `<img src="${COIN_URL}"><div class="coin-hitbox"></div>`;
-      el.querySelector(".coin-hitbox").onclick = (e) => catchCoin(coinId, e);
+    function spawnCoin(t) {
+      const bonus = Math.random() < 0.07;
+      const size = bonus ? 74 : 44 + Math.random() * 22;
+      const progress = Math.min(1, (t - startedAt) / RAIN_DURATION_MS);
+      const speed = (bonus ? 340 : 150 + Math.random() * 110) * (1 + progress * 0.6) * (vh() / 800);
+      const el = document.createElement('div');
+      el.className = 'gr-coin' + (bonus ? ' gr-bonus' : '');
+      el.style.width = el.style.height = size + 'px';
+      el.innerHTML = `<img src="${COIN_URL}" draggable="false">`;
       layer.appendChild(el);
-      setTimeout(() => { if (el.parentNode) el.remove(); }, COIN_FALL_MS - elapsed + 100);
+      coins.push({
+        el, size, bonus,
+        x: 30 + Math.random() * (vw() - 60), y: -size,
+        vy: speed,
+        swayAmp: bonus ? 70 + Math.random() * 60 : 10 + Math.random() * 45,
+        swayFreq: 0.8 + Math.random() * 2.2, phase: Math.random() * 6.28,
+        rot: Math.random() * 360, vr: (Math.random() - 0.5) * 360,
+        born: t
+      });
     }
 
-    window.catchCoin = function(coinId, evt) {
-      runTransaction(ref(db, 'goldregenState/coins/' + coinId), (current) => {
-        if (!current || current.caughtBy) return current;
-        current.caughtBy = playerId;
-        return current;
-      }).then((result) => {
-        const val = result && result.snapshot && result.snapshot.val();
-        if (result.committed && val && val.caughtBy === playerId) {
-          try { window.HSAudio && HSAudio.synth('coin'); } catch (e) {}
-          if (evt && evt.target) {
-            const rect = evt.target.getBoundingClientRect();
-            const pop = document.createElement("div");
-            pop.className = "coin-points-pop";
-            pop.style.left = (rect.left + rect.width / 2 - 20) + "px";
-            pop.style.top = (rect.top) + "px";
-            pop.innerText = "+" + COIN_POINTS;
-            document.body.appendChild(pop);
-            setTimeout(() => pop.remove(), 900);
-            if (evt.target.parentElement) evt.target.parentElement.remove();
-          }
-          // Echte Transaktionen statt "lesen, dann schreiben" - sonst gehen Punkte verloren,
-          // wenn kurz hintereinander mehrere Münzen gefangen werden (klassisches Wettlauf-
-          // Problem: zwei Vorgänge lesen denselben alten Stand und überschreiben sich gegenseitig).
-          runTransaction(ref(db, 'players/' + playerId + '/score'), (currentScore) => {
-            return (currentScore || 0) + COIN_POINTS;
-          });
-          runTransaction(ref(db, 'goldregenState/tally/' + playerId), (currentTally) => {
-            return (currentTally || 0) + 1;
-          });
-          get(ref(db, 'players/' + playerId + '/name')).then((nameSnap) => {
-            push(ref(db, 'gameLog'), {
-              text: '🪙 ' + (nameSnap.val() || 'Jemand') + ' hat eine Goldregen-Münze gefangen: +' + COIN_POINTS + ' Punkte',
-              at: Date.now()
-            });
-          });
+    function coinPos(c, t) {
+      const age = (t - c.born) / 1000;
+      return { x: c.x + Math.sin(age * c.swayFreq + c.phase) * c.swayAmp, y: c.y };
+    }
+
+    function frame(ts) {
+      if (!running) return;
+      const dt = Math.min(0.05, (ts - (lastFrame || ts)) / 1000); lastFrame = ts;
+      const t = now();
+      const left = startedAt + RAIN_DURATION_MS - t;
+      if (left <= 0) { endRain(); return; }
+      if (t < startedAt) {   // Countdown läuft noch
+        const n = Math.ceil((startedAt - t) / 1000);
+        if (countdownEl.dataset.n !== String(n)) {
+          countdownEl.dataset.n = n; countdownEl.innerText = n; countdownEl.classList.remove('show'); void countdownEl.offsetWidth; countdownEl.classList.add('show');
+          try { window.HSAudio && HSAudio.synth('tick'); } catch (e) {}
         }
+        nextSpawnAt = startedAt;
+        requestAnimationFrame(frame); return;
+      }
+      if (countdownEl.dataset.n !== 'go') {
+        countdownEl.dataset.n = 'go'; countdownEl.innerText = 'LOS!'; countdownEl.classList.remove('show'); void countdownEl.offsetWidth; countdownEl.classList.add('show');
+      }
+
+      // Spawnen: wird zum Ende hin immer dichter
+      const progress = (t - startedAt) / RAIN_DURATION_MS;
+      const interval = 520 - progress * 300;
+      if (t >= nextSpawnAt) {
+        spawnCoin(t);
+        if (Math.random() < 0.25 + progress * 0.35) spawnCoin(t);   // Doppel-Münzen
+        nextSpawnAt = t + interval * (0.6 + Math.random() * 0.8);
+      }
+
+      for (let i = coins.length - 1; i >= 0; i--) {
+        const c = coins[i];
+        c.y += c.vy * dt; c.rot += c.vr * dt;
+        const p = coinPos(c, t);
+        c.el.style.transform = `translate(${p.x - c.size / 2}px, ${p.y - c.size / 2}px) rotate(${c.rot}deg)`;
+        if (p.y - c.size > vh()) { c.el.remove(); coins.splice(i, 1); }
+      }
+
+      hudTime.innerText = Math.ceil(Math.min(left, RAIN_DURATION_MS) / 1000) + 's';
+      hudBar.style.width = Math.max(0, Math.min(1, left / RAIN_DURATION_MS) * 100) + '%';
+      if (combo > 1 && t - lastHitAt > 1200) { combo = 0; comboEl.classList.remove('show'); }
+      requestAnimationFrame(frame);
+    }
+
+    // ---------- Schießen ----------
+    function burst(x, y, opts) {
+      const b = document.createElement('div');
+      b.className = 'gr-burst' + (opts.hit ? ' gr-hit' : '') + (opts.bonus ? ' gr-big' : '');
+      b.style.left = x + 'px'; b.style.top = y + 'px';
+      let html = '<div class="gr-ring"></div><div class="gr-flash"></div>';
+      const n = opts.hit ? (opts.bonus ? 18 : 12) : 6;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2 + Math.random() * 0.4;
+        const d = (opts.hit ? 45 : 22) + Math.random() * (opts.hit ? 45 : 16);
+        html += `<i style="--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d}px;--c:${opts.hit ? (Math.random() < 0.5 ? '#ffd23f' : '#fff3a8') : (Math.random() < 0.5 ? '#ff7a1a' : '#ffd0a0')}"></i>`;
+      }
+      b.innerHTML = html;
+      document.body.appendChild(b);
+      setTimeout(() => b.remove(), 650);
+    }
+
+    function popText(x, y, txt, big) {
+      const pop = document.createElement('div');
+      pop.className = 'coin-points-pop' + (big ? ' big' : '');
+      pop.style.left = (x - 30) + 'px'; pop.style.top = (y - 20) + 'px';
+      pop.innerText = txt;
+      document.body.appendChild(pop);
+      setTimeout(() => pop.remove(), 900);
+    }
+
+    function shoot(e) {
+      if (!running || now() < startedAt) return;
+      if (e.target.closest && e.target.closest('button, #hs-audio-btn, #hs-audio-panel')) return;
+      e.preventDefault();
+      const x = e.clientX, y = e.clientY, t = now();
+      // Treffer suchen: die nächstgelegene Münze im (großzügigen) Trefferradius
+      let best = -1, bestD = Infinity;
+      coins.forEach((c, i) => {
+        const p = coinPos(c, t);
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d < c.size * 0.5 + 22 && d < bestD) { best = i; bestD = d; }
       });
-    };
+      if (best < 0) {
+        burst(x, y, { hit: false });
+        try { window.HSAudio && HSAudio.synth('shot', 0.8); } catch (err) {}
+        return;
+      }
+      const c = coins[best]; coins.splice(best, 1);
+      const p = coinPos(c, t);
+      // Münze zerplatzt sichtbar
+      c.el.style.transition = 'transform .18s ease-out, opacity .18s ease-out';
+      c.el.style.transform = `translate(${p.x - c.size / 2}px, ${p.y - c.size / 2}px) rotate(${c.rot}deg) scale(1.8)`;
+      c.el.style.opacity = '0';
+      setTimeout(() => c.el.remove(), 200);
+      burst(p.x, p.y, { hit: true, bonus: c.bonus });
+      const pts = c.bonus ? BONUS_POINTS : COIN_POINTS;
+      myCoins++; myPoints += pts; pendingPoints += pts;
+      combo = t - lastHitAt < 1200 ? combo + 1 : 1; lastHitAt = t;
+      popText(p.x, p.y, '+' + pts, c.bonus);
+      if (combo >= 3) { comboEl.innerText = combo + 'er-Combo!'; comboEl.classList.remove('show'); void comboEl.offsetWidth; comboEl.classList.add('show'); }
+      hudCoins.innerText = myCoins; hudPoints.innerText = myPoints;
+      hudPoints.parentElement.classList.remove('bump'); void hudPoints.offsetWidth; hudPoints.parentElement.classList.add('bump');
+      try { if (window.HSAudio) { HSAudio.synth('boom', 0.7); HSAudio.synth('coin', c.bonus ? 1.3 : 1); } } catch (err) {}
+    }
+
+    // ---------- Punkte im Hintergrund an Firebase melden ----------
+    function flush() {
+      if (!playerId || pendingPoints <= 0) return Promise.resolve();
+      const pts = pendingPoints; pendingPoints = 0;
+      const p1 = runTransaction(ref(db, 'players/' + playerId + '/score'), (cur) => (cur || 0) + pts)
+        .catch(() => { pendingPoints += pts; });
+      const p2 = set(ref(db, 'goldregenState/tally/' + playerId), { coins: myCoins, points: myPoints }).catch(() => {});
+      return Promise.all([p1, p2]);
+    }
+    setInterval(flush, 700);
+    window.addEventListener('pagehide', flush);
+
+    function initDom() {
+      if (layer) return true;
+      layer = document.getElementById("coin-layer");
+      if (!layer) return false;
+      hudCoins = document.getElementById("hud-coins"); hudPoints = document.getElementById("hud-points");
+      hudTime = document.getElementById("hud-time"); hudBar = document.getElementById("hud-bar");
+      comboEl = document.getElementById("gr-combo"); countdownEl = document.getElementById("gr-countdown");
+      return true;
+    }
+
+    function startRain(sa) {
+      if (running || finishedShown) return;
+      if (!initDom()) { document.addEventListener('DOMContentLoaded', () => startRain(sa), { once: true }); return; }
+      startedAt = sa + START_DELAY_MS;
+      if (now() >= startedAt + RAIN_DURATION_MS) { endRain(true); return; }
+      running = true; nextSpawnAt = now(); lastFrame = 0;
+      document.getElementById('gr-hud').classList.remove('hidden');
+      requestAnimationFrame(frame);
+    }
+
+    function endRain(alreadyOver) {
+      if (finishedShown) return;
+      running = false; finishedShown = true;
+      coins.forEach(c => c.el.remove()); coins = [];
+      flush().then(() => {
+        if (!alreadyOver && myCoins > 0) {
+          const name = (allPlayers[playerId] && allPlayers[playerId].name) || 'Jemand';
+          push(ref(db, 'gameLog'), { text: '🪙 ' + name + ' hat im Goldregen ' + myCoins + ' Münzen abgeschossen: +' + myPoints + ' Punkte', at: Date.now() });
+        }
+        // Jeder darf das Ende setzen (idempotent) - so hängt es nicht nur am Host
+        update(ref(db, 'goldregenState'), { status: 'finished' });
+      });
+      setTimeout(showResults, alreadyOver ? 0 : 1500);
+    }
+
+    function showResults() {
+      initDom();
+      document.getElementById("rain-area").classList.add("hidden");
+      document.getElementById("gr-hud").classList.add("hidden");
+      document.getElementById("result-area").classList.remove("hidden");
+      try { window.HSAudio && HSAudio.once('grEnd' + (startedAt || ''), () => HSAudio.play('spiel_ende')); } catch (e) {}
+      if (isHost) document.getElementById("host-end-btn").classList.remove("hidden");
+      renderResults();
+    }
 
     function renderResults() {
       get(ref(db, 'goldregenState/tally')).then((snap) => {
         const tally = snap.val() || {};
+        const val = (id) => { const v = tally[id]; return typeof v === 'number' ? { coins: v, points: v * COIN_POINTS } : (v || { coins: 0, points: 0 }); };
         const ids = Object.keys(allPlayers).filter(id => {
           const n = allPlayers[id] && allPlayers[id].name;
           return n && !n.includes("Host") && !n.includes("Admin");
         });
-        const sorted = ids.sort((a, b) => (tally[b] || 0) - (tally[a] || 0));
-        document.getElementById("results-list").innerHTML = sorted.map(id => `
-          <div class="flex items-center justify-between jax-card px-5 py-3">
-            <span class="font-extrabold text-[#1a1a2e]">${allPlayers[id].name}</span>
-            <span class="text-[#7017c9] font-extrabold">${tally[id] || 0} Münzen · +${(tally[id] || 0) * COIN_POINTS} Pkt.</span>
+        const sorted = ids.sort((a, b) => val(b).points - val(a).points);
+        document.getElementById("results-list").innerHTML = sorted.map((id, i) => `
+          <div class="flex items-center justify-between jax-card px-5 py-3 ${id === playerId ? 'ring-4 ring-[#ffd23f]' : ''}">
+            <span class="font-extrabold text-[#1a1a2e]">${i === 0 && val(id).points > 0 ? '👑 ' : ''}${allPlayers[id].name}</span>
+            <span class="text-[#7017c9] font-extrabold">${val(id).coins} Münzen · +${val(id).points} Pkt.</span>
           </div>
         `).join('') || `<div class="text-white/50">Niemand hat eine Münze erwischt...</div>`;
       });
@@ -173,59 +335,32 @@
 
     onValue(ref(db, 'goldregenState'), (snap) => {
       const state = snap.val() || {};
-      const rainArea = document.getElementById("rain-area");
-      const resultArea = document.getElementById("result-area");
-
       if (state.status === 'finished') {
-        rainArea.classList.add("hidden");
-        resultArea.classList.remove("hidden");
-        try { window.HSAudio && HSAudio.once('grEnd' + (state.startedAt || ''), () => HSAudio.play('spiel_ende')); } catch (e) {}
-        renderResults();
-        if (isHost) document.getElementById("host-end-btn").classList.remove("hidden");
+        // Ergebnisse anderer Spieler laufen noch kurz nach - Liste aktualisieren
+        if (finishedShown) { if (!document.getElementById("result-area").classList.contains("hidden")) renderResults(); }
+        else { running = false; endRain(true); }
         return;
       }
-
-      rainArea.classList.remove("hidden");
-      resultArea.classList.add("hidden");
-
-      const coins = state.coins || {};
-      Object.keys(coins).forEach(coinId => renderCoin(coinId, coins[coinId]));
+      if (state.startedAt && !running && !finishedShown) startRain(state.startedAt);
     });
 
     window.hostEndGoldregen = function() {
       if (!confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
+      flush();
       set(ref(db, 'goldregenState'), null);
       update(ref(db, 'gameState'), { status: 'cockpit' });
     };
 
     window.onload = () => {
       if (!playerId) { window.location.href = "index.html"; return; }
+      initDom();
+      window.addEventListener('pointerdown', shoot, { passive: false });
       get(ref(db, 'players/' + playerId)).then((snap) => {
         const data = snap.val();
         if (data && data.name && (data.name.includes("Host") || data.name.includes("Admin"))) {
           isHost = true;
           document.getElementById("host-end-btn")?.classList.remove("hidden");
           document.getElementById("host-end-persistent-btn")?.classList.remove("hidden");
-          // Nur der Host treibt das Spawnen der Münzen an - aber nur, wenn er es nicht schon
-          // selbst tut (z.B. bei Seiten-Neuladen mitten im Regen), daher Prüfung auf Startzeit.
-          get(ref(db, 'goldregenState/startedAt')).then((s) => {
-            const startedAt = s.val();
-            if (startedAt) {
-              const remaining = RAIN_DURATION_MS - (Date.now() - startedAt);
-              if (remaining > 0) {
-                spawnIntervalHandle = setInterval(() => {
-                  const x = 5 + Math.random() * 88;
-                  push(ref(db, 'goldregenState/coins'), { x, spawnedAt: Date.now(), caughtBy: null });
-                }, SPAWN_INTERVAL_MS);
-                endTimeoutHandle = setTimeout(() => {
-                  clearInterval(spawnIntervalHandle);
-                  update(ref(db, 'goldregenState'), { status: 'finished' });
-                }, remaining);
-              } else {
-                update(ref(db, 'goldregenState'), { status: 'finished' });
-              }
-            }
-          });
         }
       });
     };
@@ -238,12 +373,20 @@
   </button>
 
   <div id="coin-layer" class="fixed inset-0 pointer-events-none z-20"></div>
+  <div id="gr-timebar" class=""><div id="hud-bar"></div></div>
+  <div id="gr-hud" class="hidden">
+    <div class="gr-chip">🪙 <span id="hud-coins">0</span></div>
+    <div class="gr-chip">⭐ <span id="hud-points">0</span></div>
+    <div class="gr-chip">⏱ <span id="hud-time">30s</span></div>
+  </div>
+  <div id="gr-combo"></div>
+  <div id="gr-countdown"></div>
 
   <div id="rain-area" class="relative z-10 text-center">
     <h1 class="font-jax text-3xl md:text-5xl font-extrabold text-[#ffd23f] title-pop" style="text-shadow: 3px 3px 0 #1a1006, -3px -3px 0 #1a1006, 3px -3px 0 #1a1006, -3px 3px 0 #1a1006;">
       🪙 GOLDREGEN! 🪙
     </h1>
-    <p class="text-white/70 text-sm mt-2">Schnapp so viele Münzen wie du kannst - jede gibt +2 Punkte!</p>
+    <p class="text-white/70 text-sm mt-2">Schieß deine Münzen ab! Jede gibt +2 Punkte, glitzernde Bonus-Münzen +6.</p>
   </div>
 
   <div id="result-area" class="hidden relative z-10 text-center w-full max-w-md space-y-4">

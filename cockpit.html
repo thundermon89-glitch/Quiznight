@@ -861,7 +861,7 @@
       const now = Date.now();
       const resetVal = gameKey === 'connect4' ? null
         : gameKey === 'snake' ? { status: 'active', startedAt: now, scores: null, finished: null }
-        : { status: 'active', startedAt: now, coins: null, tally: null };
+        : { status: 'active', startedAt: { '.sv': 'timestamp' }, coins: null, tally: null };  // Server-Zeit: gleiche Uhr für alle
 
       set(ref(db, game.stateKey), resetVal).then(() => {
         set(ref(db, 'gameState'), {

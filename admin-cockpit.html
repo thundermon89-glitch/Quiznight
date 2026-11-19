@@ -711,7 +711,7 @@
       if (!confirm("Goldregen starten? Alle Spieler werden 30 Sekunden lang in den Münzregen-Raum mitgenommen.")) return;
       set(ref(db, 'goldregenState'), {
         status: 'active',
-        startedAt: Date.now(),
+        startedAt: { '.sv': 'timestamp' },   // Server-Zeit: gleiche Uhr für alle
         coins: null,
         tally: null
       }).then(() => {
