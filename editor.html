@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="gif-keep.js"></script>
   <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -995,7 +996,7 @@
 
     // Animierte GIFs würden beim Verkleinern über ein Canvas ihre Animation verlieren -
     // GIFs bis zu dieser Größe werden deshalb unverändert übernommen.
-    const MAX_GIF_BYTES = 1500000;
+    const MAX_GIF_BYTES = 3000000;
 
     // Liest eine Bilddatei ein und verkleinert sie. Bilder mit Transparenz (PNG/GIF/WebP)
     // werden als WebP gespeichert, damit freigestellte Bilder ihren durchsichtigen
@@ -1008,6 +1009,9 @@
         reader.onload = (e) => {
           const original = e.target.result;
           if (file.type === 'image/gif' && file.size <= MAX_GIF_BYTES) { resolve(original); return; }
+          if (file.type === 'image/gif') {
+            alert('Dieses GIF ist größer als 3 MB und wird deshalb als STANDBILD gespeichert (ohne Animation).\n\nTipp: GIF vorher verkleinern (z.B. auf ezgif.com) oder stattdessen einen Bild-Link einfügen.');
+          }
           const img = new Image();
           img.onload = () => {
             const scale = Math.min(1, MAX_UPLOAD_DIMENSION / Math.max(img.width, img.height));

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+  <script src="gif-keep.js"></script>
   <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -488,6 +489,9 @@
       progressEl.innerText = "Runde " + Math.min((state.roundIdx || 0) + 1, rounds.length) + " von " + rounds.length;
 
       ["waiting-area", "input-area", "result-area", "finished-area"].forEach(hide);
+      // Beim Phasenwechsel die gemerkten Karten verwerfen, damit sie neu aufgebaut werden
+      if (stage !== 'input') { const ia = document.getElementById("input-area"); if (ia) ia.dataset.cardKey = ''; }
+      if (stage !== 'result') { const ra = document.getElementById("result-area"); if (ra) ra.dataset.resultKey = ''; }
 
       if (stage === 'waiting') {
         statusBadge.innerText = "WARTET AUF NÄCHSTE RUNDE";
@@ -548,14 +552,27 @@
         `;
       }
 
-      wrap.innerHTML = `
-        <div class="jax-card p-8 text-center">
-          <p class="font-jax text-2xl md:text-3xl font-extrabold text-[#1a1a2e] mb-6">${round.emoji ? `<span class="text-4xl">${round.emoji}</span><br>` : ''}${round.question}</p>
-          ${round.image ? `<img src="${round.image}" class="max-w-sm max-h-64 w-full mx-auto rounded-xl border-3 border-[#1a1a2e] mb-6 object-contain shadow-lg" alt="Frage-Bild">` : ''}
-          <div id="input-widget">${widgetHtml}</div>
-          <div class="text-[#1a1a2e]/40 text-xs mt-4">${submittedCount} von ${ids.length} abgegeben</div>
-        </div>
-      `;
+      // Karte (Frage + Bild) nur einmal pro Runde aufbauen - sonst startet ein GIF bei
+      // jeder kleinen Änderung (z.B. jemand gibt ab) wieder von vorn und wirkt eingefroren.
+      // Danach werden nur noch Eingabebereich und Zähler aktualisiert.
+      if (wrap.dataset.cardKey !== key) {
+        wrap.dataset.cardKey = key;
+        wrap.innerHTML = `
+          <div class="jax-card p-8 text-center">
+            <p class="font-jax text-2xl md:text-3xl font-extrabold text-[#1a1a2e] mb-6">${round.emoji ? `<span class="text-4xl">${round.emoji}</span><br>` : ''}${round.question}</p>
+            ${round.image ? `<img src="${round.image}" class="max-w-sm max-h-64 w-full mx-auto rounded-xl border-3 border-[#1a1a2e] mb-6 object-contain shadow-lg" alt="Frage-Bild">` : ''}
+            <div id="input-widget"></div>
+            <div id="input-count" class="text-[#1a1a2e]/40 text-xs mt-4"></div>
+          </div>
+        `;
+      }
+      const widgetEl = document.getElementById("input-widget");
+      const widgetState = mySubmission !== undefined ? 'done:' + mySubmission : 'open';
+      if (widgetEl.dataset.state !== widgetState) {   // Regler nicht ständig neu bauen (sonst springt er beim Ziehen)
+        widgetEl.dataset.state = widgetState;
+        widgetEl.innerHTML = widgetHtml;
+      }
+      document.getElementById("input-count").innerText = submittedCount + " von " + ids.length + " abgegeben";
     }
 
     function renderResultArea(state, round) {
@@ -586,7 +603,17 @@
           }).join('')}
         </div>
       `;
-      wrap.innerHTML = bodyHtml;
+      // Erklärung + Bild nur einmal pro Runde aufbauen (GIF soll weiterlaufen), die
+      // Ergebnisliste darunter darf sich jederzeit aktualisieren.
+      const rkey = String(state.roundIdx || 0);
+      const splitAt = bodyHtml.indexOf('<div class="space-y-2 max-w-md mx-auto">');
+      const headHtml = bodyHtml.slice(0, splitAt), listHtml = bodyHtml.slice(splitAt);
+      if (wrap.dataset.resultKey !== rkey) {
+        wrap.dataset.resultKey = rkey;
+        wrap.innerHTML = headHtml + '<div id="result-list-slot"></div>';
+      }
+      const slot = document.getElementById("result-list-slot");
+      if (slot.dataset.html !== listHtml) { slot.dataset.html = listHtml; slot.innerHTML = listHtml; }
     }
   
     // ==== VERSTECKTES GEHIRN: gibt es in jedem Spiel + im Cockpit einmal zu finden.
