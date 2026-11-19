@@ -95,6 +95,18 @@
     });
     return sprites;
   }
+  // Eigene Gegenstände (props/<name>.png) - fehlt eine Datei, wird die Form selbst gezeichnet
+  const PROP_NAMES = ['banana', 'zombie_head', 'wrench', 'bottle', 'cowbell', 'fireball', 'mustache'];
+  let props = null;
+  function loadProps() {
+    if (props) return props;
+    props = {};
+    PROP_NAMES.forEach(n => { const img = new Image(); img.src = BASE + 'props/' + n + '.png'; props[n] = img; });
+    return props;
+  }
+  const propReady = (n) => { const i = props && props[n]; return i && i.complete && i.naturalWidth ? i : null; };
+  // Bild mittig zeichnen, Breite w (Höhe nach Seitenverhältnis)
+  function drawPropImg(ctx, img, w) { const h = w * img.naturalHeight / img.naturalWidth; ctx.drawImage(img, -w / 2, -h / 2, w, h); }
   const framesOf = (img) => (img && img.complete && img.naturalWidth) ? Math.max(1, Math.floor(img.naturalWidth / FRAME_W)) : 0;
 
   // ---------------------------------------------------------------------------------
@@ -216,6 +228,7 @@
     if (running) running.stop(true);
     injectStyle();
     loadSprites();
+    loadProps();
     const root = cover || document.createElement('div');
     cover = null;
     root.id = 'hsintro';
@@ -908,6 +921,12 @@
     function drawProj(p) {
       ctx.save(); ctx.translate(p.x, p.y);
       const s = FH * 0.12;
+      const pimg = propReady(p.type);
+      if (pimg) {
+        if (p.type !== 'fireball') ctx.rotate(p.r);
+        drawPropImg(ctx, pimg, FH * (p.type === 'fireball' ? 0.55 : 0.42));
+        ctx.restore(); return;
+      }
       if (p.type === 'laser') {
         ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 14; ctx.fillStyle = '#bff0ff'; ctx.fillRect(-s * 2.5, -s * 0.18, s * 5, s * 0.36);
       } else if (p.type === 'fireball') {
@@ -978,11 +997,15 @@
       if (b) {
         const bx = b.fly ? b.fly.x : b.x, byy = b.fly ? b.fly.y : GY;
         ctx.save(); ctx.translate(bx, byy - FH * 0.04); ctx.rotate(b.fly ? b.fly.r : 0);
+        const bimg = propReady('banana');
+        if (bimg) { ctx.translate(0, -FH * 0.03); drawPropImg(ctx, bimg, FH * 0.34); ctx.restore(); }
+        else {
         const s = FH * 0.09; ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.ellipse(0, 0, s * 1.4, s * 0.45, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         ctx.beginPath(); ctx.ellipse(-s * 0.9, -s * 0.3, s * 0.8, s * 0.3, -0.7, 0, Math.PI * 2); ctx.ellipse(s * 0.9, -s * 0.3, s * 0.8, s * 0.3, 0.7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         ctx.fillStyle = '#5a3a1a'; ctx.fillRect(-s * 0.15, -s * 0.6, s * 0.3, s * 0.4);
         ctx.restore();
+        }
       }
       zombies.forEach(z => { if (z.state !== 'gone') drawZombie(z); });
       heroes.slice().sort((a, c) => a.x - c.x).forEach(drawHero);
@@ -990,7 +1013,9 @@
       projs.forEach(drawProj);
       // Partikel (Blut, Zombie-Stücke, fliegende Köpfe)
       parts.forEach(q => {
-        if (q.head != null) {
+        if (q.head != null && propReady('zombie_head')) {
+          ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); drawPropImg(ctx, propReady('zombie_head'), FH * 0.42); ctx.restore();
+        } else if (q.head != null) {
           const spr = zombieSprite(q.head, 0, 'head');
           ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot);
           ctx.drawImage(spr, -11.5 * U, -5 * U, Z_W * U, Z_H * U); // nur der Kopf ist gefüllt, Mitte ca. (11.5|5)
