@@ -96,7 +96,7 @@
     return sprites;
   }
   // Eigene Gegenstände (props/<name>.png) - fehlt eine Datei, wird die Form selbst gezeichnet
-  const PROP_NAMES = ['banana', 'zombie_head', 'wrench', 'bottle', 'cowbell', 'fireball', 'mustache'];
+  const PROP_NAMES = ['banana', 'zombie_head', 'wrench', 'bottle', 'cowbell', 'fireball', 'mustache', 'shell'];
   let props = null;
   function loadProps() {
     if (props) return props;
@@ -107,6 +107,48 @@
   const propReady = (n) => { const i = props && props[n]; return i && i.complete && i.naturalWidth ? i : null; };
   // Bild mittig zeichnen, Breite w (Höhe nach Seitenverhältnis)
   function drawPropImg(ctx, img, w) { const h = w * img.naturalHeight / img.naturalWidth; ctx.drawImage(img, -w / 2, -h / 2, w, h); }
+  // Zombie-Sprites aus PixelLab (zombies/basis_<anim>.png, Frames je 172 x 172, Blick nach links)
+  // Fehlen sie, werden die kleinen Pixel-Zombies selbst gezeichnet.
+  const ZF = 172, Z_FOOT = 148, Z_FIG = 123, Z_CX = 86;
+  const Z_DEFBOX = { x: 40, y: 25, w: 90, h: 123, head: { x0: 50, x1: 105, y0: 25, y1: 62 }, hand: { x: 22, y: 85 } };
+  const ZANIMS = ['walk', 'grab', 'talk', 'hit', 'fly', 'ko', 'burn', 'eat', 'run'];
+  let zimgs = null;
+  const zbox = {};   // anim -> [ {x,y,w,h} je Frame ] (sichtbarer Bereich, für Zubehör)
+  function loadZombies() {
+    if (zimgs) return zimgs;
+    zimgs = {};
+    ZANIMS.forEach(a => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const n = Math.floor(img.naturalWidth / ZF), c = document.createElement('canvas');
+          c.width = img.naturalWidth; c.height = ZF; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+          const d = g.getImageData(0, 0, c.width, ZF).data, boxes = [];
+          const op = (f, x, y) => d[(y * c.width + f * ZF + x) * 4 + 3] > 40;
+          for (let f = 0; f < n; f++) {
+            let x0 = ZF, y0 = ZF, x1 = 0, y1 = 0;
+            for (let y = 0; y < ZF; y += 2) for (let x = 0; x < ZF; x += 2) {
+              if (op(f, x, y)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+            }
+            if (x1 <= x0) { boxes.push(Z_DEFBOX); continue; }
+            const b = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+            // Kopf = oberstes knappes Drittel, Hand = am weitesten links in Brusthöhe
+            let hx0 = ZF, hx1 = 0; const hy1 = Math.round(y0 + b.h * 0.3);
+            for (let y = y0; y <= hy1; y += 2) for (let x = 0; x < ZF; x += 2) if (op(f, x, y)) { if (x < hx0) hx0 = x; if (x > hx1) hx1 = x; }
+            let ax = ZF, ay = Math.round(y0 + b.h * 0.5);
+            for (let y = Math.round(y0 + b.h * 0.35); y <= y0 + b.h * 0.58; y += 2) for (let x = 0; x < ax; x += 2) if (op(f, x, y)) { ax = x; ay = y; break; }
+            b.head = { x0: hx0, x1: hx1, y0, y1: hy1 }; b.hand = { x: ax, y: ay };
+            boxes.push(b);
+          }
+          zbox[a] = boxes;
+        } catch (e) {}
+      };
+      img.src = BASE + 'zombies/basis_' + a + '.png';
+      zimgs[a] = img;
+    });
+    return zimgs;
+  }
+  const zReady = (a) => { const i = zimgs && zimgs[a]; return i && i.complete && i.naturalWidth ? i : null; };
   const framesOf = (img) => (img && img.complete && img.naturalWidth) ? Math.max(1, Math.floor(img.naturalWidth / FRAME_W)) : 0;
 
   // ---------------------------------------------------------------------------------
@@ -229,6 +271,7 @@
     injectStyle();
     loadSprites();
     loadProps();
+    loadZombies();
     const root = cover || document.createElement('div');
     cover = null;
     root.id = 'hsintro';
@@ -310,7 +353,7 @@
     function killZombie(z, how, dir) {
       if (z.state !== 'walk' && z.state !== 'grab') return false;
       if (theme.preKill && theme.preKill(z, how)) return false;    // z.B. geblockt
-      z.claimed = null; z.kx = z.x;
+      z.claimed = null; z.kx = z.x; z.killAt = now;
       const zx = z.x, zy = GY - FH * 0.55;
       sfx('boom', 0.7);
       word(zx, GY - FH * 1.35, pick(theme.words || HIT_WORDS));
@@ -454,6 +497,7 @@
       },
       // Film-Zündschnur: Popcorn-Zombies - und mittendrin: Standbild in Schwarzweiß, "Klappe!"
       spiel6: {
+        zWalk: 'eat',
         lines: ['Popcorn …', 'Pssst, der Film läuft!', 'Spoiler: Hiiirn!'],
         words: ['CUT!', 'ACTION!', 'BONK!'],
         acc(g, z, b) {
@@ -802,8 +846,8 @@
           if (z.x < -FH * 2) z.state = 'gone';
         } else if (z.state === 'fly' || z.state === 'fall') {
           z.x += z.vx * dt; z.vy += FH * 12 * dt; z.y += z.vy * dt; z.rot += z.vr * dt;
-          if (z.state === 'fall') { z.rot = Math.min(z.rot, Math.PI / 2); z.y = 0; if (z.rot >= Math.PI / 2) z.state = 'dead'; }
-          else if (z.y >= 0 && z.vy > 0) { z.y = 0; z.state = 'dead'; z.rot = Math.PI / 2 * (z.vx >= 0 ? 1 : -1); splats.push({ x: z.x, r: FH * 0.28, a: 0.8 }); if (theme.onLand) theme.onLand(z); }
+          if (z.state === 'fall') { z.rot = Math.min(z.rot, Math.PI / 2); z.y = 0; if (z.rot >= Math.PI / 2) { z.state = 'dead'; z.deadAt = now; } }
+          else if (z.y >= 0 && z.vy > 0) { z.y = 0; z.state = 'dead'; z.deadAt = now; z.rot = Math.PI / 2 * (z.vx >= 0 ? 1 : -1); splats.push({ x: z.x, r: FH * 0.28, a: 0.8 }); if (theme.onLand) theme.onLand(z); }
         } else if (z.state === 'squash') {
           z.sy = Math.max(0.16, z.sy - dt * 7); z.alpha -= dt * 0.45; if (z.alpha <= 0) z.state = 'gone';
         } else if (z.state === 'portal') {
@@ -887,7 +931,67 @@
       ctx.drawImage(img, fi * FRAME_W, 0, FRAME_W, FRAME_H, x, y, dw, dh);
     }
     const pixCanvas = document.createElement('canvas'); pixCanvas.width = 6; pixCanvas.height = 8;
+    // Sprite-Zombie zeichnen (gibt false zurück, wenn die Sprites noch fehlen)
+    function drawZombieSprite(z) {
+      if (!zReady('walk')) return false;
+      const s = FH * 0.98 / Z_FIG;            // Skalierung: gleiche Größe wie die Fighter
+      const alive = zAlive(z);
+      let anim = 'walk', fi = 0, flip = false, rot = 0, lying = false;
+      const pick = (a) => (zReady(a) ? a : 'walk');
+      const nOf = (a) => Math.max(1, Math.floor(zimgs[a].naturalWidth / ZF));
+      if (z.state === 'walk') {
+        anim = pick((z.hold && now < z.hold) || (frozen && !z.cheat) ? 'talk' : (theme.zWalk || 'walk'));
+        fi = anim === 'talk' ? Math.floor(now / 110) : Math.floor(z.ph * 1.6);
+      } else if (z.state === 'grab') { anim = pick('grab'); fi = Math.floor(now / 90); }
+      else if (z.state === 'fly' || z.state === 'portal') { anim = pick('fly'); fi = Math.floor((now - (z.killAt || 0)) / 70); rot = z.rot * 0.35; }
+      else if (z.state === 'fall') { anim = pick('ko'); fi = Math.floor(Math.min(1, z.rot / (Math.PI / 2)) * (nOf(anim) - 1)); }
+      else if (z.state === 'dead') { anim = pick('ko'); const n = nOf(anim); fi = Math.min(n - 1, Math.floor(n / 2) + Math.floor((now - (z.deadAt || 0)) / 50)); lying = true; }
+      else if (z.state === 'burn') { anim = pick('burn'); fi = Math.floor(z.ph * 1.2); flip = true; }
+      else if (z.state === 'squash') { anim = pick('hit'); fi = nOf(anim) - 1; }
+      const img = zimgs[anim], n = nOf(anim);
+      fi = anim === 'walk' || anim === 'grab' || anim === 'talk' || anim === 'burn' || anim === 'eat' ? ((fi % n) + n) % n : Math.min(n - 1, Math.max(0, fi));
+      let src = img, sx = fi * ZF;
+      if (z.pixel && alive) {   // Verpixelt: grob runterrechnen
+        const pg = pixCanvas.getContext('2d'); pixCanvas.width = 12; pixCanvas.height = 12; pg.imageSmoothingEnabled = true;
+        pg.clearRect(0, 0, 12, 12); pg.drawImage(img, sx, 0, ZF, ZF, 0, 0, 12, 12); src = pixCanvas; sx = -1;
+      }
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, z.alpha);
+      if (alive) { ctx.fillStyle = 'rgba(0,0,0,.33)'; ctx.beginPath(); ctx.ellipse(z.x, GY + 2, FH * 0.24, FH * 0.05, 0, 0, Math.PI * 2); ctx.fill(); }
+      ctx.translate(z.x, GY + z.y);
+      if (z.state === 'squash') ctx.scale(1 + (1 - z.sy) * 0.7, z.sy);
+      if (z.scale != null) { ctx.translate(0, -Z_FIG * s / 2); ctx.scale(Math.max(0, z.scale), Math.max(0, z.scale)); ctx.translate(0, Z_FIG * s / 2); }
+      if (rot) { ctx.translate(0, -Z_FIG * s / 2); ctx.rotate(rot); ctx.translate(0, Z_FIG * s / 2); }
+      if (z.state === 'grab') ctx.rotate(Math.sin(now / 90) * 0.03);
+      if (flip) ctx.scale(-1, 1);
+      const box = (zbox[anim] && zbox[anim][fi]) || Z_DEFBOX;
+      if (z.headless && !lying) {   // Kopf ist weggeflogen: oberes Drittel abschneiden
+        ctx.beginPath(); ctx.rect(-ZF * s, (box.y + box.h * 0.36 - Z_FOOT) * s, ZF * 2 * s, ZF * s); ctx.clip();
+      }
+      if (sx < 0) ctx.drawImage(src, 0, 0, 12, 12, -Z_CX * s, -Z_FOOT * s, ZF * s, ZF * s);
+      else ctx.drawImage(src, sx, 0, ZF, ZF, -Z_CX * s, -Z_FOOT * s, ZF * s, ZF * s);
+      // Zubehör des Spiel-Themas: das 22 x 32 Raster der Pixel-Zombies wird in drei Bereichen
+      // auf Kopf, Körper und Hand des Sprites gelegt (pro Frame ermittelt)
+      if (theme.acc && !(z.pixel && alive) && !lying && z.state !== 'squash' && box.head) {
+        const hd = box.head, hs = (hd.x1 - hd.x0) / 9;           // Pixel pro Rasterfeld am Kopf
+        const regions = [
+          { clip: [[-60, -60], [60, -60], [60, 9.5], [6, 9.5], [6, 2], [-60, 2]], tx: hd.x0 - 7 * hs, ty: hd.y0 + (hd.y1 - hd.y0) * 0.55, sx: hs, sy: (hd.y1 - hd.y0) / 9 },   // etwas tiefer: die Haare stehen hoch
+          { clip: [[6, 9.5], [60, 9.5], [60, 80], [6, 80]], tx: (hd.x0 + hd.x1) / 2 - 12 * hs * 1.2, ty: hd.y1 - 10 * hs * 1.15, sx: hs * 1.2, sy: hs * 1.15 },
+          { clip: [[-60, 2], [6, 2], [6, 80], [-60, 80]], tx: box.hand.x - 0.5 * hs, ty: box.hand.y - 13 * hs, sx: hs, sy: hs }
+        ];
+        regions.forEach(r => {
+          ctx.save();
+          ctx.translate((r.tx - Z_CX) * s, (r.ty - Z_FOOT) * s); ctx.scale(r.sx * s, r.sy * s);
+          ctx.beginPath(); r.clip.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.clip();
+          theme.acc(ctx, z, 0);
+          ctx.restore();
+        });
+      }
+      ctx.restore();
+      return true;
+    }
     function drawZombie(z) {
+      if (z.state !== 'ash' && drawZombieSprite(z)) return;
       const frame = (z.state === 'walk' || z.state === 'burn') ? (Math.floor(z.ph) % 2) : (z.state === 'grab' ? Math.floor(now / 160) % 2 : 0);
       let spr = zombieSprite(z.vi, frame, z.headless ? 'body' : 'all');
       const w = Z_W * U, h = Z_H * U;
@@ -923,7 +1027,7 @@
       const s = FH * 0.12;
       const pimg = propReady(p.type);
       if (pimg) {
-        if (p.type !== 'fireball') ctx.rotate(p.r);
+        if (p.type !== 'fireball' && p.type !== 'shell') ctx.rotate(p.r);
         drawPropImg(ctx, pimg, FH * (p.type === 'fireball' ? 0.55 : 0.42));
         ctx.restore(); return;
       }
@@ -1050,9 +1154,16 @@
       if (theme.drawFront) theme.drawFront();
     }
 
+    // Bilder kurz vorladen (max. 1,5 s), damit die Figuren nicht mitten im Intro den Stil wechseln
+    const allImgs = () => [].concat(...Object.values(sprites).map(o => Object.values(o)), Object.values(zimgs), Object.values(props));
+    let waitFrom = 0;
     function frame(ts) {
       if (ended) return;
-      if (!startAt) { startAt = ts; last = ts; }
+      if (!startAt) {
+        if (!waitFrom) waitFrom = ts;
+        if (ts - waitFrom < 1500 && allImgs().some(i => !i.complete)) { raf = requestAnimationFrame(frame); return; }
+        startAt = ts; last = ts;
+      }
       const rdt = Math.min(0.05, (ts - last) / 1000); last = ts;
       realNow = ts - startAt;
       const dt = rdt * timeScale;
@@ -1100,6 +1211,7 @@
   // Automatischer Start auf Spielseiten
   function auto() {
     if (!GAMES[page]) return;
+    loadSprites(); loadZombies(); loadProps();   // schon mal laden, während die Einstellungen kommen
     showCover();
     Promise.all([fetchJson('gameState'), getConfig(page)]).then(([gs, c]) => {
       const st = gs && gs.startTime;
