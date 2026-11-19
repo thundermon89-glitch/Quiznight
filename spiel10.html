@@ -135,6 +135,7 @@
     #timeline-scroll-outer { overflow: visible; }
     #timeline-ruler-inner {
       position: relative; height: 160px; width: 100%;
+      margin-top: 220px; /* Platz für die großen Bildkarten ÜBER dem Zeitstrahl */
     }
     .ruler-baseline {
       position: absolute; left: 0; right: 0; top: 92px; height: 4px;
@@ -155,13 +156,18 @@
     .timeline-chip {
       cursor: grab; touch-action: none; user-select: none;
       display: flex; flex-direction: column; align-items: center; gap: 4px;
-      position: absolute; top: 0; z-index: 5;
+      position: absolute; top: auto; bottom: calc(100% - 99px); z-index: 5; /* Punkt sitzt auf der Linie, Karte darüber */
       transition: left 0.35s cubic-bezier(.25,.8,.3,1); /* sanftes Zugwaggon-Gleiten */
     }
     .timeline-chip.dragging {
       cursor: grabbing; z-index: 20; transition: none; /* beim aktiven Ziehen kein Nachlaufen */
     }
     .timeline-chip img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
+    /* Reinzoomen beim Drüberfahren und beim Verschieben */
+    .timeline-chip .jax-chip { transition: transform 0.2s ease, box-shadow 0.2s ease; transform-origin: 50% 100%; }
+    .timeline-chip .jax-chip { border-radius: 18px; }
+    .timeline-chip:hover { z-index: 15; }
+    .timeline-chip:hover .jax-chip, .timeline-chip.dragging .jax-chip { transform: scale(1.5); box-shadow: 0 10px 28px rgba(0,0,0,.35); }
     .chip-rank {
       font-family: 'Baloo 2', sans-serif; font-weight: 800; color: #7017c9;
       font-size: 1rem; transition: transform 0.15s ease;
@@ -675,12 +681,12 @@
               <div id="timeline-chips">
                 ${round.events.map((ev) => `
                   <div class="timeline-chip" data-id="${ev.id}" style="left: ${xFromYear(myYearGuesses[ev.id])};">
-                    <div class="chip-rank">${myYearGuesses[ev.id]}</div>
-                    <div class="chip-dot"></div>
-                    <div class="jax-chip bg-white p-1.5 text-[11px] font-semibold text-[#1a1a2e] text-center w-[100px] leading-tight">
-                      ${ev.image ? `<img src="${ev.image}" draggable="false" class="w-16 h-16 object-contain mx-auto mb-1">` : (ev.emoji ? `<div class="text-3xl mb-1">${ev.emoji}</div>` : '')}
+                    <div class="jax-chip bg-white p-2 text-[12px] font-semibold text-[#1a1a2e] text-center w-[160px] leading-tight">
+                      ${ev.image ? `<img src="${ev.image}" draggable="false" class="w-32 h-32 object-contain mx-auto mb-1">` : (ev.emoji ? `<div class="text-6xl mb-1">${ev.emoji}</div>` : '')}
                       ${ev.label}
                     </div>
+                    <div class="chip-rank">${myYearGuesses[ev.id]}</div>
+                    <div class="chip-dot"></div>
                   </div>
                 `).join('')}
               </div>
@@ -742,12 +748,12 @@
     // für die ca. 100px breite Karte) um - der Kern der freien Jahresauswahl.
     function xFromYear(year) {
       const pct = ((year - RULER_START_YEAR) / RULER_SPAN) * 100;
-      return `calc(${pct}% - 50px)`;
+      return `calc(${pct}% - 80px)`;
     }
     // leftPx = aktuelle linke Kante der Karte in Pixeln, containerWidth = gemessene Breite
     // des Lineals in Pixeln (wird beim Ziehen live gemessen, da jetzt prozentual/responsiv).
     function yearFromX(leftPx, containerWidth) {
-      const centerPx = leftPx + 50;
+      const centerPx = leftPx + 80;
       const rawYear = RULER_START_YEAR + (centerPx / containerWidth) * RULER_SPAN;
       return Math.round(Math.max(RULER_START_YEAR, Math.min(RULER_END_YEAR, rawYear)));
     }
@@ -783,7 +789,7 @@
           if (draggingChip !== chip) return;
           const containerRect = container.getBoundingClientRect();
           let newLeft = e.clientX - containerRect.left - grabOffsetX;
-          newLeft = Math.max(-50, Math.min(newLeft, containerRect.width - 50));
+          newLeft = Math.max(-80, Math.min(newLeft, containerRect.width - 80));
           chip.style.left = newLeft + 'px';
           const year = yearFromX(newLeft, containerRect.width);
           const rankEl = chip.querySelector('.chip-rank');
