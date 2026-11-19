@@ -113,6 +113,7 @@
     musik_goldregen:{ group: 'Nebenspiele', label: 'Goldregen - Musik',               file: 'musik-beat-112',           vol: 0.45, music: true },
     musik_vier:     { group: 'Nebenspiele', label: 'Vier Gewinnt - Musik',            file: 'musik-bereit',             vol: 0.4,  music: true },
     musik_panzer:   { group: 'Nebenspiele', label: 'Panzerschlacht - Musik',          file: 'musik-bass',               vol: 0.45, music: true },
+    musik_burstpipe:{ group: 'Nebenspiele', label: 'Burst Pipe - Musik',              file: 'musik-unheimlich-loop',    vol: 0.45, music: true },
     musik_ochs:     { group: 'Nebenspiele', label: 'Ochs vorm Berg - Musik (stoppt bei Rot)', file: 'musik-festlich',   vol: 0.55, music: true },
     musik_bombe:    { group: 'Nebenspiele', label: 'Bomb is ticking - Musik',         file: 'musik-herzschlag',         vol: 0.4,  music: true },
     explosion:      { group: 'Nebenspiele', label: 'Explosion',                       file: ['explosion', 'explosion-boeller'], vol: 0.8 },
@@ -173,6 +174,7 @@
     panzer:         { music: 'musik_panzer' },
     ochsvormberg:   { music: 'musik_ochs' },
     bombtick:       { music: 'musik_bombe' },
+    burstpipe:      { music: 'musik_burstpipe' },
     siegerehrung:   { music: 'musik_siegerehrung' },
     fighter:        { widget: false },   // Fighter hat eigene Ton-Knöpfe
     editor:         { widget: false },

@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <script src="gif-keep.js"></script>
+  <script src="sounds/hs-audio.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Hirnschmalz-Arena - Burst Pipe</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Baloo 2', sans-serif; }
+    html, body { touch-action: none; overscroll-behavior: none; }
+    .shaft-bg { background: radial-gradient(ellipse at bottom, #173a12 0%, #0b140b 45%, #050805 100%); }
+    .jax-card { background: #ffffff; border: 4px solid #1a1a2e; border-radius: 22px; box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn { font-family: 'Baloo 2', sans-serif; border: 3px solid #1a1a2e; border-radius: 18px;
+      box-shadow: 5px 5px 0 rgba(0,0,0,0.85); transition: transform .12s ease, box-shadow .12s ease; }
+    .jax-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
+    .jax-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.85); }
+    .num { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 800; }
+    .bp-chip { background: rgba(5,12,5,.8); border: 3px solid #b6ff3b; border-radius: 16px; padding: 2px 12px; font-weight: 800; font-size: 17px; color: #d9ff8a; }
+    .tower { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .tower canvas { display: block; border: 4px solid #0b0f0b; border-radius: 12px; background: #0c120c;
+      box-shadow: 0 0 0 2px #3b4a1e, 0 0 26px rgba(150,255,60,.18); image-rendering: pixelated; }
+    .tower.center canvas { box-shadow: 0 0 0 3px #b6ff3b, 0 0 34px rgba(150,255,60,.35); }
+    .tower-label { font-weight: 800; font-size: 13px; color: #d9ff8a; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      background: rgba(0,0,0,.55); border: 2px solid #2d3a16; border-radius: 10px; padding: 0 8px; }
+    .tower.center .tower-label { font-size: 16px; border-color: #b6ff3b; }
+    .tower-label.dead { color: #ff8a8a; border-color: #5a1e1e; }
+    .tower.empty { visibility: hidden; }
+    #stage-row { display: flex; align-items: flex-end; justify-content: center; gap: 10px; }
+    #bp-countdown { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 5;
+      font-weight: 800; font-size: clamp(4rem, 12vw, 7rem); color: #d9ff3b; text-shadow: 0 0 18px #5dff2e, 4px 4px 0 #0b0b12; }
+    #spectate-bar { display: none; align-items: center; gap: 8px; }
+    #spectate-bar.show { display: flex; }
+    #spectate-bar button { width: 40px; height: 34px; border-radius: 12px; border: 3px solid #0b0f0b; background: #b6ff3b; color: #10200a; font-weight: 900; font-size: 18px; }
+    #touch { display: none; gap: 10px; width: 100%; max-width: 420px; user-select: none; -webkit-user-select: none; }
+    #touch button { flex: 1; height: 62px; border-radius: 16px; border: 3px solid #0b0f0b; background: rgba(255,255,255,.12); color: #fff;
+      font-size: 1.6rem; font-weight: 900; touch-action: none; }
+    #touch button.jump { flex: 1.4; background: #7ac70c; color: #10200a; }
+    #touch button.down { background: rgba(255,255,255,.3); }
+    body.touch.playing #touch { display: flex; }
+    @keyframes titlePop { 0% { transform: scale(0.3); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+    .title-pop { animation: titlePop 0.6s cubic-bezier(.34,1.56,.64,1); }
+    .glow-title { color: #d9ff3b; text-shadow: 0 0 12px rgba(150,255,60,.7), 3px 3px 0 #0b140b, -3px -3px 0 #0b140b, 3px -3px 0 #0b140b, -3px 3px 0 #0b140b; }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, get, set, update, push, onValue, onChildAdded, onChildChanged, onChildRemoved,
+             runTransaction, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = { databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com" };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // ==== BURST PIPE (Atomschacht) ====
+    // Jeder klettert in seinem EIGENEN Turm (alle Türme sind gleich gebaut: gemeinsamer Zufallswert
+    // vom Admin). Der eigene Turm ist in der Mitte, links und rechts laufen bis zu zwei Mitspieler mit.
+    // Wer in die Säure fällt, schaut danach den Überlebenden zu (◀ ▶ zum Umschalten).
+    // Physik, Turmaufbau, Schwierigkeit und Säure-Geschwindigkeit sind 1:1 aus burst_pipe übernommen.
+    const playerId = localStorage.getItem("quiz_player_id");
+    if (!playerId) window.location.href = "index.html";
+
+    let serverOffset = 0;
+    const now = () => Date.now() + serverOffset;
+    onValue(ref(db, '.info/serverTimeOffset'), (snap) => { serverOffset = snap.val() || 0; });
+    let allPlayers = {};
+    onValue(ref(db, 'players/'), (snap) => { allPlayers = snap.val() || {}; });
+    onValue(ref(db, 'gameState'), (snap) => {
+      const gs = snap.val();
+      if (gs && gs.status && gs.status !== 'in_game') window.location.href = gs.status === 'waiting' ? "index.html" : "cockpit.html";
+    });
+
+    // ---------- Konstanten (aus burst_pipe) ----------
+    const W = 230, H = 620, FLOOR_Y = 4000;
+    const FRAME_W = 48, FRAME_H = 48, SPRITE_SCALE = 1.8;
+    const SPRITE_W = FRAME_W * SPRITE_SCALE, SPRITE_H = FRAME_H * SPRITE_SCALE;
+    const GRAVITY = 0.32, JUMP_VELOCITY = -9.0;
+    const MOVE_ACCEL = 0.55, MAX_HSPEED = 3.4, FRICTION = 0.9;
+    const WATER_RISE_PER_MS = 0.014;
+    // ---------- Mehrspieler ----------
+    const START_DELAY_MS = 5000;      // Countdown, damit alle Geräte geladen haben
+    const JOIN_GRACE_MS = 4000;       // so lange nach "LOS" darf man noch einsteigen
+    const SYNC_MS = 100;              // eigene Position so oft melden
+    const STALE_MS = 12000;           // wer so lange nichts meldet, gilt als ausgeschieden
+    const SPECTATE_DELAY_MS = 1800;   // so lange sieht man das eigene Säurebad, dann wird umgeschaltet
+    // ---------- Punkte: nach Platz, gebremst auf höchstens 200 und nie mehr als die erreichten Meter ----------
+    const PLACE_POINTS = [200, 140, 100, 70, 50, 35, 25, 20, 15, 10];
+    const MAX_POINTS = 200;
+    function pointsFor(place, height) {
+      if (!height || height < 1) return 0;
+      return Math.min(MAX_POINTS, PLACE_POINTS[place] != null ? PLACE_POINTS[place] : 10, height);
+    }
+
+    const sheet = new Image();
+    sheet.src = "data:image/png;base64,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";   // Hausmeister Fix - für alle ohne eigene Fighter-Figur
+
+    // Fighter-Figuren (aus fighter.html übernommen): gehören zum Spielernamen
+    const FIGHTERS = {"cCc": {"dh": 311, "fp": 12, "anims": {"idle": {"src": "fighter/ccc_idle.png", "frames": 11}, "walk": {"src": "fighter/ccc_walk.png", "frames": 13}, "jump": {"src": "fighter/ccc_jump.png", "frames": 11}, "ko": {"src": "fighter/ccc_ko.png", "frames": 11}}}, "Sörn1989": {"dh": 323, "fp": 12, "anims": {"idle": {"src": "fighter/soern_idle.png", "frames": 9}, "walk": {"src": "fighter/soern_walk.png", "frames": 11}, "jump": {"src": "fighter/soern_jump.png", "frames": 9}, "ko": {"src": "fighter/soern_ko.png", "frames": 9}}}, "Santax": {"dh": 296, "fp": 12, "anims": {"idle": {"src": "fighter/santax_idle.png", "frames": 9}, "walk": {"src": "fighter/santax_walk.png", "frames": 9}, "jump": {"src": "fighter/santax_jump.png", "frames": 13}, "ko": {"src": "fighter/santax_ko.png", "frames": 9}}}, "Holzkohle": {"dh": 320, "fp": 12, "anims": {"idle": {"src": "fighter/holzkohle_idle.png", "frames": 9}, "walk": {"src": "fighter/holzkohle_walk.png", "frames": 9}, "jump": {"src": "fighter/holzkohle_jump.png", "frames": 9}, "ko": {"src": "fighter/holzkohle_ko.png", "frames": 11}}}, "breekibree": {"dh": 308, "fp": 12, "anims": {"idle": {"src": "fighter/breeki_idle.png", "frames": 11}, "walk": {"src": "fighter/breeki_walk.png", "frames": 11}, "jump": {"src": "fighter/breeki_jump.png", "frames": 9}, "ko": {"src": "fighter/breeki_ko.png", "frames": 11}}}, "skywalker161": {"dh": 317, "fp": 12, "anims": {"idle": {"src": "fighter/sky_idle.png", "frames": 11}, "walk": {"src": "fighter/sky_walk.png", "frames": 9}, "jump": {"src": "fighter/sky_jump.png", "frames": 9}, "ko": {"src": "fighter/sky_ko.png", "frames": 9}}}};
+    const fighterImgs = {};
+    function fighterFor(name) {
+      if (!name) return null;
+      let key = FIGHTERS[name] ? name : Object.keys(FIGHTERS).find((k) => k.toLowerCase() === String(name).trim().toLowerCase());
+      if (!key) return null;
+      if (!fighterImgs[key]) {
+        fighterImgs[key] = {};
+        for (const a in FIGHTERS[key].anims) { const img = new Image(); img.src = FIGHTERS[key].anims[a].src; fighterImgs[key][a] = img; }
+      }
+      return { cfg: FIGHTERS[key], imgs: fighterImgs[key] };
+    }
+    const FIGHTER_FIGURE_H = 86;   // sichtbare Figurenhöhe im Turm (wie Fix)
+    const FIGHTER_FPS = { idle: 8, walk: 12 };
+
+    // ---------- Turm: deterministisch aus dem Seed, für alle Ansichten derselbe ----------
+    function seededRandom(s) {
+      return function () {
+        s |= 0; s = (s + 0x6D2B79F5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    function platformTier(heightM) {
+      if (heightM > 1200) return { hard: true, extreme: true, insane: true, widthRange: 0.14, gap: (r) => 170 + r() * 95 };
+      if (heightM > 1000) return { hard: true, extreme: true, widthRange: 0.18, gap: (r) => 155 + r() * 90 };
+      if (heightM > 300) return { hard: true, extreme: false, widthRange: 0.22, gap: (r) => 70 + r() * 65 };
+      return { hard: false, extreme: false, widthRange: 0.32, gap: (r) => 55 + r() * 55 };
+    }
+    function makePlatform(y, rand, tier) {
+      const wRange = W * tier.widthRange;
+      const minW = tier.insane ? 30 : tier.extreme ? 34 : 38;
+      const w = Math.max(minW, Math.min(W - 30, 40 + rand() * wRange));
+      const x = rand() * (W - w);
+      return { x, y, w, h: 14 };
+    }
+    let seed = null, tower = [], towerIdx = 0, towerTopY = 0;
+    function resetTower(s) {
+      seed = s; towerIdx = 0; towerTopY = FLOOR_Y - 60;
+      tower = [{ x: 0, y: FLOOR_Y, w: W, h: 40, isFloor: true }];
+      extendTower(FLOOR_Y - H * 3);
+    }
+    function extendTower(minY) {
+      while (towerTopY > minY) {
+        const rand = seededRandom(seed + towerIdx * 7919);
+        const tier = platformTier(Math.round((FLOOR_Y - towerTopY) / 10));
+        towerTopY -= tier.gap(rand);
+        tower.push(makePlatform(towerTopY, rand, tier));
+        towerIdx++;
+      }
+    }
+    // Plattformen mit yMin <= y <= yMax (Turm ist nach y absteigend sortiert)
+    function forPlatforms(yMin, yMax, fn) {
+      let lo = 0, hi = tower.length;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (tower[m].y > yMax) lo = m + 1; else hi = m; }
+      for (let i = lo; i < tower.length && tower[i].y >= yMin; i++) { if (fn(tower[i]) === false) return; }
+    }
+
+    // ---------- Zustand ----------
+    let role = 'loading';             // 'player' | 'spectator'
+    let isHost = false, myName = 'Spieler';
+    let startedAt = null, startAt = null, finished = false, resultsShown = false;
+    let me = null;                    // eigene Figur (Simulation)
+    const remotes = {};               // andere Spieler (geglättete Darstellung)
+    let results = {};                 // id -> { name, height, diedAt, points, awarded }
+    let joinedIds = [];
+    let watchId = null, spectateFrom = 0;
+    const keys = { left: false, right: false };
+    let confetti = [], flyingTexts = [], lastMilestone = 0;
+
+    function newMe(snap) {
+      const s = snap || {};
+      return {
+        id: playerId, name: myName,
+        x: s.x != null ? s.x : (W - SPRITE_W) / 2, y: s.y != null ? s.y : FLOOR_Y - SPRITE_H,
+        vx: 0, vy: s.vy || 0, facing: s.f || 1, anim: 'idle', frame: 0, frameTimer: 0,
+        grounded: s.g != null ? !!s.g : true, standingOn: null, doubleJumpUsed: false,
+        spinStart: null, spinAngle: 0, spinFacing: 1,
+        cam: s.cam != null ? s.cam : FLOOR_Y - SPRITE_H, wat: s.wat != null ? s.wat : FLOOR_Y + 120,
+        h: s.h || 0, alive: true, deadAt: 0
+      };
+    }
+
+    // ---------- Eigene Figur: Physik wie im Original ----------
+    function jump() {
+      if (!me || !me.alive || role !== 'player' || now() < startAt) return;
+      if (me.grounded) {
+        me.vy = JUMP_VELOCITY; me.grounded = false; me.standingOn = null; me.doubleJumpUsed = false;
+        try { window.HSAudio && HSAudio.synth('blip', 0.35); } catch (e) {}
+      } else if (!me.doubleJumpUsed) {
+        me.vy = JUMP_VELOCITY * 0.92; me.doubleJumpUsed = true;
+        me.spinStart = performance.now(); me.spinFacing = me.facing;
+        try { window.HSAudio && HSAudio.synth('blip', 0.45); } catch (e) {}
+      }
+    }
+
+    function stepMe(dt, ts) {
+      const p = me, f = dt / 16.67;
+      if (keys.left) p.vx -= MOVE_ACCEL;
+      if (keys.right) p.vx += MOVE_ACCEL;
+      p.vx *= FRICTION;
+      p.vx = Math.max(-MAX_HSPEED, Math.min(MAX_HSPEED, p.vx));
+      if (keys.left && !keys.right) p.facing = -1; else if (keys.right && !keys.left) p.facing = 1;
+      if (!p.grounded) p.vy += GRAVITY * f;
+      p.x += p.vx * f;
+      if (!p.grounded) p.y += p.vy * f;
+      if (p.x < 0) { p.x = 0; p.vx = Math.abs(p.vx) * 0.55 + 1.2; }
+      else if (p.x > W - SPRITE_W) { p.x = W - SPRITE_W; p.vx = -(Math.abs(p.vx) * 0.55 + 1.2); }
+
+      if (p.grounded && p.standingOn) {
+        const s = p.standingOn;
+        if (!(p.x + SPRITE_W * 0.7 > s.x && p.x + SPRITE_W * 0.3 < s.x + s.w)) { p.grounded = false; p.standingOn = null; }
+      } else if (p.grounded && !p.standingOn) {
+        // nach Neuladen: Plattform unter den Füßen wiederfinden
+        const footY = p.y + SPRITE_H; let found = null;
+        forPlatforms(footY - 2, footY + 2, (s) => { if (p.x + SPRITE_W * 0.7 > s.x && p.x + SPRITE_W * 0.3 < s.x + s.w) { found = s; return false; } });
+        if (found) p.standingOn = found; else p.grounded = false;
+      }
+      if (!p.grounded && p.vy >= 0) {
+        const footY = p.y + SPRITE_H;
+        forPlatforms(footY - 50, footY, (s) => {
+          if (footY >= s.y && footY <= s.y + s.h + 10 && p.x + SPRITE_W * 0.7 > s.x && p.x + SPRITE_W * 0.3 < s.x + s.w) {
+            p.y = s.y - SPRITE_H; p.vy = 0; p.grounded = true; p.standingOn = s; p.doubleJumpUsed = false;
+            return false;
+          }
+        });
+      }
+      // Kamera springt erst nach, wenn man nah am oberen Rand ist
+      const TOP = H * 0.28;
+      if (p.y - p.cam + H * 0.8 < TOP) p.cam = p.y + H * 0.8 - TOP;
+
+      // Säure: steigt immer, ab 300 m bleibt sie sichtbar am unteren Rand und holt auf
+      const hM = Math.max(0, Math.round((FLOOR_Y - p.cam) / 10));
+      let mult = 1;
+      if (hM >= 1200) mult = 4.4; else if (hM >= 1000) mult = 3.4; else if (hM >= 800) mult = 2.1; else if (hM >= 400) mult = 1.5;
+      p.wat -= WATER_RISE_PER_MS * mult * dt;
+      if (hM >= 300) {
+        const pin = p.cam + H * 0.16;
+        if (p.wat > pin) {
+          let cu = 0.0025;
+          if (hM >= 1200) cu = 0.019; else if (hM >= 1000) cu = 0.014; else if (hM >= 800) cu = 0.009; else if (hM >= 400) cu = 0.0065;
+          p.wat -= (p.wat - pin) * Math.min(1, cu * dt);
+        }
+      }
+      extendTower(p.cam - H * 2.5);
+      p.h = hM;
+
+      const ms = Math.floor(hM / 50);
+      if (ms > lastMilestone) {
+        lastMilestone = ms;
+        spawnBurst(p.x + SPRITE_W / 2, p.y - p.cam + H * 0.8, ['#b6ff3b', '#ffe14d', '#ffffff', '#5dff2e', '#ff9d2e'], 46);
+        flyingTexts.push({ text: (ms * 50) + 'm!', x: -100, vx: (W + 350) / (1500 / 16.67), life: 0, maxLife: 1500 });
+        try { window.HSAudio && HSAudio.synth('coin', 0.8); } catch (e) {}
+      }
+
+      p.anim = p.grounded ? (Math.abs(p.vx) > 0.3 ? 'walk' : 'idle') : 'jump';
+      animate(p, dt);
+      if (p.spinStart != null) {
+        const t = (performance.now() - p.spinStart) / 420;
+        if (t >= 1) { p.spinStart = null; p.spinAngle = 0; } else p.spinAngle = t * 360 * p.spinFacing;
+      } else p.spinAngle = 0;
+
+      if (p.y + SPRITE_H > p.wat) { die(); return; }
+      if (p.y - p.cam + H * 0.8 > H + 60) { die(); return; }
+    }
+
+    // Fix-Spritesheet: Zeile 1 stehen, Zeile 2 springen/laufen
+    const ANIMS = { idle: { row: 0, frames: 2, fps: 3 }, jump: { row: 1, frames: 2, fps: 6 }, walk: { row: 1, frames: 2, fps: 6 } };
+    function animate(p, dt) {
+      const def = ANIMS[p.anim] || ANIMS.idle;
+      p.frameTimer = (p.frameTimer || 0) + dt;
+      const d = 1000 / def.fps;
+      if (p.frameTimer >= d) { p.frameTimer -= d; p.frame = ((p.frame || 0) + 1) % def.frames; }
+    }
+
+    function die() {
+      if (!me.alive) return;
+      me.alive = false; me.deadAt = performance.now(); spectateFrom = me.deadAt + SPECTATE_DELAY_MS;
+      keys.left = keys.right = false;
+      document.body.classList.remove('playing');
+      spawnBurst(me.x + SPRITE_W / 2, Math.min(H - 10, me.wat - me.cam + H * 0.8), ['#b6ff3b', '#7ac70c', '#e6ff7a', '#3f8f00'], 60, true);
+      try { window.HSAudio && HSAudio.play('verloren'); } catch (e) {}
+      syncNow();
+      const h = me.h;
+      runTransaction(ref(db, 'burstpipeState/results/' + playerId), (cur) => cur || { name: myName, height: h, diedAt: now() }).catch(() => {});
+      if (h > 0) push(ref(db, 'burstpipeHof'), { name: myName, height: h, at: Date.now() }).catch(() => {});
+    }
+
+    // ---------- Eigene Position melden ----------
+    const r1 = (v) => Math.round(v * 10) / 10;
+    function mySnapshot() {
+      return { name: myName, x: r1(me.x), y: r1(me.y), vx: r1(me.vx), vy: r1(me.vy), g: me.grounded ? 1 : 0, f: me.facing,
+        a: me.anim === 'jump' ? 2 : me.anim === 'walk' ? 1 : 0, sp: me.spinStart != null ? (me.spinFacing || 1) : 0,
+        cam: r1(me.cam), wat: r1(me.wat), h: me.h, alive: me.alive, t: now() };
+    }
+    let lastSync = 0;
+    function syncNow() {
+      if (role !== 'player' || !me) return;
+      lastSync = performance.now();
+      update(ref(db, 'burstpipeState/players/' + playerId), mySnapshot()).catch(() => {});
+    }
+
+    // ---------- Mitspieler: Daten empfangen, weich vorausberechnen ----------
+    function onRemote(snap) {
+      const id = snap.key, v = snap.val() || {};
+      if (!joinedIds.includes(id)) joinedIds.push(id);
+      if (id === playerId) return;
+      const r = remotes[id] || (remotes[id] = { id, frame: 0, frameTimer: 0, spinStart: null, spinAngle: 0 });
+      r.name = v.name || (allPlayers[id] && allPlayers[id].name) || '?';
+      r.s = v; r.recvAt = performance.now();
+      r.alive = v.alive !== false; r.h = v.h || 0; r.t = v.t || 0;
+      r.facing = v.f || 1; r.anim = v.a === 2 ? 'jump' : v.a === 1 ? 'walk' : 'idle'; r.vy = v.vy || 0;
+      if (v.sp && r.spinStart == null && !r.lastSp) { r.spinStart = performance.now(); r.spinFacing = v.sp; }
+      r.lastSp = v.sp;
+      if (r.x == null) { r.x = v.x; r.y = v.y; r.cam = v.cam; r.wat = v.wat; }
+    }
+    function stepRemote(r, dt) {
+      if (!r.s) return;
+      const s = r.s;
+      const el = Math.min(8, (performance.now() - r.recvAt) / 16.67);
+      let px = s.x, py = s.y;
+      if (r.alive) {
+        px = Math.max(0, Math.min(W - SPRITE_W, s.x + s.vx * el));
+        if (!s.g) py = s.y + s.vy * el + 0.5 * GRAVITY * el * el;
+      }
+      const k = 1 - Math.pow(0.55, dt / 16.67);
+      if (Math.abs(px - r.x) > 120 || Math.abs(py - r.y) > 220) { r.x = px; r.y = py; }
+      else { r.x += (px - r.x) * k; r.y += (py - r.y) * k; }
+      if (Math.abs(s.cam - r.cam) > 400) r.cam = s.cam; else r.cam += (s.cam - r.cam) * k;
+      if (Math.abs(s.wat - r.wat) > 400) r.wat = s.wat; else r.wat += (s.wat - r.wat) * k;
+      if (r.alive) animate(r, dt);
+      if (r.spinStart != null) {
+        const t = (performance.now() - r.spinStart) / 420;
+        if (t >= 1) { r.spinStart = null; r.spinAngle = 0; } else r.spinAngle = t * 360 * (r.spinFacing || 1);
+      }
+      extendTower(r.cam - H * 2.5);
+    }
+
+    // ---------- Wer wird wo angezeigt? ----------
+    function viewOf(id) { return id === playerId ? me : remotes[id]; }
+    function isAlive(id) { const v = viewOf(id); return !!v && v.alive && !results[id]; }
+    function heightOf(id) { const v = viewOf(id); return results[id] ? results[id].height : (v ? v.h || 0 : 0); }
+    function nameOf(id) { const v = viewOf(id); return (v && v.name) || (results[id] && results[id].name) || (allPlayers[id] && allPlayers[id].name) || '?'; }
+    function survivors() { return joinedIds.filter((id) => viewOf(id) && isAlive(id)).sort((a, b) => heightOf(b) - heightOf(a)); }
+
+    function pickViews() {
+      let center = null;
+      const amPlaying = role === 'player' && me;
+      if (amPlaying && (me.alive || performance.now() < spectateFrom)) center = playerId;
+      else {
+        const alive = survivors().filter((id) => id !== playerId);
+        if (watchId && alive.includes(watchId)) center = watchId;
+        else if (alive.length) center = watchId = alive[0];
+        else if (watchId && viewOf(watchId)) center = watchId;
+        else {
+          const any = joinedIds.filter((id) => viewOf(id)).sort((a, b) => heightOf(b) - heightOf(a));
+          center = any[0] || (amPlaying ? playerId : null);
+        }
+      }
+      const others = joinedIds.filter((id) => id !== center && id !== playerId && viewOf(id))
+        .sort((a, b) => (isAlive(b) - isAlive(a)) || (heightOf(b) - heightOf(a)));
+      return { center, left: others[0] || null, right: others[1] || null };
+    }
+
+    window.bpCycle = function (dir) {
+      const alive = survivors().filter((id) => id !== playerId);
+      if (!alive.length) return;
+      const cur = alive.indexOf(watchId);
+      watchId = alive[(cur + dir + alive.length) % alive.length];
+      spectateFrom = 0;
+    };
+
+    // ---------- Zeichnen: Atomschacht ----------
+    function makeWallTile() {
+      const c = document.createElement('canvas'); c.width = W; c.height = 360;
+      const t = c.getContext('2d'), rnd = seededRandom(4242);
+      t.fillStyle = '#121712'; t.fillRect(0, 0, W, 360);
+      const shades = ['#283028', '#232a23', '#2c352b', '#252d26'];
+      for (let y = 0; y < 360; y += 90) for (let x = 0; x < W; x += 115) {
+        t.fillStyle = shades[Math.floor(rnd() * shades.length)];
+        t.fillRect(x + 2, y + 2, 111, 86);
+        t.fillStyle = 'rgba(0,0,0,.25)'; t.fillRect(x + 2, y + 80, 111, 8);
+        t.fillStyle = 'rgba(255,255,255,.05)'; t.fillRect(x + 2, y + 2, 111, 3);
+        t.fillStyle = '#4b554a';
+        [[8, 8], [105, 8], [8, 80], [105, 80]].forEach(([rx, ry]) => { t.beginPath(); t.arc(x + rx, y + ry, 2, 0, 6.29); t.fill(); });
+        if (rnd() < 0.5) {   // grünliche Schlieren, wo die Säure schon mal hochkam
+          const sx = x + 15 + rnd() * 80, len = 20 + rnd() * 50;
+          const g = t.createLinearGradient(0, y + 4, 0, y + 4 + len);
+          g.addColorStop(0, 'rgba(120,200,40,.22)'); g.addColorStop(1, 'rgba(120,200,40,0)');
+          t.fillStyle = g; t.fillRect(sx, y + 4, 3 + rnd() * 4, len);
+        }
+      }
+      const pipe = (px, pw) => {
+        const g = t.createLinearGradient(px, 0, px + pw, 0);
+        g.addColorStop(0, '#2b302b'); g.addColorStop(0.45, '#6f786c'); g.addColorStop(1, '#1f231f');
+        t.fillStyle = g; t.fillRect(px, 0, pw, 360);
+        for (let y = 20; y < 360; y += 90) { t.fillStyle = '#4c544a'; t.fillRect(px - 3, y, pw + 6, 8); t.fillStyle = '#7e887a'; t.fillRect(px - 3, y, pw + 6, 2); }
+      };
+      pipe(4, 12); pipe(W - 16, 12);
+      return c;
+    }
+    function makeStripes(w, h) {
+      const c = document.createElement('canvas'); c.width = 16; c.height = h;
+      const t = c.getContext('2d');
+      t.fillStyle = '#ffcc00'; t.fillRect(0, 0, 16, h);
+      t.fillStyle = '#111'; t.beginPath();
+      for (let x = -16; x < 32; x += 16) { t.moveTo(x, h); t.lineTo(x + 8, 0); t.lineTo(x + 16, 0); t.lineTo(x + 8, h); }
+      t.fill();
+      return c;
+    }
+    const wallTile = makeWallTile(), stripeTile = makeStripes(16, 4), bandTile = makeStripes(16, 12);
+
+    function trefoil(ctx, cx, cy, r) {
+      ctx.save();
+      ctx.fillStyle = '#ffcc00'; ctx.strokeStyle = '#111'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(cx, cy - r * 1.25); ctx.lineTo(cx + r * 1.15, cy + r * 0.8); ctx.lineTo(cx - r * 1.15, cy + r * 0.8); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#111';
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + i * (Math.PI * 2 / 3);
+        ctx.beginPath(); ctx.moveTo(cx, cy + r * 0.05); ctx.arc(cx, cy + r * 0.05, r * 0.62, a - 0.5, a + 0.5); ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = '#ffcc00'; ctx.beginPath(); ctx.arc(cx, cy + r * 0.05, r * 0.2, 0, 6.29); ctx.fill();
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(cx, cy + r * 0.05, r * 0.12, 0, 6.29); ctx.fill();
+      ctx.restore();
+    }
+
+    function patternFor(ctx, key, img) {
+      ctx.__pat = ctx.__pat || {};
+      return ctx.__pat[key] || (ctx.__pat[key] = ctx.createPattern(img, 'repeat'));
+    }
+
+    function drawFighter(ctx, v, x, y, fg) {
+      let anim = v.alive ? (v.anim || 'idle') : 'ko';
+      const ok = (a) => fg.cfg.anims[a] && fg.imgs[a] && fg.imgs[a].complete && fg.imgs[a].naturalWidth > 0;
+      if (!ok(anim)) anim = ok('idle') ? 'idle' : null;
+      if (!anim) return false;
+      const img = fg.imgs[anim], n = fg.cfg.anims[anim].frames || 1;
+      const fw = img.naturalWidth / n, fh = img.naturalHeight;
+      let fi;
+      if (anim === 'jump') {   // Sprungbild passend zur Flugphase: hoch = Anfang, runter = Ende
+        const ph = Math.max(0, Math.min(1, ((v.vy || 0) - JUMP_VELOCITY) / (-2 * JUMP_VELOCITY)));
+        fi = Math.round(ph * (n - 1));
+      } else if (anim === 'ko') fi = n - 1;
+      else fi = Math.floor(performance.now() / (1000 / (FIGHTER_FPS[anim] || 8))) % n;
+      // gleiche Proportionen wie im Fighter: dort ist die Figur bei drawHeight ca. 190 px hoch
+      const dh = fg.cfg.dh * FIGHTER_FIGURE_H / 190, sc = dh / fh, dw = fw * sc;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      const cx = x + SPRITE_W / 2, footY = y + SPRITE_H + fg.cfg.fp * sc;
+      if (v.spinAngle) { ctx.translate(cx, y + SPRITE_H / 2); ctx.rotate(v.spinAngle * Math.PI / 180); ctx.translate(-cx, -(y + SPRITE_H / 2)); }
+      if (!v.alive) ctx.globalAlpha = 0.6;
+      ctx.translate(cx, footY); ctx.scale(v.facing < 0 ? -1 : 1, 1);
+      ctx.drawImage(img, fi * fw, 0, fw, fh, -dw / 2, -dh, dw, dh);
+      ctx.restore();
+      return true;
+    }
+
+    function drawSprite(ctx, v, x, y) {
+      const fg = fighterFor(v.name);
+      if (fg && drawFighter(ctx, v, x, y, fg)) return;
+      if (!(sheet.complete && sheet.naturalWidth > 0)) return;
+      const def = ANIMS[v.anim] || ANIMS.idle;
+      const sx = ((v.frame || 0) % def.frames) * FRAME_W, sy = def.row * FRAME_H;
+      ctx.save();
+      if (v.spinAngle) { ctx.translate(x + SPRITE_W / 2, y + SPRITE_H / 2); ctx.rotate(v.spinAngle * Math.PI / 180); ctx.translate(-(x + SPRITE_W / 2), -(y + SPRITE_H / 2)); }
+      if (!v.alive) ctx.globalAlpha = 0.45;
+      if (v.facing > 0) { ctx.translate(x + SPRITE_W, y); ctx.scale(-1, 1); ctx.drawImage(sheet, sx, sy, FRAME_W, FRAME_H, 0, 0, SPRITE_W, SPRITE_H); }
+      else ctx.drawImage(sheet, sx, sy, FRAME_W, FRAME_H, x, y, SPRITE_W, SPRITE_H);
+      ctx.restore();
+    }
+
+    function drawView(ctx, v, opts) {
+      const t = performance.now();
+      ctx.clearRect(0, 0, W, H);
+      if (!v) return;
+      const off = -v.cam + H * 0.8;
+
+      // Wand
+      ctx.save();
+      ctx.translate(0, ((off % 360) + 360) % 360 - 360);
+      ctx.fillStyle = patternFor(ctx, 'wall', wallTile);
+      ctx.fillRect(0, 0, W, H + 720);
+      ctx.restore();
+
+      // Warnlampen alle 23 m, Strahlenschilder alle 70 m, Höhenbänder alle 50 m
+      const yTop = v.cam - H * 0.8 - 40, yBot = v.cam + H * 0.2 + 40;
+      for (let k = Math.max(1, Math.floor((FLOOR_Y - yBot) / 230)); FLOOR_Y - k * 230 > yTop; k++) {
+        const wy = FLOOR_Y - k * 230 + off, lx = k % 2 ? 30 : W - 30;
+        const on = 0.5 + 0.5 * Math.sin(t / 260 + k * 1.7);
+        ctx.fillStyle = '#3a3f39'; ctx.fillRect(lx - 7, wy - 3, 14, 6);
+        const g = ctx.createRadialGradient(lx, wy - 8, 1, lx, wy - 8, 26);
+        g.addColorStop(0, `rgba(255,60,40,${0.55 * on})`); g.addColorStop(1, 'rgba(255,60,40,0)');
+        ctx.fillStyle = g; ctx.fillRect(lx - 26, wy - 34, 52, 52);
+        ctx.fillStyle = `rgb(${120 + 135 * on},${30 + 20 * on},20)`; ctx.beginPath(); ctx.arc(lx, wy - 8, 5, 0, 6.29); ctx.fill();
+      }
+      for (let k = Math.max(1, Math.floor((FLOOR_Y - yBot) / 700)); FLOOR_Y - k * 700 + 330 > yTop; k++) {
+        const wy = FLOOR_Y - k * 700 + 330 + off;
+        trefoil(ctx, k % 2 ? W - 62 : 62, wy, 15);
+      }
+      for (let k = Math.max(1, Math.floor((FLOOR_Y - yBot) / 500)); FLOOR_Y - k * 500 > yTop; k++) {
+        const wy = FLOOR_Y - k * 500 + off;
+        ctx.save(); ctx.globalAlpha = 0.55; ctx.translate(0, wy - 6);
+        ctx.fillStyle = patternFor(ctx, 'band', bandTile); ctx.fillRect(18, 0, W - 36, 12); ctx.restore();
+        ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(W / 2 - 28, wy - 9, 56, 18);
+        ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 12px ui-monospace, monospace'; ctx.textAlign = 'center';
+        ctx.fillText((k * 50) + ' M', W / 2, wy + 4);
+      }
+
+      // Plattformen: Stahlgitter mit Warnstreifen
+      forPlatforms(v.cam - H * 0.8 - 30, v.cam + H * 0.2 + 30, (p) => {
+        const py = p.y + off;
+        if (p.isFloor) {
+          ctx.fillStyle = '#2a2f2b'; ctx.fillRect(0, py, W, H);
+          ctx.fillStyle = patternFor(ctx, 'stripe', stripeTile); ctx.save(); ctx.translate(0, py); ctx.fillRect(0, 0, W, 4); ctx.restore();
+          ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 11px ui-monospace, monospace'; ctx.textAlign = 'center';
+          ctx.fillText('SCHACHT 7 · KÜHLKREIS', W / 2, py + 24);
+          return;
+        }
+        ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(p.x + 3, py + 5, p.w, p.h);
+        ctx.fillStyle = '#3b4246'; ctx.fillRect(p.x, py, p.w, p.h);
+        ctx.fillStyle = '#20262a';
+        for (let sx = p.x + 4; sx < p.x + p.w - 2; sx += 5) ctx.fillRect(sx, py + 6, 2, p.h - 8);
+        ctx.save(); ctx.translate(p.x, py); ctx.fillStyle = patternFor(ctx, 'stripe', stripeTile); ctx.fillRect(0, 0, p.w, 4); ctx.restore();
+        ctx.strokeStyle = '#0d1012'; ctx.lineWidth = 1.5; ctx.strokeRect(p.x + 0.5, py + 0.5, p.w - 1, p.h - 1);
+      });
+
+      // Figur + Name
+      const sy = v.y + off;
+      drawSprite(ctx, v, v.x, sy);
+      ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(0,0,0,.8)'; ctx.lineWidth = 3; ctx.fillStyle = opts.mine ? '#ffe14d' : '#d9ff8a';
+      ctx.strokeText(v.name || '', v.x + SPRITE_W / 2, sy - 4); ctx.fillText(v.name || '', v.x + SPRITE_W / 2, sy - 4);
+
+      // Säure
+      const ay = v.wat + off;
+      if (ay < H + 70) {
+        const fume = ctx.createLinearGradient(0, ay - 80, 0, ay);
+        fume.addColorStop(0, 'rgba(140,255,60,0)'); fume.addColorStop(1, 'rgba(140,255,60,0.3)');
+        ctx.fillStyle = fume; ctx.fillRect(0, ay - 80, W, 80);
+        for (let i = 0; i < 5; i++) {   // Dampfschwaden
+          const ph = ((t / 2400 + i * 0.21) % 1);
+          const fx = (i * 53 + Math.sin(t / 900 + i) * 20 + W) % W, fy = ay - 6 - ph * 60;
+          ctx.fillStyle = `rgba(170,255,90,${0.16 * (1 - ph)})`;
+          ctx.beginPath(); ctx.arc(fx, fy, 10 + ph * 14, 0, 6.29); ctx.fill();
+        }
+        if (ay < H) {
+          const g = ctx.createLinearGradient(0, ay, 0, H);
+          g.addColorStop(0, 'rgba(182,255,59,0.92)'); g.addColorStop(0.25, 'rgba(98,200,20,0.94)'); g.addColorStop(1, 'rgba(22,70,4,0.98)');
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.moveTo(0, H);
+          for (let x = 0; x <= W; x += 6) ctx.lineTo(x, ay + Math.sin(x * 0.07 + t / 230) * 3 + Math.sin(x * 0.17 - t / 410) * 1.5);
+          ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+          ctx.save();
+          ctx.shadowColor = '#9dff2e'; ctx.shadowBlur = 14; ctx.strokeStyle = '#eaff8a'; ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          for (let x = 0; x <= W; x += 6) { const yy = ay + Math.sin(x * 0.07 + t / 230) * 3 + Math.sin(x * 0.17 - t / 410) * 1.5; x ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); }
+          ctx.stroke(); ctx.restore();
+          for (let i = 0; i < 18; i++) {   // aufsteigende Blasen
+            const hx = Math.sin(i * 91.7) * 0.5 + 0.5, hs = Math.sin(i * 37.3) * 0.5 + 0.5;
+            const ph = ((t / (1400 + hs * 1600)) + hx) % 1;
+            const depth = 30 + hs * 140, by = ay + depth * (1 - ph);
+            if (by > H) continue;
+            ctx.strokeStyle = `rgba(230,255,160,${0.35 + 0.4 * ph})`; ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.arc(hx * W + Math.sin(t / 300 + i) * 3, by, 1.5 + hs * 3, 0, 6.29); ctx.stroke();
+          }
+        }
+        const glow = ctx.createLinearGradient(0, Math.max(0, ay - 260), 0, ay);
+        glow.addColorStop(0, 'rgba(120,255,40,0)'); glow.addColorStop(1, 'rgba(120,255,40,0.12)');
+        ctx.fillStyle = glow; ctx.fillRect(0, Math.max(0, ay - 260), W, Math.min(260, ay));
+      }
+
+      // Abdunkeln oben/unten
+      const vg = ctx.createLinearGradient(0, 0, 0, H);
+      vg.addColorStop(0, 'rgba(0,0,0,.45)'); vg.addColorStop(0.5, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.3)');
+      ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+
+      if (opts.mine) { drawParticles(ctx); drawFlyingTexts(ctx); }
+
+      if (!v.alive && !(opts.mine && performance.now() - v.deadAt < SPECTATE_DELAY_MS)) {
+        ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, W, H);
+        ctx.textAlign = 'center'; ctx.fillStyle = '#ff8a8a'; ctx.font = 'bold 26px sans-serif';
+        ctx.fillText('☠️ Säurebad', W / 2, H * 0.42);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 20px ui-monospace, monospace';
+        ctx.fillText((v.h || 0) + ' m', W / 2, H * 0.42 + 30);
+      }
+    }
+
+    // ---------- Effekte (nur im eigenen Turm) ----------
+    function spawnBurst(cx, cy, colors, n, acid) {
+      for (let i = 0; i < n; i++) {
+        const a = acid ? -Math.PI / 2 + (Math.random() - 0.5) * 1.8 : Math.random() * Math.PI * 2;
+        const sp = (acid ? 3 : 2) + Math.random() * 5.5;
+        confetti.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - (acid ? 2 : 4),
+          color: colors[Math.floor(Math.random() * colors.length)], w: 4 + Math.random() * 4, h: acid ? 4 + Math.random() * 4 : 2.5 + Math.random() * 2.5,
+          rot: Math.random() * 6.28, vrot: (Math.random() - 0.5) * 0.35, life: 0, maxLife: 700 + Math.random() * 500, round: acid,
+          g: acid ? 0.22 : 0.014 });
+      }
+    }
+    function stepParticles(dt) {
+      const f = dt / 16.67;
+      confetti.forEach((p) => { p.vy += p.g * f; p.x += p.vx * f; p.y += p.vy * f; p.rot += p.vrot * f; p.life += dt; });
+      confetti = confetti.filter((p) => p.life < p.maxLife);
+      flyingTexts.forEach((tx) => { tx.x += tx.vx * f; tx.life += dt; });
+      flyingTexts = flyingTexts.filter((tx) => tx.life < tx.maxLife);
+    }
+    function drawParticles(ctx) {
+      confetti.forEach((p) => {
+        ctx.save(); ctx.globalAlpha = Math.max(0, 1 - p.life / p.maxLife); ctx.fillStyle = p.color;
+        if (p.round) { ctx.beginPath(); ctx.arc(p.x, p.y, p.w / 2, 0, 6.29); ctx.fill(); }
+        else { ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); }
+        ctx.restore();
+      });
+    }
+    function drawFlyingTexts(ctx) {
+      flyingTexts.forEach((tx) => {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, tx.life / 180, (tx.maxLife - tx.life) / 260));
+        ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillStyle = '#d9ff3b'; ctx.strokeStyle = '#0b140b'; ctx.lineWidth = 5;
+        ctx.strokeText(tx.text, tx.x, H * 0.3); ctx.fillText(tx.text, tx.x, H * 0.3);
+        ctx.restore();
+      });
+    }
+
+    // ---------- DOM ----------
+    let cvC, cvL, cvR, ctxC, ctxL, ctxR;
+    const $ = (id) => document.getElementById(id);
+    const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    function layout() {
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const touchExtra = document.body.classList.contains('playing') && document.body.classList.contains('touch') ? 80 : 0;
+      let c = Math.min(1.3, (vh - 170 - touchExtra) / H, (vw - 40) / (W * 2));
+      c = Math.max(0.42, c);
+      cvC.style.width = Math.round(W * c) + 'px'; cvC.style.height = Math.round(H * c) + 'px';
+      [cvL, cvR].forEach((cv) => { cv.style.width = Math.round(W * c * 0.5) + 'px'; cv.style.height = Math.round(H * c * 0.5) + 'px'; });
+      ['tower-left', 'tower-right'].forEach((id) => { $(id).style.width = Math.round(W * c * 0.5 + 8) + 'px'; });
+      $('tower-center').style.width = Math.round(W * c + 8) + 'px';
+    }
+
+    function setLabel(elId, id, prefix) {
+      const el = $(elId);
+      if (!id) { el.textContent = ''; return; }
+      const dead = !isAlive(id);
+      el.textContent = (prefix || '') + (dead ? '☠️ ' : '') + nameOf(id) + ' · ' + heightOf(id) + ' m';
+      el.classList.toggle('dead', dead);
+    }
+
+    let lastTs = performance.now(), lastCountTxt = '';
+    function frame(ts) {
+      const dt = Math.min(40, ts - lastTs); lastTs = ts;
+      const t = now();
+      if (startAt) {
+        if (role === 'player' && me && me.alive && !finished && t >= startAt) stepMe(dt, ts);
+        Object.values(remotes).forEach((r) => stepRemote(r, dt));
+        stepParticles(dt);
+        if (role === 'player' && me && me.alive && performance.now() - lastSync >= SYNC_MS) syncNow();
+
+        const v = pickViews();
+        const mineCenter = v.center === playerId;
+        drawView(ctxC, viewOf(v.center), { mine: mineCenter });
+        drawView(ctxL, viewOf(v.left), {}); drawView(ctxR, viewOf(v.right), {});
+        $('tower-left').classList.toggle('empty', !v.left);
+        $('tower-right').classList.toggle('empty', !v.right);
+        setLabel('label-center', v.center, mineCenter ? '' : '👁 ');
+        setLabel('label-left', v.left); setLabel('label-right', v.right);
+
+        const spectating = !mineCenter && survivors().filter((id) => id !== playerId).length > 1;
+        $('spectate-bar').classList.toggle('show', spectating);
+        $('hud-height').textContent = role === 'player' && me ? me.h : (v.center ? heightOf(v.center) : 0);
+        const alive = survivors().length;
+        $('hud-alive').textContent = alive + '/' + joinedIds.length;
+        $('hud-mode').textContent = role === 'player' && me && me.alive ? '' : (alive ? (role === 'player' ? '👁 Du schaust den Überlebenden zu' : '👁 Zuschauer') : '');
+
+        // Countdown
+        const left = startAt - t;
+        const txt = left > 0 ? String(Math.ceil(left / 1000)) : left > -700 ? 'LOS!' : '';
+        if (txt !== lastCountTxt) {
+          lastCountTxt = txt; const el = $('bp-countdown'); el.textContent = txt;
+          if (txt) { el.animate([{ transform: 'scale(1.8)', opacity: 0.2 }, { transform: 'scale(1)', opacity: 1 }], { duration: 280, easing: 'ease-out' });
+            try { window.HSAudio && HSAudio.synth('tick'); } catch (e) {} }
+        }
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // ---------- Ende, Ranking, Punkte ----------
+    function ranking() {
+      return joinedIds.filter((id) => results[id] || viewOf(id))
+        .map((id) => ({ id, name: nameOf(id), height: heightOf(id), diedAt: results[id] ? results[id].diedAt || 0 : Infinity }))
+        .sort((a, b) => (b.height - a.height) || (b.diedAt - a.diedAt));
+    }
+
+    function checkFinish() {
+      if (finished || !startAt || now() < startAt || !joinedIds.length) return;
+      if (joinedIds.every((id) => results[id])) update(ref(db, 'burstpipeState'), { status: 'finished' }).catch(() => {});
+    }
+
+    function award(id, place, height) {
+      const pts = pointsFor(place, height);
+      return runTransaction(ref(db, 'burstpipeState/results/' + id + '/awarded'), (cur) => (cur ? undefined : true)).then((res) => {
+        if (!res.committed) return;
+        update(ref(db, 'burstpipeState/results/' + id), { points: pts, place: place + 1 });
+        if (pts > 0) {
+          runTransaction(ref(db, 'players/' + id + '/score'), (cur) => (cur || 0) + pts);
+          push(ref(db, 'gameLog'), { text: '☢️ ' + nameOf(id) + ' kletterte im Atomschacht auf ' + height + ' m (Platz ' + (place + 1) + '): +' + pts + ' Punkte', at: Date.now() });
+        }
+      }).catch(() => {});
+    }
+    function awardAll(onlyMe) {
+      return Promise.all(ranking().map((r, i) => (!onlyMe || r.id === playerId) ? award(r.id, i, r.height) : null));
+    }
+
+    function showResults() {
+      if (resultsShown) return; resultsShown = true; finished = true;
+      document.body.classList.remove('playing');
+      awardAll(!isHost);
+      try { window.HSAudio && HSAudio.once('bpEnd' + (startedAt || ''), () => HSAudio.play('spiel_ende')); } catch (e) {}
+      $('result-overlay').classList.remove('hidden');
+      if (isHost) $('host-end-btn').classList.remove('hidden'); else $('wait-host').classList.remove('hidden');
+      renderResults();
+      get(query(ref(db, 'burstpipeHof'), orderByChild('height'), limitToLast(10))).then((snap) => {
+        const list = []; snap.forEach((c) => { list.push(c.val()); });
+        list.sort((a, b) => b.height - a.height);
+        $('hof-list').innerHTML = list.map((e, i) => `<div class="flex justify-between text-sm"><span class="truncate">${i + 1}. ${esc(e.name)}</span><span class="num">${e.height} m</span></div>`).join('')
+          || '<div class="text-white/50 text-sm">Noch keine Einträge</div>';
+      }).catch(() => {});
+    }
+    function renderResults() {
+      if (!resultsShown) return;
+      $('results-list').innerHTML = ranking().map((r, i) => `
+        <div class="flex items-center justify-between jax-card px-4 py-2 ${r.id === playerId ? 'ring-4 ring-[#b6ff3b]' : ''}">
+          <span class="font-extrabold text-[#1a1a2e] truncate">${i === 0 && r.height > 0 ? '👑 ' : (i + 1) + '. '}${esc(r.name)}</span>
+          <span class="text-[#2f6b00] font-extrabold whitespace-nowrap">${r.height} m · +${pointsFor(i, r.height)} Pkt.</span>
+        </div>`).join('') || '<div class="text-white/50">Niemand ist geklettert…</div>';
+    }
+
+    // Wer länger nichts mehr meldet (Seite zu, Akku leer), scheidet mit seiner letzten Höhe aus
+    setInterval(() => {
+      if (!startAt || finished || now() < startAt + STALE_MS) return;
+      Object.values(remotes).forEach((r) => {
+        if (results[r.id] || !r.t || now() - r.t < STALE_MS) return;
+        runTransaction(ref(db, 'burstpipeState/results/' + r.id), (cur) => cur || { name: r.name, height: r.h || 0, diedAt: r.t, stale: true }).catch(() => {});
+      });
+      checkFinish();
+    }, 2000);
+
+    window.hostEndBurstPipe = function () {
+      if (!confirm("Spiel beenden und alle zurück ins Cockpit bringen? Wer noch klettert, wird mit seiner aktuellen Höhe gewertet.")) return;
+      const missing = joinedIds.filter((id) => !results[id]).map((id) => {
+        const h = heightOf(id);
+        results[id] = { name: nameOf(id), height: h, diedAt: now() };
+        return set(ref(db, 'burstpipeState/results/' + id), results[id]).catch(() => {});
+      });
+      Promise.all(missing).then(() => awardAll(false)).then(() => {
+        set(ref(db, 'burstpipeState'), null);
+        update(ref(db, 'gameState'), { status: 'cockpit' });
+      });
+    };
+
+    // ---------- Steuerung ----------
+    function bindControls() {
+      window.addEventListener('keydown', (e) => {
+        const k = (e.key || '').toLowerCase();
+        const playing = role === 'player' && me && me.alive;
+        if (!playing) {
+          if (e.key === 'ArrowLeft' || k === 'a') { bpCycle(-1); e.preventDefault(); }
+          if (e.key === 'ArrowRight' || k === 'd') { bpCycle(1); e.preventDefault(); }
+          return;
+        }
+        if (e.key === 'ArrowLeft' || k === 'a') { keys.left = true; e.preventDefault(); }
+        if (e.key === 'ArrowRight' || k === 'd') { keys.right = true; e.preventDefault(); }
+        if (e.key === 'ArrowUp' || k === 'w' || e.code === 'Space') { e.preventDefault(); if (!e.repeat) jump(); }
+      });
+      window.addEventListener('keyup', (e) => {
+        const k = (e.key || '').toLowerCase();
+        if (e.key === 'ArrowLeft' || k === 'a') keys.left = false;
+        if (e.key === 'ArrowRight' || k === 'd') keys.right = false;
+      });
+      window.addEventListener('blur', () => { keys.left = false; keys.right = false; });
+      const hold = (id, key) => {
+        const b = $(id);
+        const on = (e) => { e.preventDefault(); keys[key] = true; b.classList.add('down'); };
+        const off = (e) => { e.preventDefault(); keys[key] = false; b.classList.remove('down'); };
+        b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off);
+        b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
+      };
+      hold('tLeft', 'left'); hold('tRight', 'right');
+      const jb = $('tJump');
+      jb.addEventListener('pointerdown', (e) => { e.preventDefault(); jb.classList.add('down'); jump(); });
+      jb.addEventListener('pointerup', () => jb.classList.remove('down'));
+      jb.addEventListener('pointercancel', () => jb.classList.remove('down'));
+    }
+
+    // ---------- Start ----------
+    async function init() {
+      cvC = $('cv-center'); cvL = $('cv-left'); cvR = $('cv-right');
+      [cvC, cvL, cvR].forEach((c) => { c.width = W; c.height = H; });
+      ctxC = cvC.getContext('2d'); ctxL = cvL.getContext('2d'); ctxR = cvR.getContext('2d');
+      if (window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) document.body.classList.add('touch');
+      bindControls(); layout(); window.addEventListener('resize', layout);
+
+      const [pSnap, sSnap] = await Promise.all([get(ref(db, 'players/' + playerId)), get(ref(db, 'burstpipeState'))]);
+      const pdata = pSnap.val() || {};
+      myName = pdata.name || 'Spieler';
+      isHost = !!(pdata.name && (pdata.name.includes('Host') || pdata.name.includes('Admin')));
+      if (isHost) $('host-end-persistent-btn').classList.remove('hidden');
+      const st = sSnap.val();
+      if (!st || st.seed == null || !st.startedAt) { $('no-game').classList.remove('hidden'); return; }
+
+      startedAt = st.startedAt; startAt = startedAt + START_DELAY_MS;
+      resetTower(st.seed);
+      results = st.results || {};
+      const mine = st.players && st.players[playerId];
+      if (!isHost && !results[playerId] && (mine || now() < startAt + JOIN_GRACE_MS)) {
+        role = 'player';
+        me = newMe(mine);
+        me.name = myName;
+        lastMilestone = Math.floor(me.h / 50);
+        extendTower(me.cam - H * 2.5);
+        if (!joinedIds.includes(playerId)) joinedIds.push(playerId);
+        await set(ref(db, 'burstpipeState/players/' + playerId), mySnapshot()).catch(() => {});
+        document.body.classList.add('playing');
+      } else {
+        role = 'spectator';
+        if (mine) { me = newMe(mine); me.name = myName; me.alive = false; me.h = (results[playerId] || {}).height || mine.h || 0; }
+        if (!isHost && !mine) $('late-note').classList.remove('hidden');
+      }
+      layout();
+
+      const pRef = ref(db, 'burstpipeState/players');
+      onChildAdded(pRef, onRemote); onChildChanged(pRef, onRemote);
+      onChildRemoved(pRef, (snap) => { delete remotes[snap.key]; joinedIds = joinedIds.filter((id) => id !== snap.key); });
+      onValue(ref(db, 'burstpipeState/results'), (snap) => {
+        results = snap.val() || {};
+        Object.keys(results).forEach((id) => { const r = remotes[id]; if (r) { r.alive = false; r.h = results[id].height; } });
+        renderResults(); checkFinish();
+      });
+      onValue(ref(db, 'burstpipeState/status'), (snap) => { if (snap.val() === 'finished') setTimeout(showResults, 1200); });
+      onValue(ref(db, 'burstpipeState/seed'), (snap) => { if (snap.val() != null && snap.val() !== seed) window.location.reload(); });
+
+      requestAnimationFrame((ts) => { lastTs = ts; requestAnimationFrame(frame); });
+    }
+    window.addEventListener('pagehide', () => { if (me && me.alive) syncNow(); });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+
+    // nur für Tests
+    window.__bp = { me: () => me, remotes, results: () => results, joined: () => joinedIds, pickViews, die: () => me && die(), keys, jump };
+  </script>
+</head>
+<body class="shaft-bg text-white min-h-screen flex flex-col items-center p-2 overflow-hidden relative select-none">
+
+  <button id="host-end-persistent-btn" onclick="hostEndBurstPipe()" class="hidden fixed top-3 left-3 z-[95] jax-btn bg-white text-[#1a1a2e] font-bold px-3 py-2 text-sm">
+    🏠 Spiel beenden & zurück ins Cockpit
+  </button>
+
+  <h1 class="text-2xl md:text-4xl font-extrabold glow-title title-pop mt-1">☢️ BURST PIPE ☢️</h1>
+  <p class="text-[#d9ff8a]/70 text-xs md:text-sm text-center max-w-xl leading-tight">
+    Hausmeister Fix wollte im Atomschacht nur kurz ein Kühlrohr abdichten – jetzt steigt <b>Säure</b> nach oben. Klettere, so hoch du kannst!
+  </p>
+
+  <div class="flex gap-2 my-2 items-center flex-wrap justify-center">
+    <div class="bp-chip">⬆ <span class="num" id="hud-height">0</span> m</div>
+    <div class="bp-chip">☢️ im Schacht: <span class="num" id="hud-alive">0/0</span></div>
+    <div id="hud-mode" class="text-sm font-bold text-[#d9ff8a]"></div>
+  </div>
+
+  <div id="stage-row">
+    <div class="tower side empty" id="tower-left"><div class="tower-label" id="label-left"></div><canvas id="cv-left"></canvas></div>
+    <div class="tower center" id="tower-center">
+      <div id="spectate-bar"><button onclick="bpCycle(-1)" aria-label="vorheriger Spieler">◀</button><div class="tower-label" id="label-center"></div><button onclick="bpCycle(1)" aria-label="nächster Spieler">▶</button></div>
+      <div style="position:relative"><canvas id="cv-center"></canvas><div id="bp-countdown"></div></div>
+    </div>
+    <div class="tower side empty" id="tower-right"><div class="tower-label" id="label-right"></div><canvas id="cv-right"></canvas></div>
+  </div>
+  <div id="label-center-fallback" class="hidden"></div>
+
+  <div id="touch" class="mt-2">
+    <button id="tLeft" aria-label="links">◀</button>
+    <button id="tJump" class="jump" aria-label="springen">⤒</button>
+    <button id="tRight" aria-label="rechts">▶</button>
+  </div>
+  <p class="text-[11px] text-white/50 mt-1 text-center hidden md:block">← → / A D laufen · Leertaste / ↑ / W springen (in der Luft nochmal = Doppelsprung) · nach dem Ausscheiden ← → zum Umschalten</p>
+
+  <div id="late-note" class="hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-50 bp-chip text-sm">Die Runde läuft schon – du schaust zu 👁</div>
+  <div id="no-game" class="hidden fixed inset-0 z-[90] flex items-center justify-center bg-black/70"><div class="bp-chip">Gerade läuft kein Burst Pipe – warte auf den Spielleiter.</div></div>
+
+  <div id="result-overlay" class="hidden fixed inset-0 z-[90] bg-black/80 flex items-center justify-center p-4 overflow-y-auto">
+    <div class="w-full max-w-md space-y-3 text-center">
+      <h2 class="text-2xl md:text-4xl font-extrabold glow-title title-pop">☢️ Alle im Säurebad!</h2>
+      <div id="results-list" class="space-y-2"></div>
+      <div class="text-xs text-white/60">Punkte nach Platz (200 / 140 / 100 / 70 / 50 …), höchstens 200 und nie mehr als die erreichten Meter.</div>
+      <div class="rounded-2xl border-2 border-[#3b4a1e] bg-black/50 p-3 text-left">
+        <div class="text-center font-extrabold text-[#d9ff8a] mb-1">🏆 Hall of Fame (alle Runden)</div>
+        <div id="hof-list" class="space-y-0.5"></div>
+      </div>
+      <button id="host-end-btn" onclick="hostEndBurstPipe()" class="hidden jax-btn bg-[#7ac70c] text-[#10200a] font-bold px-6 py-3">Alle zurück ins Cockpit</button>
+      <div id="wait-host" class="hidden text-sm text-white/60">Der Spielleiter holt gleich alle zurück ins Cockpit …</div>
+    </div>
+  </div>
+</body>
+</html>
