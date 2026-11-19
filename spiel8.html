@@ -124,6 +124,10 @@
     const WRONG_PENALTY_STEP = 30; // pro eigenem Fehlversuch dieser Runde, zieht vom Gewinn ab
     const MIN_POINTS = 80;
     const BONUS_POINTS = 150; // Sonderpunkte am Ende für die meisten Falscheingaben insgesamt
+    const ROUND_MS = 120000;  // eine Runde dauert höchstens 120 Sekunden ...
+    const MAX_SOLVERS = 4;    // ... oder bis 4 Leute den richtigen Titel getippt haben
+    let serverOffset = 0;
+    const serverNow = () => Date.now() + serverOffset;
 
     // ==== COVER-KATALOG ====
     // distortedUrl = euer bereits verfremdetes Bild (wird beim Raten gezeigt),
@@ -231,7 +235,7 @@
     ];
 
     function getActivePlayerIds() {
-      return Object.keys(allPlayers).filter(id => allPlayers[id] && allPlayers[id].name && !allPlayers[id].name.includes("Host"));
+      return Object.keys(allPlayers).filter(id => allPlayers[id] && allPlayers[id].name && !allPlayers[id].name.includes("Host") && !allPlayers[id].name.includes("Admin"));
     }
 
     onValue(ref(db, 'players/'), (snapshot) => {
@@ -264,7 +268,7 @@
       const allPlayersData = snapshot.val() || {};
       const player = allPlayersData[playerId];
       if (player) {
-        if (player.name && player.name.includes("Host")) {
+        if (player.name && (player.name.includes("Host") || player.name.includes("Admin"))) {   // wie in den anderen Spielen
           isHost = true;
           document.getElementById("brain-logo")?.classList.add("hidden"); // Host bekommt das Gehirn-Feature nicht
           document.getElementById("host-controls").classList.remove("hidden");
@@ -306,6 +310,8 @@
       });
     });
     });
+
+    onValue(ref(db, '.info/serverTimeOffset'), (snap) => { serverOffset = snap.val() || 0; });
 
     onValue(ref(db, 'gameState'), (snapshot) => {
       const gs = snapshot.val();
@@ -458,7 +464,8 @@
 
       get(ref(db, 'game8State')).then((snap0) => {
         const s = snap0.val() || {};
-        if (s.solvedBy) return; // schon gelöst, zu spät
+        if (s.stage !== 'guessing') return;                       // Runde schon vorbei
+        if ((s.solvers || {})[playerId]) return;                   // hab ich schon
         const cover = covers[s.coverIdx || 0];
         const verdict = evaluateGuess(text, cover.title);
 
@@ -470,19 +477,21 @@
         });
 
         if (verdict === 'correct') {
-          runTransaction(ref(db, 'game8State/solvedBy'), (current) => {
-            if (current) return; // wurde bereits vergeben -> abbrechen
-            return playerId;
+          const wrongThisRound = ((s.wrongAttemptsThisRound || {})[playerId]) || 0;
+          const points = Math.max(MIN_POINTS, (cover.points || BASE_POINTS) - wrongThisRound * WRONG_PENALTY_STEP);
+          const ms = Math.max(0, serverNow() - (s.roundStartedAt || serverNow()));
+          // Platz sichern - höchstens MAX_SOLVERS bekommen einen
+          runTransaction(ref(db, 'game8State/solvers'), (cur) => {
+            cur = cur || {};
+            if (cur[playerId] || Object.keys(cur).length >= MAX_SOLVERS) return;   // abbrechen
+            cur[playerId] = { ms, points, wrong: wrongThisRound };
+            return cur;
           }).then((result) => {
-            if (result.committed && result.snapshot.val() === playerId) {
-              const wrongThisRound = ((s.wrongAttemptsThisRound || {})[playerId]) || 0;
-              const points = Math.max(MIN_POINTS, (cover.points || BASE_POINTS) - wrongThisRound * WRONG_PENALTY_STEP);
-              get(ref(db, 'players/' + playerId + '/score')).then((scoreSnap) => {
-                const cur = scoreSnap.val() || 0;
-                update(ref(db, 'players/' + playerId), { score: cur + points });
-                update(ref(db, 'game8State'), { stage: 'result', lastResult: 'solved', lastSolverId: playerId, lastPoints: points });
-              });
-            }
+            const mine = result && result.committed && result.snapshot.val() && result.snapshot.val()[playerId];
+            if (!mine) return;
+            get(ref(db, 'players/' + playerId + '/score')).then((scoreSnap) => {
+              update(ref(db, 'players/' + playerId), { score: (scoreSnap.val() || 0) + mine.points });
+            });
           });
         } else {
           const curRoundWrong = ((s.wrongAttemptsThisRound || {})[playerId]) || 0;
@@ -500,11 +509,29 @@
 
     window.hostRevealCover = () => {
       update(ref(db, 'game8State'), {
-        stage: 'guessing',
+        stage: 'guessing', roundStartedAt: serverNow(), solvers: null,
         solvedBy: null, wrongAttemptsThisRound: null, guessFeedback: null, guessLog: null,
         lastResult: null, lastSolverId: null, lastPoints: null
       });
     };
+    // Der Host beendet die Runde automatisch: nach 120 s oder sobald 4 (bzw. alle) richtig lagen
+    setInterval(() => {
+      const s = latestState;
+      if (!isHost || !s || s.stage !== 'guessing' || !s.roundStartedAt) return;
+      const solved = Object.keys(s.solvers || {}).length;
+      const need = Math.min(MAX_SOLVERS, Math.max(1, getActivePlayerIds().length));
+      if (solved >= need || serverNow() - s.roundStartedAt >= ROUND_MS) {
+        update(ref(db, 'game8State'), { stage: 'result', lastResult: solved ? 'solved' : 'nobody' });
+      }
+    }, 400);
+    // Zeitanzeige während des Ratens (ohne das Eingabefeld neu zu bauen)
+    setInterval(() => {
+      const s = latestState, el = document.getElementById('s8-timer');
+      if (!el || !s || s.stage !== 'guessing' || !s.roundStartedAt) return;
+      const left = Math.max(0, ROUND_MS - (serverNow() - s.roundStartedAt));
+      el.innerText = Math.ceil(left / 1000) + ' s';
+      const bar = document.getElementById('s8-timer-bar'); if (bar) bar.style.width = (left / ROUND_MS * 100) + '%';
+    }, 200);
 
     window.hostSkipCover = () => {
       update(ref(db, 'game8State'), { stage: 'result', lastResult: 'skipped' });
@@ -532,7 +559,7 @@
           });
         } else {
           update(ref(db, 'game8State'), {
-            coverIdx: nextIdx, stage: 'waiting',
+            coverIdx: nextIdx, stage: 'waiting', solvers: null, roundStartedAt: null,
             solvedBy: null, wrongAttemptsThisRound: null, guessFeedback: null, guessLog: null,
             lastResult: null, lastSolverId: null, lastPoints: null
           });
@@ -617,13 +644,30 @@
 
     function renderGuessingArea(state, cover) {
       const wrap = document.getElementById("guessing-area");
+      const oldInput = document.getElementById('guess-input');
+      const keep = oldInput ? { v: oldInput.value, f: document.activeElement === oldInput } : null;
+      const solvers = state.solvers || {};
+      const mySolve = solvers[playerId];
+      const solvedCount = Object.keys(solvers).length;
+      const left = state.roundStartedAt ? Math.max(0, ROUND_MS - (serverNow() - state.roundStartedAt)) : ROUND_MS;
+      const statusRow = `<div class="flex items-center justify-center gap-4 mb-3 text-white font-jax font-bold">
+          <span>⏱ <span id="s8-timer">${Math.ceil(left / 1000)} s</span></span>
+          <span>✅ ${solvedCount} / ${MAX_SOLVERS} gelöst</span></div>
+        <div class="h-2 bg-white/15 rounded-full overflow-hidden mb-4 max-w-sm mx-auto"><div id="s8-timer-bar" class="h-full bg-[#ffd23f]" style="width:${left / ROUND_MS * 100}%"></div></div>`;
+      if (mySolve || isHost) {
+        wrap.innerHTML = `<div class="jax-card-print p-6 text-center">${statusRow}
+          <img src="${cover.distortedUrl}" class="mx-auto rounded-xl border-2 border-white/30" style="max-width: 260px; width: 100%; height: auto;" />
+          ${mySolve ? `<div class="mt-5 font-jax text-2xl font-extrabold text-[#7ed957]">🎉 Richtig! Platz ${Object.values(solvers).filter(x => x.ms <= mySolve.ms).length} in ${(mySolve.ms / 1000).toFixed(1).replace('.', ',')} s · +${mySolve.points} Punkte</div>
+          <div class="text-white/60 text-sm mt-1">Warte, bis die Runde vorbei ist …</div>` : `<div class="mt-4 text-white/60 text-sm">Du spielst nicht mit – schau zu, wer es zuerst knackt.</div>`}</div>`;
+        return;
+      }
       const myLog = (state.guessLog || {})[playerId] || [];
       const myFeedback = (state.guessFeedback || {})[playerId];
       const showFlash = myFeedback && (Date.now() - (myFeedback.at || 0)) < 4000;
       if (showFlash) { try { window.HSAudio && HSAudio.once('s8fb' + myFeedback.at, () => myFeedback.verdict === 'close' ? HSAudio.play('aufprall') : HSAudio.result(false)); } catch (e) {} }
 
       wrap.innerHTML = `
-        <div class="jax-card-print p-6 text-center">
+        <div class="jax-card-print p-6 text-center">${statusRow}
           <img src="${cover.distortedUrl}" class="mx-auto rounded-xl border-2 border-white/30" style="max-width: 260px; width: 100%; height: auto;" />
           <div class="mt-5 space-y-3">
             <input id="guess-input" type="text" placeholder="Titel eingeben..." autocomplete="off"
@@ -640,6 +684,7 @@
         </div>
       `;
 
+      if (keep) { const ni = document.getElementById('guess-input'); if (ni) { ni.value = keep.v; if (keep.f) ni.focus(); } }
       if (showFlash) {
         const panel = wrap.querySelector('.jax-card-print');
         panel.classList.add('shake');
@@ -650,10 +695,22 @@
     function renderResultArea(state, cover) {
       const wrap = document.getElementById("result-area");
       let headline = "";
-      if (state.lastResult === 'solved') {
-        const name = (allPlayers[state.lastSolverId] || {}).name || "Jemand";
-        const isMe = state.lastSolverId === playerId;
-        headline = `<div class="font-jax text-3xl font-extrabold ${isMe ? 'text-[#7ed957]' : 'text-[#1a1a2e]'} mb-2 flex items-center justify-center gap-2">${isMe ? icon('trophy','w-8 h-8') + ' Du hattest es!' : icon('check','w-8 h-8') + ' ' + name + ' hatte es!'}</div><div class="text-[#7017c9] font-bold mb-4">+${state.lastPoints} Punkte</div>`;
+      const ranking = Object.entries(state.solvers || {}).sort((a, b) => a[1].ms - b[1].ms);
+      if (ranking.length) {
+        // Kleine Siegerehrung: wer war wie schnell
+        const medals = ['🥇', '🥈', '🥉', '4.'];
+        const heights = [96, 72, 56, 44];
+        const podiumOrder = [1, 0, 2, 3].filter(i => ranking[i]);
+        headline = `<div class="font-jax text-2xl font-extrabold text-[#1a1a2e] mb-4">🏆 Siegerehrung</div>
+          <div class="flex items-end justify-center gap-3 mb-5">${podiumOrder.map(i => {
+            const [id, r] = ranking[i]; const me = id === playerId;
+            return `<div class="flex flex-col items-center w-28">
+              <div class="text-2xl">${medals[i]}</div>
+              <div class="font-jax font-extrabold text-sm ${me ? 'text-[#7017c9]' : 'text-[#1a1a2e]'} truncate max-w-full">${((allPlayers[id] || {}).name || '?')}${me ? ' (du)' : ''}</div>
+              <div class="text-xs text-[#1a1a2e]/60 font-bold">${(r.ms / 1000).toFixed(1).replace('.', ',')} s · +${r.points}</div>
+              <div class="w-full mt-1 rounded-t-lg border-2 border-[#1a1a2e] ${i === 0 ? 'bg-[#ffd23f]' : i === 1 ? 'bg-[#d9d9e3]' : i === 2 ? 'bg-[#e0a06a]' : 'bg-[#b9c7ff]'}" style="height:${heights[i]}px"></div>
+            </div>`;
+          }).join('')}</div>`;
       } else {
         headline = `<div class="font-jax text-3xl font-extrabold text-[#1a1a2e]/50 mb-4 flex items-center justify-center gap-2">${icon('shrug','w-8 h-8')} Niemand hat es erraten...</div>`;
       }
