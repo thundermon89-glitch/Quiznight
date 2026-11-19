@@ -733,7 +733,7 @@
         drawFront() {
           const red = frozen, x = W - FH * 0.6, y = H * 0.3, r = clamp(FH * 0.16, 12, 28);
           const aimg = propReady(red ? 'traffic_red' : 'traffic_green');
-          if (aimg) { drawPropBottom(ctx, aimg, x, y + r * 5.6, r * 3.4); return; }
+          if (aimg) { const th = r * 7.5; drawPropBottom(ctx, aimg, x, y + r * 5.6, th * aimg.naturalWidth / aimg.naturalHeight); return; }   // nach Höhe skalieren: beide Ampeln gleich groß
           ctx.save(); ctx.fillStyle = '#1a1a2e'; ctx.fillRect(x - r * 1.4, y - r * 2.6, r * 2.8, r * 5.2); ctx.fillRect(x - r * 0.2, y + r * 2.6, r * 0.4, r * 3);
           ctx.fillStyle = red ? '#ff2e2e' : '#4a1010'; if (red) { ctx.shadowColor = '#ff2e2e'; ctx.shadowBlur = 24; } ctx.beginPath(); ctx.arc(x, y - r * 1.2, r, 0, 7); ctx.fill();
           ctx.shadowBlur = 0; ctx.fillStyle = red ? '#103a1a' : '#39ff8c'; if (!red) { ctx.shadowColor = '#39ff8c'; ctx.shadowBlur = 24; } ctx.beginPath(); ctx.arc(x, y + r * 1.2, r, 0, 7); ctx.fill();
