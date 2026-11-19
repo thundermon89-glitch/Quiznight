@@ -112,17 +112,10 @@
 
     /* ==== PICKAXE-LEMMING-EASTEREGG ==== */
     .pickaxe-lemming {
-      position: fixed; top: 70px; left: 78%; margin-left: -35px;
-      width: 70px; height: 70px; z-index: 50; pointer-events: none;
+      position: fixed; top: 70px; left: 78%; margin-left: -45px;
+      width: 90px; height: 90px; z-index: 50; pointer-events: none;
     }
     .pickaxe-lemming img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
-    .pickaxe-hitbox {
-      position: absolute; top: -22px; left: -22px; right: -22px; bottom: -22px;
-      pointer-events: none; /* erst während des Falls aktiv, siehe .falling .pickaxe-hitbox */
-    }
-    .pickaxe-lemming.falling .pickaxe-hitbox {
-      cursor: pointer; pointer-events: auto; /* deutlich größere Klickfläche als das Bild selbst */
-    }
     @keyframes pickaxePointsPop {
       0%   { transform: translateY(0) scale(0.6); opacity: 0; }
       20%  { transform: translateY(-10px) scale(1.25); opacity: 1; }
@@ -139,9 +132,21 @@
       100% { transform: translateY(115vh) rotate(1080deg); }
     }
     .pickaxe-lemming.falling {
-      /* linear statt stark beschleunigend - vorher wurde er gegen Ende fast untreffbar schnell */
-      animation: lemmingFallSpin 4.2s linear forwards;
+      /* langsamer und linear, damit man ihn gut erwischt */
+      animation: lemmingFallSpin 6s linear forwards;
     }
+    .pickaxe-lemming.falling::after {   /* leuchtender Ring zeigt: jetzt anklickbar */
+      content: ''; position: absolute; inset: -14px; border-radius: 50%;
+      border: 3px dashed rgba(255,210,63,.85); animation: lemmingRing 0.6s linear infinite;
+    }
+    @keyframes lemmingRing { to { transform: rotate(360deg); } }
+    .lemming-burst { position: fixed; z-index: 61; pointer-events: none; width: 0; height: 0; }
+    .lemming-burst .ring { position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; border-radius: 50%;
+      border: 5px solid #ffd23f; animation: lemmingBurstRing .45s ease-out forwards; }
+    .lemming-burst i { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%;
+      background: var(--c); box-shadow: 0 0 8px var(--c); animation: lemmingSpark .6s ease-out forwards; }
+    @keyframes lemmingBurstRing { from { transform: scale(.3); opacity: 1; } to { transform: scale(3); opacity: 0; } }
+    @keyframes lemmingSpark { to { transform: translate(var(--dx), var(--dy)) scale(.2); opacity: 0; } }
   </style>
 
   <script type="module">
@@ -974,58 +979,80 @@
     const PICKAXE_LEMMING_URL = "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/2f74c30285f3377a99ae17ae19413ca2287722ab/lemmingpickaxe_%20easter-egg.gif";
     const PICKAXE_LEMMING_POINTS = 50;
     const PICKAXE_MINING_MS = 10000; // 10 Sekunden Hackzeit, bevor der Lemming fällt
+    // Jeder Spieler hat seinen EIGENEN Lemming: kein Wettrennen um einen gemeinsamen Lemming,
+    // der Treffer zählt sofort auf dem eigenen Gerät. Klickfläche großzügig (Abstand zum
+    // Lemming-Mittelpunkt) und per pointerdown, also ohne Verzögerung.
+    const PICKAXE_HIT_RADIUS = 85;   // Pixel um den Mittelpunkt
     let pickaxeLemmingRendered = null;
+    let activeLemming = null;        // { el, runId }
 
     function maybeHandlePickaxeLemming(state) {
       const ev = state.pickaxeLemming;
       if (!ev || !ev.id) return;
       if (pickaxeLemmingRendered === ev.id) return; // schon für dieses Gerät gestartet
-      if (ev.caughtBy) return; // war schon vorbei, bevor dieses Gerät reagieren konnte
       pickaxeLemmingRendered = ev.id;
+      if (ev.caughtBy && typeof ev.caughtBy === 'object' && ev.caughtBy[playerId]) return; // schon selbst gefangen
+      if (Date.now() - ev.id > 60000) return; // längst vorbei (z.B. Seite viel später neu geladen)
 
       const el = document.createElement("div");
       el.className = "pickaxe-lemming";
-      el.innerHTML = `<img src="${PICKAXE_LEMMING_URL}"><div class="pickaxe-hitbox"></div>`;
+      el.innerHTML = `<img src="${PICKAXE_LEMMING_URL}">`;
       document.body.appendChild(el);
 
+      const fallIn = PICKAXE_MINING_MS;
       setTimeout(() => {
+        if (!el.parentNode) return;
         el.classList.add("falling");
-        el.querySelector(".pickaxe-hitbox").onclick = () => catchPickaxeLemming(ev.id, el);
-        setTimeout(() => { if (el.parentNode) el.remove(); }, 4300);
-      }, PICKAXE_MINING_MS);
+        activeLemming = { el, runId: ev.id };
+        setTimeout(() => { if (activeLemming && activeLemming.el === el) activeLemming = null; if (el.parentNode) el.remove(); }, 6100);
+      }, fallIn);
     }
 
-    window.catchPickaxeLemming = function(runId, el) {
-      runTransaction(ref(db, 'game1State/pickaxeLemming'), (current) => {
-        if (!current || current.id !== runId || current.caughtBy) return current;
-        current.caughtBy = playerId;
-        current.caughtAt = Date.now();
-        return current;
-      }).then((result) => {
-        const val = result && result.snapshot && result.snapshot.val();
-        if (result.committed && val && val.caughtBy === playerId) {
-          if (el) {
-            const rect = el.getBoundingClientRect();
-            const pop = document.createElement("div");
-            pop.className = "pickaxe-points-pop";
-            pop.style.left = (rect.left + rect.width / 2 - 30) + "px";
-            pop.style.top = rect.top + "px";
-            pop.innerText = "+" + PICKAXE_LEMMING_POINTS;
-            document.body.appendChild(pop);
-            setTimeout(() => pop.remove(), 1100);
-            if (el.parentNode) el.remove();
-          }
-          get(ref(db, 'players/' + playerId)).then((snap) => {
-            const data = snap.val() || {};
-            const newScore = (data.score || 0) + PICKAXE_LEMMING_POINTS;
-            update(ref(db, 'players/' + playerId), { score: newScore });
+    window.addEventListener('pointerdown', (e) => {
+      if (!activeLemming) return;
+      const r = activeLemming.el.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      if (Math.hypot(e.clientX - cx, e.clientY - cy) > PICKAXE_HIT_RADIUS) return;
+      e.preventDefault(); e.stopPropagation();
+      const { el, runId } = activeLemming; activeLemming = null;
+      catchPickaxeLemming(runId, el, cx, cy);
+    }, { capture: true, passive: false });
+
+    function lemmingBurst(x, y) {
+      const b = document.createElement('div');
+      b.className = 'lemming-burst'; b.style.left = x + 'px'; b.style.top = y + 'px';
+      let html = '<div class="ring"></div>';
+      for (let k = 0; k < 14; k++) {
+        const a = k / 14 * Math.PI * 2, d = 50 + Math.random() * 50;
+        html += `<i style="--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d}px;--c:${k % 2 ? '#ffd23f' : '#ff7a1a'}"></i>`;
+      }
+      b.innerHTML = html; document.body.appendChild(b);
+      setTimeout(() => b.remove(), 700);
+    }
+
+    window.catchPickaxeLemming = function(runId, el, cx, cy) {
+      // Sofort sichtbar: Explosion, Punkte-Anzeige, Lemming weg
+      lemmingBurst(cx, cy);
+      try { if (window.HSAudio) { HSAudio.synth('boom'); HSAudio.result(true); } } catch (e) {}
+      const pop = document.createElement("div");
+      pop.className = "pickaxe-points-pop";
+      pop.style.left = (cx - 30) + "px"; pop.style.top = (cy - 40) + "px";
+      pop.innerText = "+" + PICKAXE_LEMMING_POINTS;
+      document.body.appendChild(pop);
+      setTimeout(() => pop.remove(), 1100);
+      if (el && el.parentNode) el.remove();
+      // Im Hintergrund speichern (nur einmal pro Spieler und Lemming)
+      runTransaction(ref(db, 'game1State/pickaxeLemming/caughtBy/' + playerId), (cur) => cur ? undefined : Date.now())
+        .then((res) => {
+          if (!res.committed) return;
+          runTransaction(ref(db, 'players/' + playerId + '/score'), (cur) => (cur || 0) + PICKAXE_LEMMING_POINTS);
+          get(ref(db, 'players/' + playerId + '/name')).then((snap) => {
             push(ref(db, 'gameLog'), {
-              text: '⛏️ ' + (data.name || 'Jemand') + ' hat den Pickaxe-Lemming gefangen: +' + PICKAXE_LEMMING_POINTS + ' Punkte',
+              text: '⛏️ ' + (snap.val() || 'Jemand') + ' hat den Pickaxe-Lemming gefangen: +' + PICKAXE_LEMMING_POINTS + ' Punkte',
               at: Date.now()
             });
           });
-        }
-      });
+        }).catch(() => {});
     };
 
     window.hostNextQuestion = () => {
@@ -1039,7 +1066,7 @@
           // Pickaxe-Lemming-Easteregg: erscheint erst, sobald die erste Runde vorbei ist
           // (also beim Wechsel von Frage 1 auf Frage 2), danach nie wieder erneut ausgelöst.
           if (currentIdx === 0) {
-            updates.pickaxeLemming = { id: Date.now(), caughtBy: null };
+            updates.pickaxeLemming = { id: Date.now() };
           }
           update(ref(db, 'game1State'), updates);
         }
