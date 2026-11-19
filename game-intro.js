@@ -47,8 +47,8 @@
   };
 
   // Standard-Hintergründe im Repo (intros/<seite>.jpg) - gelten, solange im Editor kein eigenes Bild gesetzt ist
-  const DEFAULT_IMAGES = ['spiel1', 'spiel2', 'spiel3', 'spiel5', 'spiel6', 'spiel7', 'spiel8', 'spiel9',
-    'snake', 'goldregen', 'vier-gewinnt', 'ochsvormberg', 'fighter'];
+  const DEFAULT_IMAGES = ['spiel1', 'spiel2', 'spiel3', 'spiel4', 'spiel5', 'spiel6', 'spiel7', 'spiel8', 'spiel9', 'spiel10',
+    'snake', 'goldregen', 'vier-gewinnt', 'panzer', 'ochsvormberg', 'ccc-rechner', 'burstpipe', 'fighter'];
   const defaultImage = (p) => DEFAULT_IMAGES.includes(p) ? BASE + 'intros/' + p + '.jpg' : '';
 
   // Figuren (Dateipräfix in fighter/ + Spezialwurf aus dem Fighter-Spiel)
