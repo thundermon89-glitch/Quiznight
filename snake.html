@@ -58,7 +58,7 @@
     const db = getDatabase(app);
 
     const ROUND_DURATION_MS = 120000; // schnelle Runde: 2 Minuten
-    const COUNTDOWN_MS = 3000; // 3-2-1-Los-Countdown vor Spielbeginn
+    const COUNTDOWN_MS = 6000; // "Mach dich bereit"-Countdown vor Spielbeginn (startet nach dem Intro)
     const POINTS_PER_FOOD = 2.5;
     const GRID_SIZE = 18;
     const CELL_PX = 18;
@@ -196,7 +196,10 @@
           return;
         }
         const secs = Math.ceil(remaining / 1000);
+        if (secs > Math.ceil(COUNTDOWN_MS / 1000)) { setTimeout(tick, 200); return; }   // läuft noch das Spiel-Intro: noch nichts zeigen
         numEl.innerText = secs;
+        const ring = document.getElementById("countdown-ring");
+        if (ring) ring.style.strokeDashoffset = String(283 * (1 - remaining / COUNTDOWN_MS));
         numEl.classList.remove("countdown-pop");
         void numEl.offsetWidth;
         numEl.classList.add("countdown-pop");
@@ -252,7 +255,7 @@
         return n && !n.includes("Host") && !n.includes("Admin");
       });
       const allDone = activeIds.length > 0 && activeIds.every(id => finished[id]);
-      const timeUp = state.startedAt && (Date.now() - state.startedAt) >= ROUND_DURATION_MS;
+      const timeUp = state.startedAt && (Date.now() - state.startedAt - COUNTDOWN_MS) >= ROUND_DURATION_MS;   // Countdown zählt nicht zur Spielzeit
 
       if (state.status === 'active' && (allDone || timeUp)) {
         if (isHost && !resolvingResults) {
@@ -323,8 +326,16 @@
     🏠 Spiel beenden & zurück ins Cockpit
   </button>
 
-  <div id="countdown-overlay" class="hidden fixed inset-0 z-[90] bg-black/85 flex items-center justify-center">
-    <div id="countdown-number" class="countdown-pop font-jax text-9xl font-extrabold text-[#7ed957]" style="text-shadow: 4px 4px 0 #08150a, -4px -4px 0 #08150a, 4px -4px 0 #08150a, -4px 4px 0 #08150a;">3</div>
+  <div id="countdown-overlay" class="hidden fixed inset-0 z-[90] bg-black/85 flex flex-col items-center justify-center gap-4 text-center px-6">
+    <div class="font-jax text-3xl md:text-4xl font-extrabold text-[#ffd23f]">🐍 Mach dich bereit!</div>
+    <div class="relative w-44 h-44">
+      <svg viewBox="0 0 100 100" class="absolute inset-0 w-full h-full -rotate-90">
+        <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="7"/>
+        <circle id="countdown-ring" cx="50" cy="50" r="45" fill="none" stroke="#7ed957" stroke-width="7" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="0"/>
+      </svg>
+      <div id="countdown-number" class="countdown-pop absolute inset-0 flex items-center justify-center font-jax text-8xl font-extrabold text-[#7ed957]" style="text-shadow: 4px 4px 0 #08150a, -4px -4px 0 #08150a, 4px -4px 0 #08150a, -4px 4px 0 #08150a;">6</div>
+    </div>
+    <div class="text-white/80 text-sm md:text-base font-bold">Steuern: Pfeiltasten / WASD – am Handy das Steuerkreuz<br><span class="text-white/50 font-normal">Friss Äpfel, beiß dich nicht selbst und fahr nicht gegen die Wand.</span></div>
   </div>
 
   <div id="play-area" class="relative z-10 text-center">
