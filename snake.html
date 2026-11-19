@@ -294,6 +294,15 @@
       playArea.classList.remove("hidden");
       resultArea.classList.add("hidden");
 
+      // Noch nicht gestartet: alle warten, der Admin drückt "Countdown starten"
+      const waitEl = document.getElementById("snake-wait-overlay");
+      if (waitEl) {
+        waitEl.classList.toggle("hidden", !!state.startedAt);
+        const btn = document.getElementById("snake-start-btn");
+        if (btn) btn.classList.toggle("hidden", !isHost);
+        const txt = document.getElementById("snake-wait-text");
+        if (txt) txt.innerText = isHost ? 'Wenn alle bereit sind, starte den Countdown.' : 'Gleich geht\'s los – der Admin startet den Countdown.';
+      }
       if (state.startedAt && state.startedAt !== roundStartedAt) {
         roundStartedAt = state.startedAt;
         showPreGameCountdown(state.startedAt, () => {
@@ -302,6 +311,11 @@
         });
       }
     });
+
+    window.hostStartSnakeCountdown = () => {
+      if (!isHost) return;
+      get(ref(db, 'snakeState/startedAt')).then((s) => { if (!s.val()) update(ref(db, 'snakeState'), { startedAt: Date.now() }); });
+    };
 
     window.onload = () => {
       if (!playerId) { window.location.href = "index.html"; return; }
@@ -313,6 +327,8 @@
           document.getElementById("host-hint").classList.remove("hidden");
           document.getElementById("host-end-btn").classList.remove("hidden");
           document.getElementById("host-end-persistent-btn").classList.remove("hidden");
+          document.getElementById("snake-start-btn")?.classList.remove("hidden");   // Host-Erkennung kommt evtl. nach dem ersten Zeichnen
+          const wt = document.getElementById("snake-wait-text"); if (wt) wt.innerText = 'Wenn alle bereit sind, starte den Countdown.';
         } else {
           ctx = document.getElementById("snake-canvas").getContext("2d");
         }
@@ -325,6 +341,13 @@
   <button id="host-end-persistent-btn" onclick="hostEndSnake()" class="hidden fixed top-4 left-4 z-[95] jax-btn bg-white text-[#1a1a2e] font-jax font-bold px-4 py-2.5 text-sm">
     🏠 Spiel beenden & zurück ins Cockpit
   </button>
+
+  <div id="snake-wait-overlay" class="hidden fixed inset-0 z-[89] bg-black/85 flex flex-col items-center justify-center gap-4 text-center px-6">
+    <div class="font-jax text-3xl md:text-4xl font-extrabold text-[#ffd23f]">🐍 Snake</div>
+    <div id="snake-wait-text" class="text-white/80 text-base font-bold">Gleich geht's los – der Admin startet den Countdown.</div>
+    <div class="text-white/60 text-sm">Steuern: Pfeiltasten / WASD – am Handy das Steuerkreuz</div>
+    <button id="snake-start-btn" onclick="hostStartSnakeCountdown()" class="hidden jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold text-xl px-8 py-4">▶ Countdown starten</button>
+  </div>
 
   <div id="countdown-overlay" class="hidden fixed inset-0 z-[90] bg-black/85 flex flex-col items-center justify-center gap-4 text-center px-6">
     <div class="font-jax text-3xl md:text-4xl font-extrabold text-[#ffd23f]">🐍 Mach dich bereit!</div>

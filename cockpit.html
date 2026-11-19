@@ -862,7 +862,7 @@
       // sie hätten schon 1970 begonnen und wären demnach längst vorbei.
       const now = Date.now();
       const resetVal = gameKey === 'connect4' ? null
-        : gameKey === 'snake' ? { status: 'active', startedAt: now + 9000, scores: null, finished: null }
+        : gameKey === 'snake' ? { status: 'active', startedAt: null, scores: null, finished: null }   // Admin startet den Countdown auf der Snake-Seite
         : { status: 'active', startedAt: { '.sv': 'timestamp' }, coins: null, tally: null };  // Server-Zeit: gleiche Uhr für alle
 
       set(ref(db, game.stateKey), resetVal).then(() => {
