@@ -115,7 +115,7 @@
   const ZCHARS = {
     basis: ['walk', 'grab', 'talk', 'hit', 'fly', 'ko', 'burn', 'eat', 'run'],
     frau: ['walk', 'run', 'getup'],
-    dicke: ['walk', 'getup']
+    dicke: ['walk', 'getup', 'ko', 'hit']
   };
   let zimgs = null;
   const zbox = {};   // "typ:anim" -> [ {x,y,w,h,head,hand} je Frame ] (sichtbarer Bereich, für Zubehör)
