@@ -1434,6 +1434,7 @@
                   <button onclick="removeEvent(${rIdx}, ${eIdx})" class="w-9 h-9 jax-btn bg-[#ff2e93] text-white flex items-center justify-center" ${(round.events || []).length <= 2 ? 'disabled title="Mindestens 2 Ereignisse nötig"' : ''}>${icon('trash', 'w-3.5 h-3.5')}</button>
                 </div>
                 ${imageFieldHtml(rIdx + '.events.' + eIdx + '.image', ev.image, '', { small: true, placeholder: 'Bild-Link (optional, ersetzt das Emoji) oder hochladen' })}
+                ${imageFieldHtml(rIdx + '.events.' + eIdx + '.revealImage', ev.revealImage, 'Bild bei der Auflösung (optional – sonst wird das Bild oben gezeigt)', { small: true, placeholder: 'Bild-Link für die Auflösung oder hochladen' })}
               </div>
             `).join('')}
           </div>
