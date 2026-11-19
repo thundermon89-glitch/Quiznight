@@ -35,7 +35,6 @@
     spiel8: 'Spiel 8: Schriftzug-Salat',
     spiel9: 'Spiel 9: Zeitreise',
     spiel10: 'Spiel 10: Zeitreise 2',
-    sekwars: 'Sekwars',
     snake: 'Snake',
     goldregen: 'Goldregen',
     'vier-gewinnt': 'Vier Gewinnt',
@@ -599,13 +598,6 @@
           ctx.save(); ctx.fillStyle = 'rgba(60,140,255,.12)'; ctx.fillRect(0, 0, W, H); ctx.restore();
           bigText('Z E I T L U P E', H * 0.45, '#3ecbff', 0.7 + Math.sin(realNow / 120) * 0.04);
         }
-      },
-      // Sekwars: jeder Zombie wird beim Umhauen gewogen
-      sekwars: {
-        lines: ['Wie schwer bin ich?', 'Schätz mal mein Hirn!', 'Ohne Hirn nur 3 kg …'],
-        words: ['GEWOGEN!', 'BONK!', 'ZACK!'],
-        acc(g, z, b) { g.fillStyle = '#fff'; g.fillRect(15.5, 13 + b, 3.5, 2.5); g.fillStyle = '#e63946'; g.fillRect(16, 13.6 + b, 2.5, 0.6); },
-        onKill(z) { word(z.x, GY - FH * 1.8, '≈ ' + Math.round(rnd(45, 140)) + ' kg', '#3ecbff'); return false; }
       },
       // Snake: die Zombies kommen als Polonaise-Schlange
       snake: {
