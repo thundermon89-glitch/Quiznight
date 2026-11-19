@@ -45,6 +45,11 @@
     fighter: 'Hirnschmalz-Fighter'
   };
 
+  // Standard-Hintergründe im Repo (intros/<seite>.jpg) - gelten, solange im Editor kein eigenes Bild gesetzt ist
+  const DEFAULT_IMAGES = ['spiel1', 'spiel2', 'spiel3', 'spiel5', 'spiel6', 'spiel7', 'spiel8', 'spiel9',
+    'snake', 'goldregen', 'vier-gewinnt', 'ochsvormberg', 'bombtick', 'fighter'];
+  const defaultImage = (p) => DEFAULT_IMAGES.includes(p) ? BASE + 'intros/' + p + '.jpg' : '';
+
   // Figuren (Dateipräfix in fighter/ + Spezialwurf aus dem Fighter-Spiel)
   const FIGHTERS = [
     { key: 'ccc', name: 'cCc', proj: 'wrench' },
@@ -216,7 +221,7 @@
     root.id = 'hsintro';
     root.classList.remove('hsi-out');
     const title = cfg.title || GAMES[cfg.page] || (document.title || '').replace(/^Hirnschmalz-Arena\s*-\s*/, '');
-    const img = cfg.image || '';
+    const img = cfg.image || defaultImage(cfg.page);
     const fit = cfg.fit === 'contain' ? 'contain' : 'cover';
     root.innerHTML = `
       ${img ? (fit === 'contain' ? `<div class="hsi-blur" style="background-image:url('${esc(img)}')"></div>` : '')
@@ -1083,7 +1088,7 @@
     }).catch(dropCover);
   }
 
-  window.HSIntro = { GAMES, DURATION, play, preview, getConfig };
+  window.HSIntro = { GAMES, DURATION, play, preview, getConfig, defaultImage };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', auto, { once: true });
   else auto();
 })();

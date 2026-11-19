@@ -1723,10 +1723,11 @@
         const c = introCfg[k] || {};
         const def = HSIntro.GAMES[k];
         const uploaded = typeof c.image === 'string' && c.image.startsWith('data:');
+        const shown = c.image || HSIntro.defaultImage(k);
         return `<div class="py-3 border-b border-[#1a1a2e]/10">
           <div class="flex items-start gap-3">
             <div class="w-28 h-16 flex-shrink-0 rounded-xl border-2 border-[#1a1a2e] overflow-hidden flex items-center justify-center text-[9px] text-center px-1"
-              style="${c.image ? `background:#1a1a2e url('${esc(c.image)}') center/${c.fit === 'contain' ? 'contain' : 'cover'} no-repeat` : 'background:linear-gradient(120deg,#2b0f54,#7017c9,#ff2e93,#ff8a3d);color:#fff'}">${c.image ? '' : 'Kein Bild<br>(Farbverlauf)'}</div>
+              style="${shown ? `background:#1a1a2e url('${esc(shown)}') center/${c.fit === 'contain' ? 'contain' : 'cover'} no-repeat;color:#fff` : 'background:linear-gradient(120deg,#2b0f54,#7017c9,#ff2e93,#ff8a3d);color:#fff'}">${c.image ? '' : (shown ? '<span style="background:rgba(0,0,0,.6);padding:1px 4px;border-radius:4px">Standardbild</span>' : 'Kein Bild<br>(Farbverlauf)')}</div>
             <div class="flex-1 min-w-0 space-y-1.5">
               <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div class="font-jax font-extrabold text-sm">${esc(def)}</div>
@@ -1739,7 +1740,7 @@
                 <input type="text" autocomplete="off" value="${esc(c.title)}" placeholder="Titel (leer = ${esc(def)})" onchange="setIntroField('${k}','title', this.value.trim())" class="jax-input w-full text-xs" />
                 <input type="text" autocomplete="off" value="${esc(c.subtitle)}" placeholder="Spruch unter dem Titel (optional)" onchange="setIntroField('${k}','subtitle', this.value.trim())" class="jax-input w-full text-xs" />
               </div>
-              <input type="text" autocomplete="off" value="${uploaded ? '' : esc(c.image)}" placeholder="${uploaded ? 'Hochgeladenes Bild ist gespeichert - ein Link hier ersetzt es' : 'Bild-Link einfügen (https://...) oder hochladen'}"
+              <input type="text" autocomplete="off" value="${uploaded ? '' : esc(c.image)}" placeholder="${uploaded ? 'Hochgeladenes Bild ist gespeichert - ein Link hier ersetzt es' : (shown ? 'Standardbild aus dem Repo - Link einfügen oder hochladen ersetzt es' : 'Bild-Link einfügen (https://...) oder hochladen')}"
                 onchange="setIntroField('${k}','image', this.value.trim())" class="jax-input w-full text-xs" />
               <div class="flex items-center gap-2 flex-wrap">
                 <label class="jax-btn bg-white text-[#1a1a2e] px-2.5 py-1.5 text-[11px] font-jax font-bold inline-block cursor-pointer">
