@@ -6,14 +6,14 @@
   <script src="easter-eggs.js"></script>
   <script src="game-intro.js"></script>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=1280">
   <title>Hirnschmalz-Arena - Burst Pipe</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Baloo 2', sans-serif; }
-    html, body { touch-action: none; overscroll-behavior: none; }
+    html, body { overscroll-behavior: none; }
     .shaft-bg { background: radial-gradient(ellipse at bottom, #173a12 0%, #0b140b 45%, #050805 100%); }
     .jax-card { background: #ffffff; border: 4px solid #1a1a2e; border-radius: 22px; box-shadow: 7px 7px 0 rgba(0,0,0,0.85); }
     .jax-btn { font-family: 'Baloo 2', sans-serif; border: 3px solid #1a1a2e; border-radius: 18px;
@@ -37,12 +37,6 @@
     #spectate-bar { display: none; align-items: center; gap: 8px; }
     #spectate-bar.show { display: flex; }
     #spectate-bar button { width: 40px; height: 34px; border-radius: 12px; border: 3px solid #0b0f0b; background: #b6ff3b; color: #10200a; font-weight: 900; font-size: 18px; }
-    #touch { display: none; gap: 10px; width: 100%; max-width: 420px; user-select: none; -webkit-user-select: none; }
-    #touch button { flex: 1; height: 62px; border-radius: 16px; border: 3px solid #0b0f0b; background: rgba(255,255,255,.12); color: #fff;
-      font-size: 1.6rem; font-weight: 900; touch-action: none; }
-    #touch button.jump { flex: 1.4; background: #7ac70c; color: #10200a; }
-    #touch button.down { background: rgba(255,255,255,.3); }
-    body.touch.playing #touch { display: flex; }
     @keyframes titlePop { 0% { transform: scale(0.3); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
     .title-pop { animation: titlePop 0.6s cubic-bezier(.34,1.56,.64,1); }
     .glow-title { color: #d9ff3b; text-shadow: 0 0 12px rgba(150,255,60,.7), 3px 3px 0 #0b140b, -3px -3px 0 #0b140b, 3px -3px 0 #0b140b, -3px 3px 0 #0b140b; }
@@ -727,8 +721,7 @@
 
     function layout() {
       const vw = window.innerWidth, vh = window.innerHeight;
-      const touchExtra = document.body.classList.contains('playing') && document.body.classList.contains('touch') ? 80 : 0;
-      let c = Math.min(1.3, (vh - 170 - touchExtra) / H, (vw - 40) / (W * 2));
+      let c = Math.min(1.3, (vh - 170) / H, (vw - 40) / (W * 2));
       c = Math.max(0.42, c);
       cvC.style.width = Math.round(W * c) + 'px'; cvC.style.height = Math.round(H * c) + 'px';
       [cvL, cvR].forEach((cv) => { cv.style.width = Math.round(W * c * 0.5) + 'px'; cv.style.height = Math.round(H * c * 0.5) + 'px'; });
@@ -879,18 +872,6 @@
         if (e.key === 'ArrowRight' || k === 'd') keys.right = false;
       });
       window.addEventListener('blur', () => { keys.left = false; keys.right = false; });
-      const hold = (id, key) => {
-        const b = $(id);
-        const on = (e) => { e.preventDefault(); keys[key] = true; b.classList.add('down'); };
-        const off = (e) => { e.preventDefault(); keys[key] = false; b.classList.remove('down'); };
-        b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off);
-        b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
-      };
-      hold('tLeft', 'left'); hold('tRight', 'right');
-      const jb = $('tJump');
-      jb.addEventListener('pointerdown', (e) => { e.preventDefault(); jb.classList.add('down'); jump(); });
-      jb.addEventListener('pointerup', () => jb.classList.remove('down'));
-      jb.addEventListener('pointercancel', () => jb.classList.remove('down'));
     }
 
     // ---------- Start ----------
@@ -898,7 +879,6 @@
       cvC = $('cv-center'); cvL = $('cv-left'); cvR = $('cv-right');
       [cvC, cvL, cvR].forEach((c) => { c.width = W; c.height = H; });
       ctxC = cvC.getContext('2d'); ctxL = cvL.getContext('2d'); ctxR = cvR.getContext('2d');
-      if (window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) document.body.classList.add('touch');
       bindControls(); layout(); window.addEventListener('resize', layout);
 
       const [pSnap, sSnap] = await Promise.all([get(ref(db, 'players/' + playerId)), get(ref(db, 'burstpipeState'))]);
@@ -976,12 +956,7 @@
   </div>
   <div id="label-center-fallback" class="hidden"></div>
 
-  <div id="touch" class="mt-2">
-    <button id="tLeft" aria-label="links">◀</button>
-    <button id="tJump" class="jump" aria-label="springen">⤒</button>
-    <button id="tRight" aria-label="rechts">▶</button>
-  </div>
-  <p class="text-[11px] text-white/50 mt-1 text-center hidden md:block">← → / A D laufen · Leertaste / ↑ / W springen (in der Luft nochmal = Doppelsprung) · bei 200 / 500 / 1000 / 1500 / 2000 m liegt ein Bonus (+50) · nach dem Ausscheiden ← → zum Umschalten</p>
+  <p class="text-[11px] text-white/50 mt-1 text-center">← → / A D laufen · Leertaste / ↑ / W springen (in der Luft nochmal = Doppelsprung) · bei 200 / 500 / 1000 / 1500 / 2000 m liegt ein Bonus (+50) · nach dem Ausscheiden ← → zum Umschalten</p>
 
   <div id="late-note" class="hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-50 bp-chip text-sm">Die Runde läuft schon – du schaust zu 👁</div>
   <div id="no-game" class="hidden fixed inset-0 z-[90] flex items-center justify-center bg-black/70"><div class="bp-chip">Gerade läuft kein Burst Pipe – warte auf den Spielleiter.</div></div>

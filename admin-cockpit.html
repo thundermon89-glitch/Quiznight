@@ -4,7 +4,7 @@
   <script src="gif-keep.js"></script>
   <script src="sounds/hs-audio.js"></script>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=1280">
   <title>Hirnschmalz-Arena - Admin Cockpit</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -677,7 +677,7 @@
     };
 
     window.launchConnect4 = function() {
-      if (!confirm("Vier Gewinnt starten? Alle Spieler werden zum Zwischenspiel mitgenommen (bis zu 6 können mitspielen).")) return;
+      if (!confirm("Vier Gewinnt starten? Alle Spieler werden zum Zwischenspiel mitgenommen (alle inkl. Admin spielen mit).")) return;
       set(ref(db, 'connect4State'), null).then(() => {
         set(ref(db, 'gameState'), {
           status: 'in_game',
@@ -938,8 +938,8 @@
         let lastX = 0, lastY = 0, snapshotBeforeShape = null;
         function getPos(e) {
           const rect = canvas.getBoundingClientRect();
-          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          const clientX = e.clientX;
+          const clientY = e.clientY;
           return { x: (clientX - rect.left) * (canvas.width / rect.width), y: (clientY - rect.top) * (canvas.height / rect.height) };
         }
         function startDraw(e) {
@@ -1013,9 +1013,6 @@
         canvas.addEventListener('mousedown', startDraw);
         canvas.addEventListener('mousemove', moveDraw);
         window.addEventListener('mouseup', endDraw);
-        canvas.addEventListener('touchstart', startDraw, { passive: false });
-        canvas.addEventListener('touchmove', moveDraw, { passive: false });
-        canvas.addEventListener('touchend', endDraw);
       }
     }
 

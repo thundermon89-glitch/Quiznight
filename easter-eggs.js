@@ -51,7 +51,7 @@
     const st = document.createElement('style'); st.id = 'hsegg-style';
     st.textContent = `
       .hsegg { position: fixed; z-index: 2147483600; cursor: pointer; image-rendering: pixelated; background-repeat: no-repeat;
-        user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+        user-select: none; }
       .hsegg-bubble { position: fixed; z-index: 2147483601; pointer-events: none; transform: translate(-50%, -100%);
         background: #fff; color: #1a1a2e; border: 3px solid #1a1a2e; border-radius: 14px; padding: 4px 10px;
         font: 800 15px 'Baloo 2', system-ui, sans-serif; white-space: nowrap; box-shadow: 3px 3px 0 #1a1a2e; }

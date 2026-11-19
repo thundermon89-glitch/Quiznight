@@ -6,7 +6,7 @@
   <script src="easter-eggs.js"></script>
   <script src="game-intro.js"></script>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=1280">
   <title>Hirnschmalz-Arena - Vier Gewinnt</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -87,12 +87,12 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    const NUM_COLS = 14, NUM_ROWS = 12, MAX_PLAYERS = 6;
+    const NUM_COLS = 14, NUM_ROWS = 12, MAX_PLAYERS = 7;   // 6 Spieler + Admin
     const TURN_DURATION_MS = 6000;
     const COUNTDOWN_MS = 3000;
     const WIN_POINTS = 150;
 
-    const PLAYER_COLORS = ["#ff2e93", "#3ecbff", "#ffd23f", "#7ed957", "#7017c9", "#ff8a3d"];
+    const PLAYER_COLORS = ["#ff2e93", "#3ecbff", "#ffd23f", "#7ed957", "#9b5cff", "#ff8a3d", "#f4f4f4"];
 
     let playerId = localStorage.getItem("quiz_player_id");
     let isHost = false;
@@ -118,11 +118,9 @@
       update(ref(db, 'gameState'), { status: 'cockpit' });
     };
 
+    // Bei Vier Gewinnt spielt der Admin mit
     function getActivePlayerIds() {
-      return Object.keys(allPlayers).filter(id => {
-        const n = allPlayers[id] && allPlayers[id].name;
-        return n && !n.includes("Host") && !n.includes("Admin");
-      });
+      return Object.keys(allPlayers).filter(id => allPlayers[id] && allPlayers[id].name);
     }
 
     function renderPlayerLegend() {
@@ -434,7 +432,7 @@
 
     <div id="c4-board" class="mx-auto max-w-full"></div>
 
-    <div id="host-hint" class="hidden text-white/50 text-xs mt-3">Du bist Moderator - klicke oben rechts "Runde starten", sobald alle bereit sind.</div>
+    <div id="host-hint" class="hidden text-white/50 text-xs mt-3">Du spielst mit und startest die Runde oben rechts mit „Runde starten“, sobald alle bereit sind.</div>
   </div>
 
   <div id="result-area" class="hidden relative z-10 text-center w-full max-w-md space-y-4">
