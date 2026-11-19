@@ -114,6 +114,7 @@
     musik_vier:     { group: 'Nebenspiele', label: 'Vier Gewinnt - Musik',            file: 'musik-bereit',             vol: 0.4,  music: true },
     musik_panzer:   { group: 'Nebenspiele', label: 'Panzerschlacht - Musik',          file: 'musik-bass',               vol: 0.45, music: true },
     musik_ochs:     { group: 'Nebenspiele', label: 'Ochs vorm Berg - Musik (stoppt bei Rot)', file: 'musik-festlich',   vol: 0.55, music: true },
+    musik_bombe:    { group: 'Nebenspiele', label: 'Bomb is ticking - Musik',         file: 'musik-herzschlag',         vol: 0.4,  music: true },
     explosion:      { group: 'Nebenspiele', label: 'Explosion',                       file: ['explosion', 'explosion-boeller'], vol: 0.8 },
     schuss:         { group: 'Nebenspiele', label: 'Schuss',                          file: 'schrotflinte',             vol: 0.55 },
     aufprall:       { group: 'Nebenspiele', label: 'Aufprall / Stein fällt',          file: ['aufprall-1', 'aufprall-2'], vol: 0.6 },
@@ -171,6 +172,7 @@
     'vier-gewinnt': { music: 'musik_vier' },
     panzer:         { music: 'musik_panzer' },
     ochsvormberg:   { music: 'musik_ochs' },
+    bombtick:       { music: 'musik_bombe' },
     siegerehrung:   { music: 'musik_siegerehrung' },
     fighter:        { widget: false },   // Fighter hat eigene Ton-Knöpfe
     editor:         { widget: false },

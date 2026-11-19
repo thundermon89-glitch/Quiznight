@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<script src="sounds/hs-audio.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hirnschmalz-Arena - Bomb is ticking</title>
+<!--
+  Bomb is ticking – Mehrspieler-Version für die Hirnschmalz-Arena.
+  Herkunft: Quizwarz (games/bombtick.html) bzw. die eigenständige Datei bomb-is-ticking.html.
+  Module, Regeln und Handbuch sind 1:1 übernommen. Neu ist nur der gemeinsame Spielstand in Firebase
+  (bombtickState): der Spielleiter startet, jeder Spieler sitzt am eigenen Gerät, der Entschärfer
+  wechselt mit jeder Bombe, die Handbuchseiten werden reihum auf die Experten verteilt.
+  Wer eine Regel im Code ändert, muss sie auch im Handbuch (MANUAL) ändern.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#0b0b12; --pink:#ff2e93; --yellow:#ffd23f; --green:#39ff8c; --red:#ff3b3b; --cyan:#00e5ff; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; min-height:100%; }
+  body {
+    font-family:'Inter',sans-serif; color:#f4eef6; min-height:100vh; overflow-x:hidden;
+    background: radial-gradient(ellipse 70% 55% at 50% -10%, rgba(255,59,59,.32), transparent 60%),
+      linear-gradient(180deg, #120a10 0%, #1c1016 50%, #0d0a10 100%);
+  }
+  .font-jax { font-family:'ATWriter','Baloo 2',monospace; }
+  .hide { display:none !important; }
+
+  /* ==== Kopfzeile ==== */
+  #hud { position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:8px; justify-content:center; align-items:center;
+    padding:10px 12px; background:rgba(8,6,12,.88); backdrop-filter:blur(4px); border-bottom:2px solid rgba(255,46,147,.35); }
+  .chip { border:2px solid rgba(255,255,255,.22); border-radius:999px; padding:5px 12px; font-weight:800; white-space:nowrap; font-size:.88rem; background:rgba(0,0,0,.35); }
+  #timer { font-family:'04b30',monospace; font-size:1.7rem; color:var(--red); background:#120000; border:3px solid #3a0000; border-radius:10px;
+    padding:4px 14px; text-shadow:0 0 10px var(--red); letter-spacing:2px; min-width:128px; text-align:center; font-variant-numeric:tabular-nums; }
+  body.danger #timer { animation:blink .5s steps(1) infinite; }
+  @keyframes blink { 50% { color:#5a0000; text-shadow:none; } }
+  #strikes .s { display:inline-block; width:14px; height:14px; border-radius:50%; background:#3a1a1a; border:2px solid #000; margin-left:5px; vertical-align:-2px; }
+  #strikes .s.on { background:var(--red); box-shadow:0 0 10px var(--red); }
+  #mute { cursor:pointer; user-select:none; }
+
+  #roleBanner { text-align:center; margin:14px auto 4px; max-width:980px; padding:0 14px; font-weight:800; font-size:1.15rem; line-height:1.3; }
+  #roleBanner small { display:block; font-weight:500; opacity:.8; font-size:.86rem; margin-top:3px; }
+  #main { display:flex; gap:16px; justify-content:center; align-items:flex-start; padding:10px 12px 190px; flex-wrap:wrap; }
+
+  /* ==== Bombe ==== */
+  #bomb { width:100%; max-width:760px; background:linear-gradient(160deg,#4a525d,#2b3038); border:4px solid #111; border-radius:22px; padding:14px;
+    box-shadow:0 12px 40px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.15); }
+  #bomb.solo { max-width:620px; }
+  @media (min-width:1000px) { #bomb.solo { position:sticky; top:76px; } }
+  #bombInfo { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .serial { background:#f4f1e6; color:#111; border-radius:6px; padding:3px 10px 4px; font-family:ui-monospace,Menlo,Consolas,monospace; font-weight:800;
+    letter-spacing:3px; font-size:1.15rem; box-shadow:2px 2px 0 #000; }
+  .serial small { display:block; font-size:.58rem; letter-spacing:1px; opacity:.6; font-family:'Inter',sans-serif; font-weight:700; }
+  .batt { display:inline-flex; gap:5px; align-items:center; font-weight:800; font-size:.85rem; }
+  .batt i { display:inline-block; width:13px; height:28px; border-radius:3px; background:linear-gradient(180deg,#ffd23f 0 16%,#1d1d1d 16%); border:2px solid #000; }
+  #mods { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+  .mod { position:relative; background:linear-gradient(180deg,#3a414b,#262b33); border:3px solid #111; border-radius:14px; padding:12px 12px 12px; min-height:210px;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.06); transition:box-shadow .3s; }
+  .mod h4 { margin:0 0 10px; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; opacity:.7; }
+  .led { position:absolute; top:10px; right:10px; width:16px; height:16px; border-radius:50%; background:#401010; border:2px solid #000; }
+  .mod.solved .led { background:var(--green); box-shadow:0 0 12px var(--green); }
+  .mod.solved { box-shadow:0 0 0 3px rgba(57,255,140,.55); }
+  .mod.solved .body { opacity:.55; pointer-events:none; }
+  .mod.flash .led { background:var(--red); box-shadow:0 0 14px var(--red); }
+  .mod.flash { animation:shake .35s; }
+  @keyframes shake { 20%{transform:translateX(-5px)} 40%{transform:translateX(5px)} 60%{transform:translateX(-3px)} 80%{transform:translateX(3px)} }
+  #bomb.locked .body { pointer-events:none; }
+
+  /* Kabel */
+  .wires { display:flex; flex-direction:column; gap:11px; padding:4px 2px; }
+  .wire { display:flex; align-items:center; gap:6px; cursor:pointer; padding:2px 0; }
+  .wire .num { font-size:.7rem; opacity:.5; width:12px; text-align:right; }
+  .wire .term { width:12px; height:20px; background:#9aa0a8; border:2px solid #222; border-radius:3px; flex:none; }
+  .wire .bar { flex:1; height:13px; border-radius:7px; border:2px solid rgba(0,0,0,.65); transition:transform .1s; }
+  .wire:hover .bar { transform:scaleY(1.35); }
+  .wire.cut { cursor:default; }
+  .wire.cut .bar { -webkit-mask:linear-gradient(90deg,#000 0 42%,transparent 42% 58%,#000 58%); mask:linear-gradient(90deg,#000 0 42%,transparent 42% 58%,#000 58%); transform:none; }
+
+  /* Knopf */
+  .bigbtn { display:flex; align-items:center; justify-content:center; margin:2px auto 14px; width:120px; height:120px; border-radius:50%; border:5px solid #111;
+    font-family:'ATWriter','Baloo 2',monospace; font-weight:900; font-size:.95rem; cursor:pointer; color:#111;
+    box-shadow:0 7px 0 #000, inset 0 -6px 0 rgba(0,0,0,.25); user-select:none; -webkit-user-select:none; touch-action:none; }
+  .bigbtn.dark { color:#fff; }
+  .bigbtn.down { transform:translateY(5px); box-shadow:0 2px 0 #000, inset 0 -3px 0 rgba(0,0,0,.25); }
+  .strip { height:18px; border-radius:9px; border:2px solid #111; background:#15181d; margin:0 12px; transition:background .15s, box-shadow .15s; }
+
+  /* Symbole */
+  .keys { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:4px 14px; }
+  .key { position:relative; height:74px; border-radius:10px; border:3px solid #111; background:#e9e4d4; font-size:2.2rem; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 4px 0 #000; padding-top:8px; }
+  .key:active { transform:translateY(3px); box-shadow:0 1px 0 #000; }
+  .key::after { content:""; position:absolute; top:6px; left:50%; width:24px; height:5px; margin-left:-12px; border-radius:3px; background:#333; }
+  .key.ok::after { background:var(--green); box-shadow:0 0 6px var(--green); }
+
+  /* Farbcode */
+  .pads { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:4px 26px; }
+  .pad { height:62px; border-radius:12px; border:3px solid #111; cursor:pointer; opacity:.35; transition:opacity .08s, box-shadow .08s, filter .08s; }
+  .pad.lit, .pad:active { opacity:1; filter:brightness(1.25); box-shadow:0 0 24px 4px currentColor; }
+  .stagebar { display:flex; gap:5px; justify-content:center; margin-top:12px; }
+  .stagebar i { width:12px; height:12px; border-radius:50%; background:#222; border:2px solid #000; }
+  .stagebar i.done { background:var(--green); box-shadow:0 0 6px var(--green); }
+
+  /* Passwort */
+  .pw { display:flex; justify-content:center; gap:5px; margin:4px 0 12px; }
+  .pw .col { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .pw button.arr { width:36px; height:26px; border-radius:6px; border:2px solid #111; background:#c9c3b0; cursor:pointer; font-size:.7rem; color:#111; }
+  .pw .let { width:36px; height:42px; display:flex; align-items:center; justify-content:center; background:#0f2a12; color:var(--green);
+    font-family:ui-monospace,Menlo,Consolas,monospace; font-size:1.45rem; font-weight:800; border:2px solid #111; border-radius:6px; text-shadow:0 0 8px var(--green); }
+  .send { display:block; margin:0 auto; padding:8px 18px; border-radius:9px; border:3px solid #111; background:var(--yellow); font-weight:900; cursor:pointer; color:#111; }
+
+  /* ==== Handbuch ==== */
+  #manual { width:100%; max-width:760px; display:flex; flex-direction:column; gap:14px; }
+  #manual.solo { max-width:560px; }
+  .page { background:#f4efe0; color:#1a1a1a; border-radius:6px; padding:14px 18px; box-shadow:4px 4px 0 rgba(0,0,0,.6); font-size:.93rem; line-height:1.45; border-left:12px solid #c9b98f; }
+  .page h3 { margin:0 0 8px; font-family:'ATWriter','Baloo 2',monospace; font-size:1.15rem; }
+  .page p { margin:4px 0 8px; }
+  .page ol, .page ul { margin:4px 0 10px; padding-left:22px; }
+  .page li { margin-bottom:3px; }
+  .page table { border-collapse:collapse; margin:6px 0 10px; }
+  .page td, .page th { border:1px solid #8a8270; padding:3px 9px; text-align:center; }
+  .page th { background:#e4dcc4; }
+  .page .sub { font-weight:800; margin-top:6px; }
+  .symcols { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+  .symcols div { display:flex; flex-direction:column; align-items:center; background:#fff; border:2px solid #8a8270; border-radius:6px; padding:4px 0; font-size:1.55rem; line-height:1.4; }
+  .symcols b { font-size:.75rem; font-family:'Inter',sans-serif; }
+  .words { columns:5 64px; font-family:ui-monospace,Menlo,Consolas,monospace; font-weight:700; font-size:.95rem; }
+  .who { font-size:.85rem; }
+  .tag { display:inline-block; padding:1px 7px; border-radius:6px; background:#1a1a1a; color:#f4efe0; font-size:.8rem; font-weight:700; margin:1px 2px; }
+  .dot { display:inline-block; width:12px; height:12px; border-radius:50%; border:1px solid #000; vertical-align:-1px; margin-right:3px; }
+
+  /* ==== Chat ==== */
+  #chat { position:fixed; left:50%; bottom:28px; transform:translateX(-50%); width:min(580px,calc(100% - 24px)); z-index:25;
+    background:rgba(10,8,16,.93); border:2px solid rgba(0,229,255,.45); border-radius:12px; padding:6px 8px; }
+  #chatLog { max-height:96px; overflow-y:auto; font-size:.84rem; line-height:1.35; }
+  #chatLog b { color:var(--cyan); }
+  #chatLog .empty { opacity:.5; }
+  #chatForm { display:flex; gap:6px; margin-top:4px; }
+  #chatInput { flex:1; min-width:0; border-radius:8px; border:2px solid #333; background:#15151f; color:#fff; padding:7px 9px; font-size:.9rem; }
+  #chatForm button { border-radius:8px; border:2px solid #111; background:var(--cyan); font-weight:800; padding:0 14px; cursor:pointer; }
+
+  /* ==== Ergebnis / Pausen ==== */
+  #overlay { position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(5,3,10,.84); }
+  .card { background:#0b0b16; border:3px solid var(--pink); border-radius:18px; padding:20px 22px; max-width:480px; width:100%; text-align:center;
+    box-shadow:0 0 38px rgba(255,46,147,.4); max-height:calc(100vh - 32px); overflow-y:auto; }
+  .card.win { border-color:var(--green); box-shadow:0 0 40px rgba(57,255,140,.45); }
+  .card h2 { font-family:'ATWriter','Baloo 2',monospace; margin:0 0 8px; font-size:1.8rem; }
+  .card p { margin:6px 0; }
+  .card .row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed rgba(255,255,255,.15); text-align:left; gap:10px; }
+  .card .pts { font-family:'ATWriter','Baloo 2',monospace; color:var(--green); white-space:nowrap; }
+  .card button { margin-top:14px; width:100%; padding:12px; border-radius:10px; border:3px solid #111; background:var(--green); color:#111;
+    font-family:'ATWriter','Baloo 2',monospace; font-weight:800; font-size:1.05rem; cursor:pointer; }
+  .card button:disabled { opacity:.6; cursor:default; }
+  .muted { opacity:.7; font-size:.85rem; }
+  #boomFlash { position:fixed; inset:0; z-index:45; pointer-events:none; opacity:0;
+    background:radial-gradient(circle, #fff 0, #ffd23f 22%, #ff3b3b 52%, #3a0000 100%); }
+  #boomFlash.go { animation:boom 1.5s ease-out; }
+  #boomFlash.win { background:radial-gradient(circle, rgba(57,255,140,.85) 0, rgba(57,255,140,.25) 45%, transparent 75%); }
+  @keyframes boom { 0% { opacity:1; } 100% { opacity:0; } }
+  body.shake #main { animation:shake .4s 3; }
+  @media (max-width:520px) {
+    #timer { font-size:1.35rem; min-width:104px; }
+    .chip { font-size:.78rem; padding:4px 9px; }
+    .symcols div { font-size:1.2rem; }
+  }
+  /* ==== Ergänzungen der eigenständigen Version ==== */
+  #start, #manualView { max-width:760px; margin:0 auto; padding:18px 14px 60px; }
+  .hero { text-align:center; margin:14px 0 18px; }
+  .hero h1 { font-family:'ATWriter','Baloo 2',monospace; font-size:2.2rem; margin:0 0 6px; }
+  .hero p { opacity:.85; margin:4px 0; }
+  .opts { background:#0b0b16; border:3px solid rgba(255,46,147,.55); border-radius:16px; padding:16px; display:grid; gap:14px; }
+  .opts label { display:block; font-weight:800; margin-bottom:6px; }
+  .seg { display:flex; flex-wrap:wrap; gap:6px; }
+  .seg button { padding:8px 14px; border-radius:10px; border:2px solid #333; background:#15151f; color:#fff; font-weight:800; cursor:pointer; }
+  .seg button.on { background:var(--yellow); color:#111; border-color:#111; }
+  .bigGo { display:block; width:100%; margin-top:6px; padding:14px; border-radius:12px; border:3px solid #111; background:var(--green); color:#111;
+    font-family:'ATWriter','Baloo 2',monospace; font-weight:900; font-size:1.2rem; cursor:pointer; }
+  .linkBtn { display:inline-block; padding:9px 14px; border-radius:10px; border:2px solid rgba(255,255,255,.3); background:rgba(0,0,0,.35); color:#fff;
+    font-weight:800; cursor:pointer; text-decoration:none; margin:4px 4px 0 0; }
+  .how { margin-top:16px; font-size:.92rem; line-height:1.5; opacity:.9; }
+  .how li { margin-bottom:4px; }
+  #manualView .page { margin-bottom:14px; }
+  #manualView .tools { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  @media print {
+    body { background:#fff !important; color:#000; }
+    #manualView .tools, #hud, #start, #main, #overlay { display:none !important; }
+    #manualView { max-width:none; padding:0; }
+    .page { box-shadow:none !important; break-inside:avoid; border-left-color:#999; }
+  }
+  /* ==== Ergänzungen Hirnschmalz-Arena ==== */
+  body { font-family:'Baloo 2','Inter',sans-serif; }
+  .opts .hint { font-size:.85rem; opacity:.75; margin-top:4px; }
+  #hostBar { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; padding:8px 12px 0; }
+  #hostBar button, .smallBtn { padding:7px 14px; border-radius:10px; border:2px solid #111; background:#f4eef6; color:#111; font-weight:800; cursor:pointer; font-family:inherit; }
+  #manualNote { background:rgba(0,0,0,.35); border:2px dashed rgba(255,255,255,.25); border-radius:12px; padding:10px 14px; font-size:.9rem; }
+  #manualNote button { margin-top:6px; }
+  .bigNum { font-family:'ATWriter','Baloo 2',monospace; font-size:4rem; font-weight:900; color:var(--yellow); line-height:1; margin:10px 0 4px; }
+  .card .ptsRow { font-weight:800; }
+  #waitBox { text-align:center; margin-top:16px; padding:14px; border-radius:14px; border:2px dashed rgba(255,255,255,.3); background:rgba(0,0,0,.3); font-weight:800; }
+</style>
+</head>
+<body>
+<!-- Startbildschirm -->
+<div id="start">
+  <div class="hero">
+    <h1>💣 Bomb is ticking</h1>
+    <p>Einer entschärft – alle anderen lesen im Handbuch. Nur gemeinsam schafft ihr es.</p>
+  </div>
+  <div class="opts hide" id="hostOpts">
+    <div><label>Wie viele Bomben?</label><div class="seg" id="optBombs"></div>
+      <div class="hint">Mit jeder Bombe wechselt der Entschärfer. So viele Bomben wie Spieler heißt: jeder ist einmal dran.</div></div>
+    <div><label>Schwierigkeit</label><div class="seg" id="optLevel"></div></div>
+    <button class="bigGo" id="goBtn">💣 Bombe scharf machen</button>
+    <div><a class="linkBtn" href="#handbuch" target="_blank" rel="noopener">📖 Ganzes Handbuch ansehen / drucken</a></div>
+  </div>
+  <div id="waitBox" class="hide">⏳ Gleich geht's los – der Spielleiter macht die Bombe scharf.</div>
+  <div class="how">
+    <b>So spielt ihr:</b>
+    <ol>
+      <li>Bei jeder Bombe ist einer von euch der <b>Entschärfer</b>: Nur er sieht die Bombe auf seinem Gerät – aber kein Handbuch.</li>
+      <li>Alle anderen sind <b>Experten</b>: Sie sehen nur ihre <b>Handbuchseiten</b>, nicht die Bombe. Die Seiten werden auf euch verteilt.</li>
+      <li>Der Entschärfer beschreibt, was er sieht – die Experten sagen, was zu tun ist. Reden ist alles!</li>
+      <li>Jeder Fehler ist ein <b>Strike</b> (−15 Sekunden). Beim 3. Strike oder wenn die Zeit abläuft: 💥</li>
+      <li>Punkte für alle: 10 je geschafftem Modul, 50 fürs Entschärfen, +1 je 10 s Restzeit – der Entschärfer bekommt 30 extra.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- Handbuch-Ansicht zum Drucken (#handbuch) -->
+<div id="manualView" class="hide">
+  <div class="tools">
+    <button class="linkBtn" onclick="window.print()">🖨️ Drucken</button>
+  </div>
+  <div id="manualPages"></div>
+</div>
+
+<!-- Spiel -->
+<div id="hud" class="hide">
+  <div class="chip font-jax">💣 Bomb is ticking</div>
+  <div class="chip" id="bombChip">Bombe 1/1</div>
+  <div class="chip" id="defuserChip">🧨 –</div>
+  <div id="timer">-:--</div>
+  <div class="chip" id="strikes" title="Beim 3. Strike explodiert die Bombe">Strikes<span class="s"></span><span class="s"></span><span class="s"></span></div>
+  <div class="chip" id="solvedChip">0/0 Module</div>
+</div>
+<div id="hostBar" class="hide">
+  <button id="hostEndBtn">🏠 Spiel beenden & zurück ins Cockpit</button>
+</div>
+<div id="roleBanner" class="hide"></div>
+<div id="main" class="hide">
+  <div id="bomb"></div>
+  <div id="manual"></div>
+</div>
+<div id="chat" class="hide">
+  <div id="chatLog"><div class="empty">Team-Chat – falls ihr gerade nicht redet.</div></div>
+  <form id="chatForm" autocomplete="off"><input id="chatInput" maxlength="200" placeholder="Nachricht ans Team…"><button>➤</button></form>
+</div>
+<div id="boomFlash"></div>
+<div id="overlay" class="hide"><div class="card" id="overlayCard"></div></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getDatabase, ref, get, set, update, push, onValue, runTransaction, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+  const app = initializeApp({ databaseURL: "https://play-ground-82b46-default-rtdb.firebaseio.com" });
+  const db = getDatabase(app);
+  const STATE = "bombtickState", CHAT = "bombtickChat";
+  const INTRO_MS = 6000;                        // Ansage "Wer entschärft?" vor jeder Bombe
+
+  // Server-Uhr: alle Geräte rechnen mit derselben Zeit (endsAt ist eine absolute Uhrzeit)
+  let clockOffset = 0;
+  onValue(ref(db, ".info/serverTimeOffset"), (s) => { clockOffset = s.val() || 0; });
+  const now = () => Date.now() + clockOffset;
+  const PAGE_LOADED = Date.now();
+
+  // ==== Zeiten & Punkte ====
+  const SEC_BASE = 75, SEC_PER_MODULE = 45;     // 3 Module: 3:30 · 4 Module: 4:15
+  const STRIKE_PENALTY_MS = 15000;              // jeder Fehler kostet 15 Sekunden
+  const MAX_STRIKES = 3;
+  // Ergebnis zwischen zwei Bomben: weiter, wenn alle bereit sind (next-gate.js)
+  const HOLD_MS = 500;                          // ab so lange gilt der Knopf als "gehalten"
+  const PTS_MODULE = 10;                        // je gelöstes Modul, für alle (auch bei Explosion)
+  const PTS_DEFUSED = 50;                       // entschärft: alle
+  const PTS_DEFUSER = 30;                       // entschärft: Entschärfer extra
+  const SEC_PER_BONUS_PT = 10;                  // + 1 Punkt je 10 s Restzeit (alle)
+
+  // ==== Moduldaten ====
+  const MOD_NAMES = { kabel: "Kabel", knopf: "Der Knopf", symbole: "Symbole", farbcode: "Farbcode", passwort: "Passwort" };
+  const MOD_ICONS = { kabel: "✂️", knopf: "🔴", symbole: "🔣", farbcode: "🚥", passwort: "🔤" };
+  const WIRE_HEX = { rot: "#e8322f", blau: "#2f6fe8", gelb: "#f2d22e", weiss: "#f4f4f4", schwarz: "#141414" };
+  const WIRE_NAME = { rot: "rot", blau: "blau", gelb: "gelb", weiss: "weiß", schwarz: "schwarz" };
+  const BTN_HEX = { rot: "#e8322f", blau: "#2f6fe8", gelb: "#f2d22e", weiss: "#f4f4f4" };
+  const BTN_LABELS = ["DRÜCKEN", "HALTEN", "STOPP", "ZÜNDEN"];
+  const STRIP = { weiss: { hex: "#f4f4f4", digit: 3, name: "weiß" }, gruen: { hex: "#39d353", digit: 7, name: "grün" },
+                  rot: { hex: "#e8322f", digit: 2, name: "rot" }, lila: { hex: "#a03cf0", digit: 6, name: "lila" } };
+  const SYM_COLS = [
+    ["🐙", "🍄", "⚓", "🌵", "🎈", "🔑", "🦷"],
+    ["🧲", "🐙", "🪐", "🎃", "🐌", "🍄", "🎲"],
+    ["🧀", "🦴", "🎈", "🐌", "🌙", "⏳", "🔑"],
+    ["🪶", "🐸", "🍒", "🦴", "🔔", "🌵", "🧩"],
+    ["🦀", "💎", "🌀", "🔔", "🎩", "🪐", "⏳"],
+    ["🦋", "🎩", "🧩", "💎", "🦷", "🧀", "🐸"],
+  ];
+  const SIMON = ["rot", "blau", "gruen", "gelb"];
+  const SIMON_HEX = { rot: "#ff3b3b", blau: "#3b8bff", gruen: "#39d353", gelb: "#ffd23f" };
+  const SIMON_NAME = { rot: "rot", blau: "blau", gruen: "grün", gelb: "gelb" };
+  // [Strikes 0, 1, 2]: blinkende Farbe -> zu drückende Farbe
+  const SIMON_MAP = {
+    vokal: [
+      { rot: "gelb", blau: "rot", gruen: "blau", gelb: "gruen" },
+      { rot: "gruen", blau: "gelb", gruen: "rot", gelb: "blau" },
+      { rot: "blau", blau: "gruen", gruen: "gelb", gelb: "rot" },
+    ],
+    ohne: [
+      { rot: "gruen", blau: "rot", gruen: "gelb", gelb: "blau" },
+      { rot: "rot", blau: "gelb", gruen: "blau", gelb: "gruen" },
+      { rot: "blau", blau: "gruen", gruen: "rot", gelb: "gelb" },
+    ],
+  };
+  const WORDS = ["ABEND", "BLITZ", "BLUME", "BRIEF", "DRAHT", "FEUER", "FLUSS", "GEIST", "GLANZ", "HONIG",
+                 "INSEL", "KABEL", "KERZE", "KLANG", "KRONE", "LAMPE", "MAUER", "NEBEL", "PFERD", "PIRAT",
+                 "RADIO", "SCHAF", "SONNE", "STURM", "TIGER", "WOLKE", "ZANGE", "ZEBRA", "TASSE", "SPIEL"];
+  const ALPHABET = "ABCDEFGHIJKLMNOPRSTUWZ".split("");
+  const SERIAL_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXZ".split(""); // ohne I und O (sehen aus wie 1 und 0)
+
+  // ==== Hilfsfunktionen ====
+  const rnd = (n) => Math.floor(Math.random() * n);
+  const pick = (a) => a[rnd(a.length)];
+  const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const hasVowel = (serial) => /[AEIOU]/.test(serial);
+  const lastDigit = (serial) => { const d = String(serial).match(/\d/g); return d ? Number(d[d.length - 1]) : 0; };
+  function fmtTime(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+
+  // ==== Lösungen (gleiche Regeln wie im Handbuch unten) ====
+  function wireSolution(m, bomb) {
+    const w = m.wires, n = w.length;
+    const count = (c) => w.filter((x) => x === c).length;
+    const odd = lastDigit(bomb.serial) % 2 === 1;
+    const vowel = hasVowel(bomb.serial);
+    if (n === 3) {
+      if (count("gelb") === 0) return 0;
+      if (w[2] === "schwarz") return 1;
+      const twin = w.find((c) => count(c) === 2);
+      if (twin) return w.findIndex((c) => c !== twin);
+      return 2;
+    }
+    if (n === 4) {
+      if (count("rot") > 1 && !odd) return w.lastIndexOf("rot");
+      if (count("blau") === 0) return 2;
+      if (count("weiss") === 1) return w.indexOf("weiss");
+      if (bomb.batteries > 2) return 0;
+      return 1;
+    }
+    if (n === 5) {
+      if (w[0] === "schwarz" && vowel) return 3;
+      if (count("gelb") === 1 && count("weiss") > 1) return 0;
+      if (count("schwarz") === 0) return 1;
+      if (count("blau") > 0) return w.indexOf("blau");
+      return 4;
+    }
+    // 6 Kabel
+    if (count("gelb") === 0 && odd) return 2;
+    if (count("gelb") === 1 && count("weiss") > 1) return 4;
+    if (count("rot") === 0) return 5;
+    return 3;
+  }
+  function buttonMustHold(m, bomb) {
+    if (m.color === "blau" && m.label === "STOPP") return true;
+    if (bomb.batteries > 2 && m.label === "ZÜNDEN") return false;
+    if (m.color === "weiss" && hasVowel(bomb.serial)) return true;
+    if (m.color === "rot" && m.label === "HALTEN") return false;
+    if (m.color === "gelb") return true;
+    return false;
+  }
+  function symbolColumn(syms) { return SYM_COLS.find((col) => syms.every((s) => col.includes(s))); }
+  function symbolOrder(m) { const col = symbolColumn(m.syms); return m.syms.slice().sort((a, b) => col.indexOf(a) - col.indexOf(b)); }
+  // Stufe s (0-basiert) blinkt die ersten s+1 Farben; erwartet wird die übersetzte Folge
+  function simonExpected(m, bomb, stage, strikes) {
+    const table = SIMON_MAP[hasVowel(bomb.serial) ? "vokal" : "ohne"][Math.min(2, strikes || 0)];
+    return m.seq.slice(0, stage + 1).map((c) => table[c]);
+  }
+  function passwordWord(m) { return WORDS.find((w) => [0, 1, 2, 3, 4].every((i) => m.cols[i].includes(w[i]))); }
+
+  // ==== Bomben bauen (nur der Host, einmal am Anfang) ====
+  function genSerial() {
+    let s = "";
+    for (let i = 0; i < 5; i++) s += Math.random() < 0.55 ? pick(SERIAL_LETTERS) : String(rnd(10));
+    return s + String(rnd(10)); // endet immer mit einer Ziffer
+  }
+  function genModule(type, bombIdx) {
+    if (type === "kabel") {
+      const n = bombIdx === 0 ? 3 + rnd(2) : 4 + rnd(3);
+      return { type, wires: Array.from({ length: n }, () => pick(Object.keys(WIRE_HEX))) };
+    }
+    if (type === "knopf") return { type, color: pick(Object.keys(BTN_HEX)), label: pick(BTN_LABELS), strip: pick(Object.keys(STRIP)) };
+    if (type === "symbole") {
+      for (;;) {
+        const syms = shuffle(pick(SYM_COLS)).slice(0, 4);
+        if (SYM_COLS.filter((col) => syms.every((s) => col.includes(s))).length === 1) return { type, syms: shuffle(syms) };
+      }
+    }
+    if (type === "farbcode") {
+      const len = bombIdx === 0 ? 3 : 3 + rnd(3);
+      return { type, seq: Array.from({ length: len }, () => pick(SIMON)) };
+    }
+    // passwort: zu jeder Stelle 6 Buchstaben, so dass genau ein Listenwort einstellbar ist
+    for (;;) {
+      const word = pick(WORDS);
+      const cols = [0, 1, 2, 3, 4].map((i) => shuffle([word[i], ...shuffle(ALPHABET.filter((l) => l !== word[i])).slice(0, 5)]));
+      const fits = WORDS.filter((w) => [0, 1, 2, 3, 4].every((i) => cols[i].includes(w[i])));
+      if (fits.length === 1) return { type: "passwort", cols, start: cols.map(() => rnd(6)) };
+    }
+  }
+  function genBomb(idx, defuser) {
+    const others = ["knopf", "symbole", "farbcode", "passwort"];
+    const types = idx === 0 ? shuffle(["kabel", ...shuffle(others).slice(0, 2)]) : shuffle(["kabel", ...others]).slice(0, 4);
+    return {
+      defuser,
+      serial: genSerial(),
+      batteries: rnd(5),
+      durationMs: (SEC_BASE + SEC_PER_MODULE * types.length) * 1000,
+      modules: types.map((t) => genModule(t, idx)),
+    };
+  }
+
+  // Schwierigkeit: wie viele Module je Bombe und wie viele Kabel/Farben (genModule nutzt bombIdx 0 = leicht)
+  const LEVELS = {
+    leicht: { label: "🐣 Leicht", modules: () => 3, genIdx: () => 0 },
+    normal: { label: "⚔️ Normal", modules: (i) => (i === 0 ? 3 : 4), genIdx: (i) => i },
+    schwer: { label: "🌍 Schwer", modules: () => 5, genIdx: () => 1 },
+  };
+  function genBombLevel(idx, level) {
+    const L = LEVELS[level];
+    const n = L.modules(idx);
+    const others = shuffle(["knopf", "symbole", "farbcode", "passwort"]);
+    const types = shuffle(["kabel", ...others.slice(0, n - 1)]);
+    return {
+      defuser: "local", serial: genSerial(), batteries: rnd(5),
+      durationMs: (SEC_BASE + SEC_PER_MODULE * types.length) * 1000,
+      modules: types.map((t) => genModule(t, L.genIdx(idx))),
+    };
+  }
+
+  // ==== Mehrspieler: gemeinsamer Spielstand in Firebase ====
+  const playerId = localStorage.getItem("quiz_player_id");
+  let isHost = false, allPlayers = {};
+  let latestState = null;          // { status, order, bombs, bombIdx, startsAt, endsAt, strikes, mods, results }
+  const local = {};                // Farbcode-Eingabe, Passwort-Räder (nur auf diesem Gerät)
+  let seenResultKey = "", lastTickSec = -1, viewKey = "", overlayMode = "", ending = false, strikeSeen = "", showAllPages = false;
+  const settings = { bombs: 3, level: "normal" };
+
+  const nameOf = (id) => (allPlayers[id] || {}).name || "?";
+  const isHostName = (n) => !!n && (n.includes("Host") || n.includes("Admin"));
+  function activePlayerIds() { return Object.keys(allPlayers).filter((id) => { const n = allPlayers[id] && allPlayers[id].name; return n && !isHostName(n); }); }
+
+  const bombOf = (st) => (st && st.bombs ? st.bombs[st.bombIdx] : null);
+  const isDefuser = () => { const b = bombOf(latestState); return !!b && b.defuser === playerId; };
+  const amDefuser = () => isDefuser() || isHost;     // wer die Bombe sieht (Spielleiter schaut nur zu)
+  const started = (st) => now() >= (st.startsAt || 0);
+  const canAct = () => !!latestState && latestState.status === "playing" && isDefuser() && started(latestState) && now() < latestState.endsAt;
+  function solvedCount(st) { const b = bombOf(st); const m = st.mods || {}; return b.modules.filter((_, k) => m["m" + k] && m["m" + k].solved).length; }
+
+  // Jede Änderung läuft als Transaktion auf den ganzen Spielstand - so zählt nichts doppelt
+  function tx(fn) {
+    return runTransaction(ref(db, STATE), (s) => {
+      if (!s) return s;
+      return fn(s) === false ? undefined : s;
+    });
+  }
+  function finishBomb(s, defused, reason) {
+    const b = bombOf(s);
+    s.results = s.results || {};
+    s.results["b" + s.bombIdx] = { defused, reason, solved: solvedCount(s), total: b.modules.length,
+      secLeft: defused ? Math.max(0, Math.ceil((s.endsAt - now()) / 1000)) : 0, strikes: s.strikes || 0, defuser: b.defuser };
+    s.status = "between";
+  }
+  function setModProgress(i, patch) {
+    const bi = latestState.bombIdx;
+    tx((s) => {
+      if (s.status !== "playing" || s.bombIdx !== bi) return false;
+      const mods = (s.mods = s.mods || {});
+      const m = (mods["m" + i] = mods["m" + i] || {});
+      Object.entries(patch).forEach(([k, v]) => {
+        if (k.includes("/")) { const [a, b] = k.split("/"); (m[a] = m[a] || {})[b] = v; } else m[k] = v;
+      });
+    });
+  }
+  function strike(i) {
+    const box = document.getElementById("mod" + i);
+    if (box) { box.classList.remove("flash"); void box.offsetWidth; box.classList.add("flash"); setTimeout(() => box.classList.remove("flash"), 700); }
+    if (!canAct()) return;
+    sfx.strike(); flashScreen();
+    const bi = latestState.bombIdx;
+    strikeSeen = bi + ":" + ((latestState.strikes || 0) + 1);
+    tx((s) => {
+      if (s.status !== "playing" || s.bombIdx !== bi) return false;
+      s.strikes = (s.strikes || 0) + 1;
+      if (s.strikes >= MAX_STRIKES) finishBomb(s, false, "strikes");
+      else s.endsAt -= STRIKE_PENALTY_MS;
+    });
+  }
+  function solveMod(i, extra = {}) {
+    if (!canAct()) return;
+    sfx.ok();
+    const bi = latestState.bombIdx;
+    tx((s) => {
+      if (s.status !== "playing" || s.bombIdx !== bi) return false;
+      const mods = (s.mods = s.mods || {});
+      const old = mods["m" + i] || {};
+      mods["m" + i] = { ...old, ...extra, cut: { ...(old.cut || {}), ...(extra.cut || {}) }, solved: true };
+      const b = bombOf(s);
+      if (b.modules.every((_, k) => mods["m" + k] && mods["m" + k].solved)) finishBomb(s, true, "defused");
+    });
+  }
+
+  // ==== Spielleiter ====
+  function hostStart() {
+    const ids = shuffle(activePlayerIds());
+    if (ids.length < 2) { alert("Mindestens 2 Spieler nötig: einer entschärft, mindestens einer liest im Handbuch."); return; }
+    const bombs = Array.from({ length: settings.bombs }, (_, i) => { const b = genBombLevel(i, settings.level); b.defuser = ids[i % ids.length]; return b; });
+    const t = now() + INTRO_MS;
+    set(ref(db, CHAT), null);
+    set(ref(db, STATE), { status: "playing", level: settings.level, order: ids, bombs, bombIdx: 0,
+      startsAt: t, endsAt: t + bombs[0].durationMs, strikes: 0, startedAt: now() });
+    push(ref(db, "gameLog"), { text: "💣 Bomb is ticking: " + bombs.length + " Bombe" + (bombs.length === 1 ? "" : "n") + " scharf gemacht", at: Date.now() });
+  }
+  function hostNext() {
+    tx((s) => {
+      if (s.status !== "between") return false;
+      if (s.bombIdx + 1 < s.bombs.length) {
+        s.bombIdx += 1; s.status = "playing"; s.strikes = 0; s.mods = null;
+        const t = now() + INTRO_MS;
+        s.startsAt = t; s.endsAt = t + s.bombs[s.bombIdx].durationMs;
+      } else s.status = "finished";
+    });
+  }
+  function hostEnd(ask) {
+    if (ask && !confirm("Spiel wirklich beenden und alle zurück ins Cockpit bringen?")) return;
+    set(ref(db, STATE), null);
+    set(ref(db, CHAT), null);
+    update(ref(db, "gameState"), { status: "cockpit" });
+  }
+  // Punkte (wie in Quizwarz): je Modul für alle, Entschärfen für alle, Entschärfer extra, Restzeit-Bonus
+  function pointsFor(r, id) {
+    if (!r) return 0;
+    let p = PTS_MODULE * (r.solved || 0);
+    if (r.defused) { p += PTS_DEFUSED + Math.floor((r.secLeft || 0) / SEC_PER_BONUS_PT); if (id === r.defuser) p += PTS_DEFUSER; }
+    return p;
+  }
+  function hostPayout(st) {
+    Object.keys(st.results || {}).forEach((key) => {
+      const r0 = st.results[key];
+      if (!r0 || r0.paid) return;
+      tx((s) => { const r = s.results && s.results[key]; if (!r || r.paid) return false; r.paid = true; }).then((res) => {
+        if (!res.committed) return;
+        const r = res.snapshot.val().results[key];
+        const order = res.snapshot.val().order || [];
+        order.forEach((id) => {
+          const p = pointsFor(r, id);
+          if (p > 0) runTransaction(ref(db, "players/" + id + "/score"), (cur) => (cur || 0) + p);
+        });
+        const n = Number(key.slice(1)) + 1;
+        push(ref(db, "gameLog"), { text: (r.defused ? "✅ Bombe " + n + " entschärft von " : "💥 Bombe " + n + " explodiert bei ") + nameOf(r.defuser) +
+          " – " + order.map((id) => nameOf(id) + " +" + pointsFor(r, id)).join(", "), at: Date.now() });
+      });
+    });
+  }
+
+  // ==== Ansicht je Rolle ====
+  // Handbuch-Verteilung reihum: jede Modulseite der aktuellen Bombe geht an einen Experten; wer leer ausgeht, bekommt eine Seite doppelt
+  function myPages(st) {
+    const b = bombOf(st);
+    const types = b.modules.map((m) => m.type);
+    const experts = (st.order || []).filter((id) => id !== b.defuser);
+    const k = experts.indexOf(playerId);
+    if (k < 0 || experts.length <= 1 || showAllPages) return types;
+    const mine = types.filter((_, j) => j % experts.length === k);
+    if (!mine.length) mine.push(types[k % types.length]);
+    return mine;
+  }
+  function pageNames(types) { return types.map((t) => MOD_ICONS[t] + " " + MOD_NAMES[t]).join(", "); }
+
+  function buildView() {
+    const st = latestState, bomb = bombOf(st);
+    const bombEl = document.getElementById("bomb"), manEl = document.getElementById("manual");
+    const banner = document.getElementById("roleBanner");
+    Object.keys(local).forEach((k) => delete local[k]);
+    if (isDefuser() || isHost) {
+      buildBombView();
+      bombEl.classList.remove("hide");
+    } else { bombEl.innerHTML = ""; bombEl.classList.add("hide"); }
+    if (isDefuser()) {
+      banner.innerHTML = `🧨 Du bist <span style="color:var(--yellow)">ENTSCHÄRFER</span>!<small>Beschreib den Experten, was du siehst – im Handbuch steht, was zu tun ist.</small>`;
+      manEl.innerHTML = ""; manEl.classList.add("hide");
+      bombEl.classList.add("solo");
+    } else if (isHost) {
+      banner.innerHTML = `🎬 Du leitest das Spiel – <span style="color:var(--yellow)">${esc(nameOf(bomb.defuser))}</span> entschärft gerade.<small>Du siehst die Bombe nur zu. Links die Bombe, rechts das ganze Handbuch.</small>`;
+      bombEl.classList.remove("solo");
+      manEl.classList.remove("hide", "solo");
+      manEl.innerHTML = manualGeneralPage() + bomb.modules.map((m) => MANUAL[m.type]()).join("");
+    } else {
+      const pages = myPages(st);
+      banner.innerHTML = `📖 Du bist <span style="color:var(--cyan)">EXPERTE</span> – <span style="color:var(--yellow)">${esc(nameOf(bomb.defuser))}</span> entschärft.<small>Deine Handbuchseiten: ${pageNames(pages)}. Frag nach, welche Module auf der Bombe sind!</small>`;
+      manEl.classList.remove("hide"); manEl.classList.add("solo");
+      const all = bomb.modules.map((m) => m.type);
+      manEl.innerHTML = manualGeneralPage() + pages.map((t) => MANUAL[t]()).join("") +
+        (pages.length < all.length ? `<div id="manualNote">Die anderen Seiten haben deine Mitspieler. Fehlt jemand?
+          <br><button class="smallBtn" id="allPagesBtn">📖 Ganzes Handbuch zeigen</button></div>` : "");
+      const btn = document.getElementById("allPagesBtn");
+      if (btn) btn.addEventListener("click", () => { showAllPages = true; buildView(); });
+    }
+  }
+
+  function buildBombView() {
+    const bomb = bombOf(latestState);
+    const el = document.getElementById("bomb");
+    el.innerHTML = `
+      <div id="bombInfo">
+        <div class="serial"><small>SERIENNUMMER</small>${esc(bomb.serial)}</div>
+        <div class="batt">🔋 Batterien: ${bomb.batteries ? Array.from({ length: bomb.batteries }, () => "<i></i>").join("") : "<span style='opacity:.7'>keine</span>"}</div>
+      </div>
+      <div id="mods"></div>`;
+    const mods = el.querySelector("#mods");
+    bomb.modules.forEach((m, i) => {
+      const box = document.createElement("div");
+      box.className = "mod"; box.id = "mod" + i;
+      box.innerHTML = `<div class="led"></div><h4>${MOD_ICONS[m.type]} ${MOD_NAMES[m.type]}</h4><div class="body"></div>`;
+      mods.appendChild(box);
+      BUILD[m.type](box.querySelector(".body"), m, i, bomb);
+    });
+  }
+
+  function showGame(on) {
+    document.getElementById("start").classList.toggle("hide", on);
+    ["hud", "roleBanner", "main", "chat"].forEach((id) => document.getElementById(id).classList.toggle("hide", !on));
+    document.getElementById("hostBar").classList.toggle("hide", !(on && isHost));
+  }
+
+  function render() {
+    const st = latestState;
+    if (!st || !st.bombs) {
+      showGame(false); hideOverlay();
+      document.getElementById("hostOpts").classList.toggle("hide", !isHost);
+      document.getElementById("waitBox").classList.toggle("hide", isHost);
+      viewKey = "";
+      return;
+    }
+    showGame(true);
+    const bomb = bombOf(st);
+    const key = st.bombIdx + ":" + st.startsAt;
+    if (key !== viewKey) { viewKey = key; showAllPages = false; buildView(); }
+    document.getElementById("bombChip").textContent = `Bombe ${st.bombIdx + 1}/${st.bombs.length}`;
+    document.getElementById("defuserChip").textContent = `🧨 ${nameOf(bomb.defuser)}`;
+    document.querySelectorAll("#strikes .s").forEach((el, i) => el.classList.toggle("on", i < (st.strikes || 0)));
+    document.getElementById("solvedChip").textContent = `✅ ${solvedCount(st)}/${bomb.modules.length} Module`;
+    document.getElementById("bomb").classList.toggle("locked", !canAct());
+    // Strike auch auf den anderen Geräten hören und sehen
+    const sk = st.bombIdx + ":" + (st.strikes || 0);
+    if ((st.strikes || 0) > 0 && sk !== strikeSeen && st.status === "playing") { strikeSeen = sk; if (Date.now() - PAGE_LOADED > 2500) { sfx.strike(); flashScreen(); } }
+    updateModules(st);
+    if (isHost) hostPayout(st);
+    if (st.status === "between") showBetween(st);
+    else if (st.status === "finished") showFinal(st);
+    else if (overlayMode !== "intro") hideOverlay();
+  }
+
+  function tick() {
+    const st = latestState;
+    if (!st || !st.bombs) return;
+    const timerEl = document.getElementById("timer");
+    if (st.status === "playing") {
+      const t = now();
+      if (t < st.startsAt) {
+        timerEl.textContent = fmtTime(st.endsAt - st.startsAt);
+        showIntro(st, st.startsAt - t);
+        return;
+      }
+      if (overlayMode === "intro") { hideOverlay(); document.getElementById("bomb").classList.toggle("locked", !canAct()); sfx.go(); }
+      const left = st.endsAt - t;
+      timerEl.textContent = fmtTime(left);
+      document.body.classList.toggle("danger", left <= 30000);
+      const sec = Math.ceil(left / 1000);
+      if (sec !== lastTickSec && sec >= 0) { lastTickSec = sec; if (left > 0) sfx.tick(sec <= 10); }
+      simonTick();
+      if (left <= 0 && !ending) {
+        ending = true;
+        tx((s) => { if (s.status !== "playing" || now() < s.endsAt) return false; finishBomb(s, false, "time"); })
+          .catch(() => {}).finally(() => { ending = false; });
+      }
+    } else document.body.classList.remove("danger");
+  }
+
+  const BUILD = {
+    kabel(body, m, i, bomb) {
+      body.innerHTML = `<div class="wires">${m.wires.map((c, k) => `
+        <div class="wire" data-k="${k}"><span class="num">${k + 1}</span><span class="term"></span>
+        <span class="bar" style="background:${WIRE_HEX[c]}"></span><span class="term"></span></div>`).join("")}</div>`;
+      body.querySelectorAll(".wire").forEach((w) => w.addEventListener("click", () => {
+        if (!canAct() || w.classList.contains("cut")) return;
+        const k = Number(w.dataset.k);
+        w.classList.add("cut");
+        sfx.snip();
+        setModProgress(i, { ["cut/w" + k]: true });
+        if (k === wireSolution(m, bomb)) solveMod(i, { cut: { ["w" + k]: true } });
+        else strike(i);
+      }));
+    },
+
+    knopf(body, m, i, bomb) {
+      body.innerHTML = `<div class="bigbtn${m.color === "blau" || m.color === "rot" ? " dark" : ""}" style="background:${BTN_HEX[m.color]}">${esc(m.label)}</div><div class="strip"></div>`;
+      const btn = body.querySelector(".bigbtn");
+      const strip = body.querySelector(".strip");
+      let downAt = null, holdTimer = null;
+      btn.addEventListener("pointerdown", (e) => {
+        if (!canAct()) return;
+        downAt = Date.now();
+        btn.classList.add("down");
+        try { btn.setPointerCapture(e.pointerId); } catch (err) {}
+        holdTimer = setTimeout(() => {
+          const s = STRIP[m.strip];
+          strip.style.background = s.hex;
+          strip.style.boxShadow = `0 0 14px ${s.hex}`;
+        }, HOLD_MS);
+      });
+      const release = () => {
+        if (downAt === null) return;
+        const dur = Date.now() - downAt;
+        downAt = null;
+        clearTimeout(holdTimer);
+        btn.classList.remove("down");
+        strip.style.background = "";
+        strip.style.boxShadow = "";
+        if (!canAct()) return;
+        const mustHold = buttonMustHold(m, bomb);
+        if (dur < HOLD_MS) { if (mustHold) strike(i); else solveMod(i); return; }
+        if (!mustHold) { strike(i); return; }
+        const shown = fmtTime(latestState.endsAt - now());
+        if (shown.includes(String(STRIP[m.strip].digit))) solveMod(i); else strike(i);
+      };
+      btn.addEventListener("pointerup", release);
+      btn.addEventListener("pointercancel", release);
+    },
+
+    symbole(body, m, i) {
+      body.innerHTML = `<div class="keys">${m.syms.map((s, k) => `<div class="key" data-k="${k}">${s}</div>`).join("")}</div>`;
+      body.querySelectorAll(".key").forEach((key) => key.addEventListener("click", () => {
+        if (!canAct() || key.classList.contains("ok")) return;
+        const order = symbolOrder(m);
+        const pressed = ((latestState.mods || {})["m" + i] || {}).pressed || 0;
+        const sym = m.syms[Number(key.dataset.k)];
+        if (sym === order[pressed]) {
+          key.classList.add("ok");
+          sfx.click();
+          if (pressed + 1 >= order.length) solveMod(i, { pressed: order.length });
+          else setModProgress(i, { pressed: pressed + 1 });
+        } else {
+          strike(i);
+        }
+      }));
+    },
+
+    farbcode(body, m, i, bomb) {
+      body.innerHTML = `<div class="pads">${SIMON.map((c) => `<div class="pad" data-c="${c}" style="background:${SIMON_HEX[c]};color:${SIMON_HEX[c]}"></div>`).join("")}</div>
+        <div class="stagebar">${m.seq.map(() => "<i></i>").join("")}</div>`;
+      const stateStage = ((latestState.mods || {})["m" + i] || {}).stage || 0;
+      local["sim" + i] = { stage: stateStage, input: [], lastInput: Date.now() - 1500, t0: Date.now() };
+      body.querySelectorAll(".pad").forEach((pad) => pad.addEventListener("pointerdown", () => {
+        if (!canAct()) return;
+        const sim = local["sim" + i];
+        const now = Date.now();
+        sim.lastInput = now;
+        sfx.pad(SIMON.indexOf(pad.dataset.c));
+        const expected = simonExpected(m, bomb, sim.stage, latestState.strikes || 0);
+        if (pad.dataset.c === expected[sim.input.length]) {
+          sim.input.push(pad.dataset.c);
+          if (sim.input.length === expected.length) {
+            sim.stage++;
+            sim.input = [];
+            sim.t0 = now + 900;
+            sim.lastInput = now - 1600; // neue Folge kommt nach kurzer Pause
+            if (sim.stage >= m.seq.length) solveMod(i, { stage: sim.stage });
+            else setModProgress(i, { stage: sim.stage });
+            renderStageBar(i, sim.stage);
+          }
+        } else {
+          sim.input = [];
+          strike(i);
+        }
+      }));
+      renderStageBar(i, stateStage);
+    },
+
+    passwort(body, m, i) {
+      local["pw" + i] = m.start.slice();
+      body.innerHTML = `<div class="pw">${m.cols.map((_, k) => `
+        <div class="col"><button class="arr" data-k="${k}" data-d="-1">▲</button><div class="let" id="pw${i}_${k}"></div><button class="arr" data-k="${k}" data-d="1">▼</button></div>`).join("")}</div>
+        <button class="send">SENDEN</button>`;
+      const draw = () => m.cols.forEach((col, k) => { document.getElementById(`pw${i}_${k}`).textContent = col[local["pw" + i][k]]; });
+      draw();
+      body.querySelectorAll(".arr").forEach((b) => b.addEventListener("click", () => {
+        if (!canAct()) return;
+        const k = Number(b.dataset.k);
+        local["pw" + i][k] = (local["pw" + i][k] + Number(b.dataset.d) + 6) % 6;
+        sfx.click();
+        draw();
+      }));
+      body.querySelector(".send").addEventListener("click", () => {
+        if (!canAct()) return;
+        const word = m.cols.map((col, k) => col[local["pw" + i][k]]).join("");
+        if (word === passwordWord(m)) solveMod(i); else strike(i);
+      });
+    },
+  };
+
+  function renderStageBar(i, stage) {
+    document.querySelectorAll(`#mod${i} .stagebar i`).forEach((el, k) => el.classList.toggle("done", k < stage));
+  }
+
+  // Farbcode blinken lassen: Folge der aktuellen Stufe, danach Pause; nach einer Eingabe kurz Ruhe
+  function simonTick() {
+    const bomb = bombOf(latestState);
+    if (!bomb) return;
+    const now = Date.now();
+    bomb.modules.forEach((m, i) => {
+      if (m.type !== "farbcode") return;
+      const sim = local["sim" + i];
+      const box = document.getElementById("mod" + i);
+      if (!sim || !box) return;
+      let lit = null;
+      const solved = box.classList.contains("solved");
+      if (!solved && now - sim.lastInput > 2500 && now >= sim.t0) {
+        const k = sim.stage + 1;
+        const cycle = k * 650 + 1800;
+        const t = (now - sim.t0) % cycle;
+        const idx = Math.floor(t / 650);
+        if (idx < k && t % 650 < 400) lit = m.seq[idx];
+      }
+      box.querySelectorAll(".pad").forEach((p) => p.classList.toggle("lit", p.dataset.c === lit));
+    });
+  }
+
+  function updateModules(st) {
+    if (!amDefuser(st)) return;
+    const bomb = bombOf(st);
+    const mods = st.mods || {};
+    bomb.modules.forEach((m, i) => {
+      const box = document.getElementById("mod" + i);
+      if (!box) return;
+      const ms = mods["m" + i] || {};
+      box.classList.toggle("solved", !!ms.solved);
+      if (m.type === "kabel") {
+        const cut = ms.cut || {};
+        box.querySelectorAll(".wire").forEach((w) => { if (cut["w" + w.dataset.k]) w.classList.add("cut"); });
+      }
+      if (m.type === "symbole") {
+        const order = symbolOrder(m);
+        const pressed = ms.pressed || 0;
+        box.querySelectorAll(".key").forEach((key) => {
+          const pos = order.indexOf(m.syms[Number(key.dataset.k)]);
+          key.classList.toggle("ok", pos < pressed);
+        });
+      }
+      if (m.type === "farbcode") {
+        const sim = local["sim" + i];
+        if (sim && (ms.stage || 0) > sim.stage) sim.stage = ms.stage;
+        renderStageBar(i, ms.solved ? m.seq.length : (sim ? sim.stage : ms.stage || 0));
+      }
+    });
+  }
+
+  const MANUAL = {
+    kabel: () => `<div class="page">
+      <h3>✂️ Kabel</h3>
+      <p>3 bis 6 farbige Kabel (rot, blau, gelb, weiß, schwarz). Es muss genau <b>ein</b> Kabel durchgeschnitten werden.
+      Nimm die Regeln für die passende Kabelzahl und geh sie der Reihe nach durch – <b>die erste, die zutrifft, gilt</b>.</p>
+      <div class="sub">3 Kabel</div><ol>
+        <li>Kein Kabel ist gelb → das <b>erste</b> Kabel.</li>
+        <li>Sonst, wenn das letzte Kabel schwarz ist → das <b>zweite</b> Kabel.</li>
+        <li>Sonst, wenn genau zwei Kabel dieselbe Farbe haben → das Kabel mit der <b>anderen</b> Farbe.</li>
+        <li>Sonst → das <b>letzte</b> Kabel.</li></ol>
+      <div class="sub">4 Kabel</div><ol>
+        <li>Mehr als ein Kabel ist rot und die letzte Ziffer der Seriennummer ist gerade → das <b>letzte rote</b> Kabel.</li>
+        <li>Sonst, wenn kein Kabel blau ist → das <b>dritte</b> Kabel.</li>
+        <li>Sonst, wenn genau ein Kabel weiß ist → das <b>weiße</b> Kabel.</li>
+        <li>Sonst, wenn die Bombe mehr als 2 Batterien hat → das <b>erste</b> Kabel.</li>
+        <li>Sonst → das <b>zweite</b> Kabel.</li></ol>
+      <div class="sub">5 Kabel</div><ol>
+        <li>Das erste Kabel ist schwarz und die Seriennummer enthält einen Vokal → das <b>vierte</b> Kabel.</li>
+        <li>Sonst, wenn genau ein Kabel gelb ist und mehr als ein Kabel weiß → das <b>erste</b> Kabel.</li>
+        <li>Sonst, wenn kein Kabel schwarz ist → das <b>zweite</b> Kabel.</li>
+        <li>Sonst, wenn es ein blaues Kabel gibt → das <b>oberste blaue</b> Kabel.</li>
+        <li>Sonst → das <b>fünfte</b> Kabel.</li></ol>
+      <div class="sub">6 Kabel</div><ol>
+        <li>Kein Kabel ist gelb und die letzte Ziffer der Seriennummer ist ungerade → das <b>dritte</b> Kabel.</li>
+        <li>Sonst, wenn genau ein Kabel gelb ist und mehr als ein Kabel weiß → das <b>fünfte</b> Kabel.</li>
+        <li>Sonst, wenn kein Kabel rot ist → das <b>letzte</b> Kabel.</li>
+        <li>Sonst → das <b>vierte</b> Kabel.</li></ol>
+      <p class="muted">0 zählt als gerade.</p>
+    </div>`,
+    knopf: () => `<div class="page">
+      <h3>🔴 Der Knopf</h3>
+      <p>Ein großer Knopf mit Farbe und Aufschrift. Entscheide: <b>kurz drücken</b> (sofort wieder loslassen) oder <b>gedrückt halten</b>.
+      Die erste Regel, die zutrifft, gilt:</p>
+      <ol>
+        <li>Blauer Knopf mit „STOPP“ → <b>halten</b>.</li>
+        <li>Mehr als 2 Batterien und Aufschrift „ZÜNDEN“ → <b>kurz drücken</b>.</li>
+        <li>Weißer Knopf und die Seriennummer enthält einen Vokal → <b>halten</b>.</li>
+        <li>Roter Knopf mit „HALTEN“ → <b>kurz drücken</b>.</li>
+        <li>Gelber Knopf → <b>halten</b>.</li>
+        <li>Sonst → <b>kurz drücken</b>.</li>
+      </ol>
+      <p><b>Beim Halten</b> leuchtet unter dem Knopf ein Streifen auf. Lass erst los, wenn im Timer <b>irgendwo</b> diese Ziffer steht:</p>
+      <table><tr><th>Streifen</th><th>Ziffer</th></tr>
+        ${Object.values(STRIP).map((s) => `<tr><td><span class="dot" style="background:${s.hex}"></span>${s.name}</td><td><b>${s.digit}</b></td></tr>`).join("")}
+      </table>
+    </div>`,
+    symbole: () => `<div class="page">
+      <h3>🔣 Symbole</h3>
+      <p>Vier Tasten mit Symbolen. Genau <b>eine</b> Spalte unten enthält alle vier.
+      Drück die Tasten in der Reihenfolge, in der sie in dieser Spalte stehen – <b>von oben nach unten</b>.</p>
+      <div class="symcols">${SYM_COLS.map((col, c) => `<div><b>${"ABCDEF"[c]}</b>${col.join("<br>")}</div>`).join("")}</div>
+    </div>`,
+    farbcode: () => {
+      const table = (key) => `<table><tr><th>blinkt →</th>${SIMON.map((c) => `<th><span class="dot" style="background:${SIMON_HEX[c]}"></span>${SIMON_NAME[c]}</th>`).join("")}</tr>
+        ${SIMON_MAP[key].map((row, s) => `<tr><th>${s} Strike${s === 1 ? "" : "s"}</th>${SIMON.map((c) => `<td><span class="dot" style="background:${SIMON_HEX[row[c]]}"></span>${SIMON_NAME[row[c]]}</td>`).join("")}</tr>`).join("")}</table>`;
+      return `<div class="page">
+      <h3>🚥 Farbcode</h3>
+      <p>Vier farbige Felder blinken in einer Folge. Drück für <b>jedes</b> Blinken die <b>übersetzte</b> Farbe aus der Tabelle –
+      immer die ganze Folge von vorne. Danach kommt eine Farbe dazu. Die Punkte unter den Feldern zeigen, wie viele Stufen es gibt.</p>
+      <p>Welche Tabelle gilt, hängt davon ab, ob die Seriennummer einen Vokal hat – und welche Zeile, wie viele Strikes die Bombe <b>gerade</b> hat.</p>
+      <div class="sub">Seriennummer MIT Vokal</div>${table("vokal")}
+      <div class="sub">Seriennummer OHNE Vokal</div>${table("ohne")}
+      <p class="muted">Bei einem Fehler fängt die aktuelle Stufe von vorne an.</p>
+    </div>`;
+    },
+    passwort: () => `<div class="page">
+      <h3>🔤 Passwort</h3>
+      <p>Fünf Buchstaben-Räder, jedes hat 6 Buchstaben (mit ▲▼ durchblättern). Genau <b>ein</b> Wort aus dieser Liste lässt sich einstellen.
+      Einstellen, dann <b>SENDEN</b>. Tipp: Lass dir die Buchstaben eines Rads aufzählen und streich Wörter weg.</p>
+      <div class="words">${WORDS.slice().sort().map((w) => `<div>${w}</div>`).join("")}</div>
+    </div>`,
+  };
+
+  function manualGeneralPage() {
+    return `<div class="page">
+      <h3>📖 Handbuch – Allgemein</h3>
+      <ul>
+        <li>Du bist <b>Experte</b>: Du siehst die Bombe nicht. Lass dir vom Entschärfer beschreiben, was drauf ist.</li>
+        <li>Eine Bombe hat 3 bis 5 Module. Jedes hat oben rechts eine Lampe – <b>grün</b> heißt geschafft. Sind alle grün, ist die Bombe entschärft.</li>
+        <li>Jeder Fehler ist ein <b>Strike</b> und kostet <b>15 Sekunden</b>. Beim <b>3. Strike</b> explodiert die Bombe.</li>
+        <li>Manche Regeln brauchen die <b>Seriennummer</b> oder die Zahl der <b>Batterien</b> – beides steht auf der Bombe. Vokale sind A, E, I, O, U.</li>
+        <li>Zahlen wie „das erste“ zählen von oben nach unten.</li>
+        <li>Frag zuerst, <b>welche Module</b> auf der Bombe sind, und blättert dann zur passenden Seite.</li>
+      </ul>
+    </div>`;
+  }
+
+  // ==== Ansage vor der Bombe / Zwischen den Bomben / Ende ====
+  function hideOverlay() { overlayMode = ""; document.getElementById("overlay").classList.add("hide"); }
+  function showIntro(st, msLeft) {
+    const key = "intro" + st.bombIdx + ":" + st.startsAt;
+    const card = document.getElementById("overlayCard");
+    if (overlayMode !== "intro" || card.dataset.key !== key) {
+      overlayMode = "intro"; card.dataset.key = key;
+      const bomb = bombOf(st);
+      card.className = "card";
+      const head = `<p class="muted">Bombe ${st.bombIdx + 1} von ${st.bombs.length} · ${bomb.modules.length} Module · ${fmtTime(bomb.durationMs)}</p>`;
+      let body;
+      if (isDefuser()) body = `<h2>🧨 DU entschärfst!</h2><p>Nur du siehst gleich die Bombe. Schau nicht ins Handbuch – beschreib den anderen, was du siehst.</p>`;
+      else if (isHost) body = `<h2>💣 Bombe ${st.bombIdx + 1}</h2><p><b>${esc(nameOf(bomb.defuser))}</b> entschärft. Du schaust zu.</p>`;
+      else body = `<h2>📖 Du bist Experte</h2><p><b>${esc(nameOf(bomb.defuser))}</b> entschärft. Deine Handbuchseiten:<br><b>${pageNames(myPages(st))}</b></p>`;
+      card.innerHTML = head + body + `<div class="bigNum" id="introNum"></div><p class="muted">Gleich tickt die Uhr …</p>`;
+      document.getElementById("overlay").classList.remove("hide");
+    }
+    const n = document.getElementById("introNum");
+    if (n) n.textContent = Math.ceil(msLeft / 1000);
+  }
+  function reasonText(r) {
+    if (r.defused) return `Entschärft mit <b>${fmtTime(r.secLeft * 1000)}</b> Restzeit!`;
+    if (r.reason === "strikes") return "Drei Fehler – die Bombe ist hochgegangen.";
+    return "Die Zeit ist abgelaufen.";
+  }
+  function hostWaitLine(text) { return isHost ? "" : `<p class="muted" style="margin-top:10px">⏳ ${text}</p>`; }
+  function showBetween(st) {
+    const r = st.results["b" + st.bombIdx];
+    const key = "b" + st.bombIdx + ":" + st.startsAt;
+    if (!r || (overlayMode === "between" && seenResultKey === key)) return;
+    const fresh = seenResultKey !== key;
+    seenResultKey = key; overlayMode = "between";
+    if (fresh && Date.now() - PAGE_LOADED > 2500) {   // nach Neuladen nicht nochmal knallen
+      if (r.defused) { sfx.win(); flashScreen(true); } else { sfx.boom(); flashScreen(); document.body.classList.add("shake"); setTimeout(() => document.body.classList.remove("shake"), 1300); }
+    }
+    const last = st.bombIdx + 1 >= st.bombs.length;
+    const card = document.getElementById("overlayCard");
+    card.className = "card" + (r.defused ? " win" : "");
+    const mine = (st.order || []).includes(playerId) ? `<div class="row ptsRow"><span>Deine Punkte</span><span class="pts">+${pointsFor(r, playerId)}</span></div>` : "";
+    const nextDef = last ? "" : `<p class="muted" style="margin-top:8px">Nächste Bombe entschärft: <b>${esc(nameOf(st.bombs[st.bombIdx + 1].defuser))}</b></p>`;
+    card.innerHTML = `
+      <h2>${r.defused ? "✅ ENTSCHÄRFT!" : "💥 BUMM!"}</h2>
+      <p>${reasonText(r)}</p>
+      <div class="row"><span>Entschärfer</span><span>${esc(nameOf(r.defuser))}</span></div>
+      <div class="row"><span>Module geschafft</span><span>${r.solved}/${r.total}</span></div>
+      <div class="row"><span>Strikes</span><span>${r.strikes}</span></div>
+      ${mine}
+      ${nextDef}
+      ${isHost ? `<button id="nextBtn">${last ? "Zum Ergebnis ➜" : "Nächste Bombe ➜"}</button>` : hostWaitLine(last ? "Gleich kommt das Ergebnis." : "Der Spielleiter startet gleich die nächste Bombe.")}`;
+    document.getElementById("overlay").classList.remove("hide");
+    const nb = document.getElementById("nextBtn");
+    if (nb) nb.addEventListener("click", () => { nb.disabled = true; hostNext(); });
+  }
+  function showFinal(st) {
+    if (overlayMode === "final") return;
+    overlayMode = "final";
+    const defused = st.bombs.filter((_, i) => ((st.results || {})["b" + i] || {}).defused).length;
+    const totals = (st.order || []).map((id) => [id, st.bombs.reduce((a, _, i) => a + pointsFor((st.results || {})["b" + i], id), 0)]).sort((a, b) => b[1] - a[1]);
+    const card = document.getElementById("overlayCard");
+    card.className = "card" + (defused === st.bombs.length ? " win" : "");
+    if (defused === st.bombs.length) sfx.win();
+    card.innerHTML = `
+      <h2>${defused === st.bombs.length ? "🏆 Alle Bomben entschärft!" : defused ? "😅 Teilweise überlebt" : "💀 Alles in die Luft gejagt"}</h2>
+      <p>${defused} von ${st.bombs.length} Bomben entschärft.</p>
+      ${st.bombs.map((b, i) => { const r = (st.results || {})["b" + i] || {};
+        return `<div class="row"><span>${r.defused ? "✅" : "💥"} Bombe ${i + 1} · ${esc(nameOf(b.defuser))}</span><span>${r.solved || 0}/${b.modules.length} Module${r.defused ? ` · ${fmtTime(r.secLeft * 1000)} übrig` : ""}</span></div>`; }).join("")}
+      <p style="margin-top:12px"><b>Punkte aus diesem Spiel</b></p>
+      ${totals.map(([id, p]) => `<div class="row"><span>${id === playerId ? "👉 " : ""}${esc(nameOf(id))}</span><span class="pts">+${p}</span></div>`).join("")}
+      ${isHost ? `<button id="backBtn">🏠 Alle zurück ins Cockpit</button>` : hostWaitLine("Der Spielleiter bringt euch gleich zurück ins Cockpit.")}`;
+    document.getElementById("overlay").classList.remove("hide");
+    const bb = document.getElementById("backBtn");
+    if (bb) bb.addEventListener("click", () => hostEnd(false));
+  }
+
+  // ==== Effekte & Töne (Lautstärke/Stumm über den Lautsprecher-Knopf der Arena) ====
+  function flashScreen(win) {
+    const el = document.getElementById("boomFlash");
+    el.classList.remove("go", "win");
+    void el.offsetWidth;
+    if (win) el.classList.add("win");
+    el.classList.add("go");
+  }
+  let actx = null;
+  const HS = () => window.HSAudio;
+  const sfxScale = () => (HS() ? HS().sfxVolume() : 1);
+  function audio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (actx.state === "suspended") actx.resume().catch(() => {});
+    return actx;
+  }
+  document.addEventListener("pointerdown", () => audio(), { passive: true });
+  function beep(freq, dur, type = "square", vol = 0.05, delay = 0) {
+    const sc = sfxScale();
+    if (sc <= 0) return;
+    const a = audio();
+    if (!a || a.state !== "running") return;
+    const t = a.currentTime + delay;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(vol * sc, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol) {
+    const sc = sfxScale();
+    if (sc <= 0) return;
+    const a = audio();
+    if (!a || a.state !== "running") return;
+    const buf = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.2);
+    const src = a.createBufferSource(), g = a.createGain(), f = a.createBiquadFilter();
+    f.type = "lowpass"; f.frequency.value = 900;
+    g.gain.value = vol * sc;
+    src.buffer = buf; src.connect(f); f.connect(g); g.connect(a.destination); src.start();
+  }
+  const sfx = {
+    tick: (urgent) => beep(urgent ? 1900 : 1500, 0.035, "square", urgent ? 0.04 : 0.022),
+    strike: () => { beep(150, 0.4, "sawtooth", 0.11); beep(110, 0.4, "sawtooth", 0.08, 0.12); },
+    ok: () => { beep(880, 0.08, "square", 0.05); beep(1320, 0.14, "square", 0.05, 0.09); },
+    snip: () => beep(2400, 0.03, "triangle", 0.06),
+    click: () => beep(1100, 0.025, "square", 0.03),
+    pad: (k) => beep([330, 392, 523, 659][k] || 440, 0.18, "triangle", 0.07),
+    go: () => { beep(660, 0.1, "square", 0.05); beep(990, 0.2, "square", 0.05, 0.1); },
+    boom: () => { if (HS()) { HS().play("explosion"); beep(60, 0.9, "sine", 0.25); } else { noise(1.6, 0.9); beep(60, 0.9, "sine", 0.25); } },
+    win: () => { if (HS()) HS().play("sieg_klein"); else [523, 659, 784, 1046].forEach((f, k) => beep(f, 0.18, "square", 0.05, k * 0.11)); },
+  };
+
+  // ==== Team-Chat ====
+  function renderChat(list) {
+    const log = document.getElementById("chatLog");
+    if (!list.length) { log.innerHTML = `<div class="empty">Team-Chat – falls ihr gerade nicht redet.</div>`; return; }
+    log.innerHTML = list.map((m) => `<div><b>${esc(m.name)}:</b> ${esc(m.text)}</div>`).join("");
+    log.scrollTop = log.scrollHeight;
+  }
+  onValue(query(ref(db, CHAT), limitToLast(40)), (s) => { const v = s.val() || {}; renderChat(Object.values(v).sort((a, b) => (a.at || 0) - (b.at || 0))); });
+  document.getElementById("chatForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const inp = document.getElementById("chatInput");
+    const text = inp.value.trim().slice(0, 200);
+    if (!text) return;
+    inp.value = "";
+    push(ref(db, CHAT), { name: nameOf(playerId), text, at: Date.now() });
+  });
+
+  // ==== Start ====
+  function seg(id, options, key) {
+    const el = document.getElementById(id);
+    el.innerHTML = options.map(([v, label]) => `<button data-v="${v}">${label}</button>`).join("");
+    const mark = () => el.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === String(settings[key])));
+    el.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+      const v = b.dataset.v; settings[key] = key === "bombs" ? Number(v) : v; mark();
+    }));
+    mark();
+  }
+  function showManualOnly() {
+    document.getElementById("manualPages").innerHTML = manualGeneralPage() + Object.keys(MANUAL).map((t) => MANUAL[t]()).join("");
+    document.getElementById("manualView").classList.remove("hide");
+    ["start", "hud", "hostBar", "roleBanner", "main", "chat"].forEach((id) => document.getElementById(id).classList.add("hide"));
+  }
+
+  if (location.hash === "#handbuch") {
+    // reine Handbuch-Ansicht zum Ansehen/Drucken - ohne Spielstand
+    showManualOnly();
+  } else {
+    if (!playerId) location.href = "index.html";
+    onValue(ref(db, "gameState"), (snap) => {
+      const gs = snap.val();
+      if (gs && gs.status && gs.status !== "in_game") location.href = gs.status === "waiting" ? "index.html" : "cockpit.html";
+    });
+    seg("optBombs", [1, 2, 3, 4, 5, 6].map((n) => [n, String(n)]), "bombs");
+    seg("optLevel", Object.entries(LEVELS).map(([k, v]) => [k, v.label]), "level");
+    document.getElementById("goBtn").addEventListener("click", () => { audio(); hostStart(); });
+    document.getElementById("hostEndBtn").addEventListener("click", () => hostEnd(true));
+    get(ref(db, "players/" + playerId)).then((snap) => {
+      const data = snap.val();
+      isHost = !!(data && isHostName(data.name));
+      onValue(ref(db, "players"), (s) => {
+        allPlayers = s.val() || {};
+        if (isHost && !latestState) { const n = Math.min(6, Math.max(1, activePlayerIds().length)); if (!settings._touched) { settings.bombs = n; seg("optBombs", [1, 2, 3, 4, 5, 6].map((x) => [x, String(x)]), "bombs"); } }
+        render();
+      });
+      onValue(ref(db, STATE), (s) => { latestState = s.val(); render(); });
+    });
+    document.getElementById("optBombs").addEventListener("click", () => { settings._touched = true; });
+    setInterval(tick, 50);
+  }
+  // für Tests
+  window.__bomb = { state: () => latestState, wireSolution, buttonMustHold, symbolOrder, simonExpected, passwordWord, fmtTime, STRIP, now };
+</script>
+</body>
+</html>
