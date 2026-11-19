@@ -770,15 +770,15 @@
       });
     };
 
-    window.launchBombtick = function() {
-      if (!confirm("Bomb is ticking starten? Alle Spieler werden mitgenommen: einer entschärft, die anderen lesen im Handbuch. Du stellst Bombenzahl und Schwierigkeit ein und startest jede Bombe per Klick.")) return;
-      set(ref(db, 'bombtickState'), null).then(() => set(ref(db, 'bombtickChat'), null)).then(() => {
+    window.launchCCC = function() {
+      if (!confirm("CCC Rechner starten? Alle Spieler werden mitgenommen: einer schraubt am uralten Rechner, die anderen sind die Hotline mit dem Handbuch. Du stellst Anzahl und Schwierigkeit ein und schaltest jeden Rechner per Klick ein.")) return;
+      set(ref(db, 'cccState'), null).then(() => set(ref(db, 'cccChat'), null)).then(() => {
         set(ref(db, 'gameState'), {
           status: 'in_game',
-          activeGame: 'bombtick.html',
+          activeGame: 'ccc-rechner.html',
           startTime: Date.now()
         }).then(() => {
-          logEvent('💣 Bomb is ticking gestartet');
+          logEvent('🖥️ CCC Rechner gestartet');
         });
       });
     };
@@ -1269,7 +1269,7 @@
           <button onclick="launchPanzer()" class="mini-launch-btn" style="background:linear-gradient(135deg,#4d5f2f,#7a8f4a);">🎖️ Panzerschlacht</button>
           <button onclick="launchOchsVormBerg()" class="mini-launch-btn" style="background:linear-gradient(135deg,#ff2e93,#ff6a3d);">🧍 Ochs vorm Berg</button>
           <button onclick="launchFighter()" class="mini-launch-btn" style="background:linear-gradient(135deg,#7c3aed,#f43f5e);">🥊 Hirnschmalz-Fighter</button>
-          <button onclick="launchBombtick()" class="mini-launch-btn" style="background:linear-gradient(135deg,#7f1d1d,#ef4444);">💣 Bomb is ticking</button>
+          <button onclick="launchCCC()" class="mini-launch-btn" style="background:linear-gradient(135deg,#9e936f,#d9d0b4);color:#1a1a1a;">🖥️ CCC Rechner</button>
           <button onclick="launchBurstPipe()" class="mini-launch-btn" style="background:linear-gradient(135deg,#3f8f00,#b6ff3b);color:#10200a;">☢️ Burst Pipe</button>
         </div>
         <div id="fighter-league-info" class="text-xs opacity-80 mt-1"></div>
