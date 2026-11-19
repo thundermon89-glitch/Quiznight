@@ -5,16 +5,16 @@
 
    - Bei jedem Spieler taucht irgendwann im Laufe des Abends Stefan auf und schlendert
      über den Bildschirm (bleibt kurz stehen und isst einen Snack). Wer ihn 3x anklickt,
-     bekommt +100 Punkte.
+     bekommt +50 Punkte.
    - Genauso die Goldene Ente: sie taucht an einer zufälligen Stelle auf, schwimmt/wippt
-     und hüpft nach jedem Klick weiter. 3 Treffer = +100 Punkte.
+     und hüpft nach jedem Klick weiter. 3 Treffer = +50 Punkte.
    - Jedes Ei gibt es pro Spieler einmal pro Tag. Wird es verpasst, kommt es später wieder.
    - Admin/Host sieht keine Eier. Auf Lobby, Editor und Admin-Seiten erscheinen sie nicht.
    ===================================================================================== */
 (function () {
   if (window.HSEggs) return;
   const DB_URL = 'https://play-ground-82b46-default-rtdb.firebaseio.com';
-  const POINTS = 100, CLICKS = 3;
+  const POINTS = 50, CLICKS = 3;
   const FIRST_MIN = 4, FIRST_MAX = 70;     // erster Auftritt: 4 bis 70 Minuten nach dem ersten Laden am Tag
   const RETRY_MIN = 6, RETRY_MAX = 20;     // verpasst? dann 6 bis 20 Minuten später nochmal
   const BASE = (function () { const s = document.currentScript && document.currentScript.src; return s ? s.replace(/[^/]*$/, '') : ''; })();

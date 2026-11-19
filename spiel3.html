@@ -4,6 +4,7 @@
   <script src="gif-keep.js"></script>
   <script src="sounds/hs-audio.js"></script>
   <script src="easter-eggs.js"></script>
+  <script src="balance.js"></script>
   <script src="game-intro.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=1280">
@@ -229,12 +230,16 @@
     // Punkte richten sich nach der Größe der richtigen Gruppe - relativ zur Spielerzahl,
     // damit es mit 6, 7, 8 oder mehr Spielern gleich funktioniert (bei 6 Spielern exakt wie
     // früher: 1 = 400, 2-3 = 0, 4 = 100, 5 = 200, alle 6 = 300).
+    // Basiswerte wie früher (400/300/200/100), aber so verkleinert, dass ein guter Spieler
+    // über das ganze Spiel auf ungefähr 600 Punkte kommt (siehe balance.js)
+    function groupScale() { return HSBalance.QUIZ_BUDGET / (Math.max(1, questions.length) * 200); }
+    function groupPts(base) { return HSBalance.round5(base * groupScale()); }
     function pointsForGroupSize(correctCount, totalActive) {
       if (correctCount <= 0) return 0;
-      if (totalActive > 0 && correctCount === totalActive) return 300; // alle einig
-      if (correctCount === 1) return 400;                    // ganz allein richtig
-      if (correctCount === totalActive - 1) return 200;      // alle bis auf einen
-      if (correctCount === totalActive - 2) return 100;      // alle bis auf zwei
+      if (totalActive > 0 && correctCount === totalActive) return groupPts(300); // alle einig
+      if (correctCount === 1) return groupPts(400);                    // ganz allein richtig
+      if (correctCount === totalActive - 1) return groupPts(200);      // alle bis auf einen
+      if (correctCount === totalActive - 2) return groupPts(100);      // alle bis auf zwei
       return 0;                                              // kleine Zwischengruppen
     }
 
@@ -522,6 +527,7 @@
         if (Array.isArray(resolved) && resolved.length > 0) {
           questions = resolved;
         }
+        document.querySelectorAll('[data-grp]').forEach(el => { el.textContent = groupPts(+el.dataset.grp) + ' Punkte'; });
         startListeningWithQuestions();
       }
 
@@ -1460,11 +1466,11 @@
         <div class="bg-[#f4f1ff] rounded-xl p-4 text-sm md:text-base mt-3">
           <div class="font-jax font-extrabold mb-2">Punkte pro richtiger Antwort, je nach Gruppengröße:</div>
           <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-            <div>🥇 Ganz allein richtig</div><div class="font-extrabold text-[#7ed957]">400 Punkte</div>
+            <div>🥇 Ganz allein richtig</div><div class="font-extrabold text-[#7ed957]" data-grp="400">400 Punkte</div>
             <div>👥 Kleine Gruppe richtig</div><div class="font-extrabold text-[#ff2e93]">0 Punkte</div>
-            <div>👥 Alle bis auf zwei richtig</div><div class="font-extrabold text-[#7ed957]">100 Punkte</div>
-            <div>👥 Alle bis auf einen richtig</div><div class="font-extrabold text-[#7ed957]">200 Punkte</div>
-            <div>🌍 ALLE gemeinsam richtig</div><div class="font-extrabold text-[#7ed957]">300 Punkte</div>
+            <div>👥 Alle bis auf zwei richtig</div><div class="font-extrabold text-[#7ed957]" data-grp="100">100 Punkte</div>
+            <div>👥 Alle bis auf einen richtig</div><div class="font-extrabold text-[#7ed957]" data-grp="200">200 Punkte</div>
+            <div>🌍 ALLE gemeinsam richtig</div><div class="font-extrabold text-[#7ed957]" data-grp="300">300 Punkte</div>
           </div>
         </div>
       </div>

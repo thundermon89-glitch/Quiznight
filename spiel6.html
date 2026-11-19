@@ -118,7 +118,7 @@
 
     // ==== FILMRUNDEN-DATEN ====
     // Jetzt YouTube statt Rumble - deutlich zuverlässiger einzubetten.
-    const MOVIE_START_POINTS = 150;
+    let MOVIE_START_POINTS = 50;   // wird nach dem Laden auf 600 / Anzahl Filme gesetzt (Punkte-Balance)
     const CLIP_SHOW = 3, CLIP_PAUSE = 3;   // Sekunden: Ausschnitt zeigen / schwarze Pause
     const MOVIE_DURATION_MS = 60000; // 1 Minute - die Zündschnur brennt in dieser Zeit ab
     const MOVIE_LEAD_MS = 4000;      // so lange vor dem gemeinsamen Start wird das Video schon geladen (3-2-1)
@@ -706,6 +706,8 @@
         movieRounds.length = 0;
         movieRounds.push(...custom);
       }
+      MOVIE_START_POINTS = Math.max(30, Math.min(150, Math.round(600 / Math.max(1, movieRounds.length) / 5) * 5));
+      { const el = document.getElementById('my-solved-points'); if (el) el.innerText = '+' + MOVIE_START_POINTS + ' Punkte'; }
 
       onValue(ref(db, 'game6State'), (snapshot) => {
         const state = snapshot.val() || { stage: 'waiting' };

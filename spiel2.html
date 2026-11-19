@@ -870,7 +870,7 @@
             if ((tally[id].ja || 0) > maxJa) maxJa = tally[id].ja || 0;
           });
           const bonusWinners = maxJa > 0 ? Object.keys(tally).filter(id => (tally[id].ja || 0) === maxJa) : [];
-          const BONUS_POINTS = 150;
+          const BONUS_POINTS = 100;
 
           const scorePromises = bonusWinners.map(id =>
             get(ref(db, 'players/' + id + '/score')).then((scoreSnap) => {

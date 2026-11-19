@@ -180,10 +180,10 @@
     // Wartezeit VOR jedem Aufdeckungsschritt - die ersten beiden bleiben zügig, danach wird
     // spürbar mehr Zeit zum Überlegen gelassen, je klarer das Bild schon ist.
     const REVEAL_STEP_DELAYS = [2000, 2000, 3000, 3500, 4000, 4500, 5000];
-    const BASE_POINTS = 300;
-    const STEP_PENALTY = 30;   // Punktabzug pro bereits gezeigtem Aufdeckungsschritt beim Buzzern
-    const MIN_POINTS = 60;
-    const WRONG_PENALTY = 50;
+    const BASE_POINTS = 100;   // Punkte-Balance: 18 Bilder x max. 100, je nur ein Gewinner
+    const STEP_PENALTY = 10;   // Punktabzug pro bereits gezeigtem Aufdeckungsschritt beim Buzzern
+    const MIN_POINTS = 20;
+    const WRONG_PENALTY = 20;
 
     // ==== BILDER-KATALOG ====
     // Format: imageUrl = das ORIGINAL-Bild (Verpixelung übernimmt der Code automatisch per Canvas,

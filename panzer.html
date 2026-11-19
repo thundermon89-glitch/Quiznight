@@ -585,7 +585,7 @@
           const players = snap.val() || {};
           const updates = { 'panzerState/finished': true, 'panzerState/winnerId': winnerId || null };
           if (winnerId && players[winnerId]) {
-            updates['players/' + winnerId + '/score'] = (players[winnerId].score || 0) + 150;
+            updates['players/' + winnerId + '/score'] = (players[winnerId].score || 0) + 300;
           }
           update(ref(db), updates);
         });
@@ -609,7 +609,7 @@
         const resultArea = document.getElementById("result-area");
         resultArea.classList.remove("hidden");
         document.getElementById("result-text").innerText = winnerName
-          ? '🏆 ' + winnerName + ' hat als letzter Panzer überlebt und bekommt +150 Punkte!'
+          ? '🏆 ' + winnerName + ' hat als letzter Panzer überlebt und bekommt +300 Punkte!'
           : 'Alle Panzer wurden zerstört - unentschieden!';
         document.getElementById("my-status-text").innerText = iAmDead ? '💥 Du wurdest getroffen!' : (winnerId === playerId ? '🎉 Du hast gewonnen!' : '');
       });

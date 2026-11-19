@@ -505,7 +505,7 @@
           const players = snap.val() || {};
           const updates = { 'ochsState/finished': true, 'ochsState/winnerId': winnerId || null, 'ochsState/allEliminated': !!allEliminated };
           if (winnerId && players[winnerId]) {
-            updates['players/' + winnerId + '/score'] = (players[winnerId].score || 0) + 200;
+            updates['players/' + winnerId + '/score'] = (players[winnerId].score || 0) + 300;
           }
           if (allEliminated) {
             getAllParticipantIds().forEach(id => {
@@ -536,7 +536,7 @@
         resultArea.classList.remove("hidden");
         document.getElementById("result-text").innerText = st.allEliminated
           ? '💀 Alle wurden erwischt! Jeder verliert 50 Punkte.'
-          : '🏆 ' + winnerName + ' hat die Ziellinie erreicht und bekommt +200 Punkte!';
+          : '🏆 ' + winnerName + ' hat die Ziellinie erreicht und bekommt +300 Punkte!';
         document.getElementById("my-status-text").innerText =
           my && my.won ? '🎉 Du hast es geschafft!' : (my && my.eliminated ? '💀 Du wurdest erwischt!' : '');
       });

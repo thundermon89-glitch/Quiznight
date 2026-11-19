@@ -4,6 +4,7 @@
   <script src="gif-keep.js"></script>
   <script src="sounds/hs-audio.js"></script>
   <script src="easter-eggs.js"></script>
+  <script src="balance.js"></script>
   <script src="game-intro.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=1280">
@@ -364,6 +365,7 @@
         });
         rounds.push(...custom);
       }
+      HSBalance.scaleList(rounds);   // Spiel ist insgesamt höchstens 600 Punkte wert
 
       onValue(ref(db, 'game9State'), (snapshot) => {
         const state = snapshot.val() || { roundIdx: 0, stage: 'waiting' };

@@ -4,6 +4,7 @@
   <script src="gif-keep.js"></script>
   <script src="sounds/hs-audio.js"></script>
   <script src="easter-eggs.js"></script>
+  <script src="balance.js"></script>
   <script src="game-intro.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=1280">
@@ -123,7 +124,7 @@
     const BASE_POINTS = 250;
     const WRONG_PENALTY_STEP = 30; // pro eigenem Fehlversuch dieser Runde, zieht vom Gewinn ab
     const MIN_POINTS = 80;
-    const BONUS_POINTS = 150; // Sonderpunkte am Ende für die meisten Falscheingaben insgesamt
+    const BONUS_POINTS = 75;  // Sonderpunkte am Ende für die meisten Falscheingaben insgesamt
     const ROUND_MS = 120000;  // eine Runde dauert höchstens 120 Sekunden ...
     const MAX_SOLVERS = 4;    // ... oder bis 4 Leute den richtigen Titel getippt haben
     let serverOffset = 0;
@@ -301,6 +302,7 @@
         covers.length = 0;
         covers.push(...custom);
       }
+      HSBalance.scaleList(covers);   // 18 Cover -> je ca. 35 Punkte, Spiel insgesamt ca. 600 wert
 
       onValue(ref(db, 'game8State'), (snapshot) => {
         const state = snapshot.val() || { coverIdx: 0, stage: 'waiting' };
@@ -478,7 +480,8 @@
 
         if (verdict === 'correct') {
           const wrongThisRound = ((s.wrongAttemptsThisRound || {})[playerId]) || 0;
-          const points = Math.max(MIN_POINTS, (cover.points || BASE_POINTS) - wrongThisRound * WRONG_PENALTY_STEP);
+          const cp = cover.points || BASE_POINTS;
+          const points = Math.max(HSBalance.round5(cp * 0.5), cp - wrongThisRound * HSBalance.round5(cp * 0.2));   // je Fehlversuch -20 %, mind. die Hälfte
           const ms = Math.max(0, serverNow() - (s.roundStartedAt || serverNow()));
           // Platz sichern - höchstens MAX_SOLVERS bekommen einen
           runTransaction(ref(db, 'game8State/solvers'), (cur) => {

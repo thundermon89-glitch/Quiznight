@@ -1903,7 +1903,7 @@
     };
 
     // ==== EASTER EGG: wer 5x ein Bild verschickt hat, bekommt einmalig 80 Bonuspunkte ====
-    const PAINT_EASTER_EGG_POINTS = 80;
+    const PAINT_EASTER_EGG_POINTS = 50;
     const PAINT_EASTER_EGG_THRESHOLD = 5;
     function checkPaintEasterEgg() {
       get(ref(db, 'players/' + playerId)).then((snap) => {

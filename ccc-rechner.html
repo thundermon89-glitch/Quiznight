@@ -363,10 +363,10 @@
   const MAX_STRIKES = 3;
   // Ergebnis zwischen zwei Bomben: weiter, wenn alle bereit sind (next-gate.js)
   const HOLD_MS = 500;                          // ab so lange gilt der Knopf als "gehalten"
-  const PTS_MODULE = 10;                        // je gelöstes Modul, für alle (auch bei Explosion)
-  const PTS_DEFUSED = 50;                       // entschärft: alle
-  const PTS_DEFUSER = 30;                       // entschärft: Entschärfer extra
-  const SEC_PER_BONUS_PT = 10;                  // + 1 Punkt je 10 s Restzeit (alle)
+  const PTS_MODULE = 20;                        // je gelöstes Modul, für alle (auch bei Explosion)
+  const PTS_DEFUSED = 100;                      // entschärft: alle
+  const PTS_DEFUSER = 60;                       // entschärft: Entschärfer extra
+  const SEC_PER_BONUS_PT = 5;                   // + 1 Punkt je 10 s Restzeit (alle)
 
   // ==== Moduldaten ====
   const MOD_NAMES = { kabel: "Netzteil-Kabel", knopf: "Power-Knopf", symbole: "Festplatte", farbcode: "CPU auflöten", passwort: "BIOS-Passwort", dip: "Grafikkarte" };
