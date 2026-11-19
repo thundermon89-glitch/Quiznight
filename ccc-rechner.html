@@ -238,6 +238,15 @@
   #manualView .tools { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
   #hostBar { display:flex; gap:8px; justify-content:center; padding:8px 12px 0; }
   #hostBar button, .smallBtn { padding:5px 14px; border-radius:2px; border:2px solid #111; background:#c0c0c0; color:#111; cursor:pointer; font-family:'VT323',monospace; font-size:1.2rem; box-shadow:3px 3px 0 #000; }
+  .mod { padding-top:20px; }
+  .owner { position:absolute; top:-13px; left:12px; z-index:2; background:#111; color:#cfc6a6; font-size:1.05rem; padding:0 8px; border:2px solid #555; line-height:1.3; }
+  .mod.mine .owner { color:#111; background:var(--yellow); border-color:#111; }
+  .mod.mine:not(.solved) { box-shadow:0 0 0 3px var(--yellow), 0 0 22px rgba(255,210,63,.45); }
+  .mod.notmine { filter:saturate(.45) brightness(.78); }
+  .mod.notmine .body { pointer-events:none; }
+  #mods { row-gap:22px; padding-top:8px; }
+  #bomb { flex:1 1 640px; } #manual { flex:0 1 560px; }
+  .forWho { background:#1a1a1a; color:#ffd23f; margin:-16px -44px 12px; padding:4px 44px; font-size:1.2rem; }
   #manualNote { background:#f3f6ee; color:#1a1a1a; border-top:2px dashed #9aa; padding:10px 44px; font-size:1.2rem; }
   .bigNum { font-family:'Press Start 2P',monospace; font-size:3rem; color:var(--yellow); line-height:1; margin:14px 0 8px; }
   #waitBox { text-align:center; margin-top:16px; padding:14px; border:2px dashed rgba(125,255,106,.4); background:#040b04; color:var(--phos); font-size:1.35rem; }
@@ -256,11 +265,11 @@
   <div class="hero">
     <img src="CCC.png" alt="CCC">
     <h1>CCC RECHNER</h1>
-    <p>Die alte Kiste soll das verdammte AAA-Game zum Laufen bringen. Einer schraubt – alle anderen sind die Hotline.</p>
+    <p>Die alte Möhre soll das verdammte AAA-Game zum Rennen bringen. Alle schrauben – und jeder ist Hotline für einen anderen.</p>
   </div>
   <div class="opts hide" id="hostOpts">
     <div><label>&gt; Wie viele Rechner?</label><div class="seg" id="optBombs"></div>
-      <div class="hint">Mit jedem Rechner wechselt der Schrauber. So viele Rechner wie Spieler heißt: jeder schraubt einmal.</div></div>
+      <div class="hint">Jeder Rechner ist eine Runde. Alle schrauben gleichzeitig – bei jedem Rechner werden die Einschübe neu verteilt.</div></div>
     <div><label>&gt; Schwierigkeit</label><div class="seg" id="optLevel"></div></div>
     <button class="bigGo" id="goBtn">⏻ RECHNER EINSCHALTEN</button>
     <div><a class="linkBtn" href="#handbuch" target="_blank" rel="noopener">📖 Ganzes Handbuch ansehen / drucken</a></div>
@@ -269,11 +278,11 @@
   <div class="how">
     <b>So spielt ihr:</b>
     <ol>
-      <li>Bei jedem Rechner ist einer von euch der <b>Schrauber</b>: Nur er sieht das Innenleben – aber kein Handbuch.</li>
-      <li>Alle anderen sind die <b>Hotline</b>: Sie sehen nur ihre <b>Handbuchseiten</b>, nicht den Rechner. Die Seiten werden auf euch verteilt.</li>
-      <li>Der Schrauber beschreibt, was er sieht – die Hotline sagt, was zu tun ist. Reden ist alles!</li>
-      <li>Jeder Fehler ist ein <b>Kurzschluss</b> (−15 Sekunden). Beim 3. Kurzschluss oder wenn die Zeit abläuft, fliegt euch die Kiste um die Ohren. 💥</li>
-      <li>Sind alle Einschübe grün, startet das AAA-Game. Punkte für alle: 10 je geschafftem Einschub, 50 wenn das Game läuft, +1 je 10 s Restzeit – der Schrauber bekommt 30 extra.</li>
+      <li>Alle sehen denselben Rechner. <b>Jeder hat seinen eigenen Einschub</b> (Festplatte, CPU, Netzteil …) und kann nur den bedienen.</li>
+      <li>Das Handbuch für deinen Einschub hast <b>du nicht</b> – das hat ein Mitspieler. Dafür hast du das Handbuch für den Einschub von jemand anderem: Du bist seine <b>Hotline</b>.</li>
+      <li>Also: beschreib deinen Einschub, hör auf deine Hotline – und sag gleichzeitig deinem Schützling, was er tun muss. Reden ist alles!</li>
+      <li>Jeder Fehler ist ein <b>Kurzschluss</b> (−15 Sekunden) – egal von wem. Beim 3. Kurzschluss (ab 5 Spielern beim 4.) oder wenn die Zeit abläuft, fliegt euch die Kiste um die Ohren. 💥</li>
+      <li>Sind alle Einschübe grün, startet das AAA-Game. Punkte für alle: 10 je erledigtem Einschub, 50 wenn das Game läuft, +1 je 10 s Restzeit – und 20 extra für jeden, der seinen eigenen Einschub geschafft hat.</li>
     </ol>
   </div>
 </div>
@@ -296,6 +305,7 @@
   <div class="chip" id="solvedChip">0/0 Einschübe</div>
 </div>
 <div id="hostBar" class="hide">
+  <button id="hostAssistBtn">🛠️ Admin springt ein: AUS</button>
   <button id="hostEndBtn">🏠 Spiel beenden & zurück ins Cockpit</button>
 </div>
 <div id="roleBanner" class="hide"></div>
@@ -493,40 +503,47 @@
   }
 
   // Schwierigkeit: wie viele Module je Bombe und wie viele Kabel/Farben (genModule nutzt bombIdx 0 = leicht)
+  // Schwierigkeit: Varianten der Einschübe (genModule: bombIdx 0 = leicht) und Zeit bis zur Überhitzung.
+  // Alle schrauben gleichzeitig, darum hängt die Zeit nicht mehr an der Zahl der Einschübe.
   const LEVELS = {
-    leicht: { label: "🐣 Leicht", modules: () => 3, genIdx: () => 0 },
-    normal: { label: "⚔️ Normal", modules: (i) => (i === 0 ? 3 : 4), genIdx: (i) => i },
-    schwer: { label: "🌍 Schwer", modules: () => 5, genIdx: () => 1 },
+    leicht: { label: "🐣 Leicht", sec: 300, genIdx: () => 0 },
+    normal: { label: "⚔️ Normal", sec: 240, genIdx: (i) => i },
+    schwer: { label: "🌍 Schwer", sec: 180, genIdx: () => 1 },
   };
-  function genBombLevel(idx, level) {
+  const ALL_TYPES = ["kabel", "knopf", "symbole", "farbcode", "passwort", "dip"];
+  function genBombLevel(idx, level, count) {
     const L = LEVELS[level];
-    const n = L.modules(idx);
-    const others = shuffle(["knopf", "symbole", "farbcode", "passwort", "dip"]);
-    const types = shuffle(["kabel", ...others.slice(0, n - 1)]);
+    const types = shuffle(ALL_TYPES).slice(0, count);
     return {
-      defuser: "local", serial: genSerial(), batteries: rnd(5),
-      durationMs: (SEC_BASE + SEC_PER_MODULE * types.length) * 1000,
+      serial: genSerial(), batteries: rnd(5),
+      durationMs: L.sec * 1000,
       modules: types.map((t) => genModule(t, L.genIdx(idx))),
     };
   }
 
   // ==== Mehrspieler: gemeinsamer Spielstand in Firebase ====
+  // Jeder Spieler hat seinen eigenen Einschub (owners) – das Handbuch dafür hat aber sein Nachbar (readers).
   const playerId = localStorage.getItem("quiz_player_id");
-  let isHost = false, allPlayers = {};
-  let latestState = null;          // { status, order, bombs, bombIdx, startsAt, endsAt, strikes, mods, results }
-  const local = {};                // Farbcode-Eingabe, Passwort-Räder (nur auf diesem Gerät)
+  let isHost = false, allPlayers = {}, hostAssist = false;
+  let latestState = null;          // { status, order, bombs, bombIdx, startsAt, endsAt, strikes, maxStrikes, strikeBy, mods, results }
+  const local = {};                // Farbcode-Eingabe, Passwort-Räder, DIP-Schalter (nur auf diesem Gerät)
   let seenResultKey = "", lastTickSec = -1, viewKey = "", overlayMode = "", ending = false, strikeSeen = "", showAllPages = false;
   const settings = { bombs: 3, level: "normal" };
+  const PTS_OWN = 20;              // eigener Einschub erledigt: extra für den, der ihn geschraubt hat
 
   const nameOf = (id) => (allPlayers[id] || {}).name || "?";
   const isHostName = (n) => !!n && (n.includes("Host") || n.includes("Admin"));
   function activePlayerIds() { return Object.keys(allPlayers).filter((id) => { const n = allPlayers[id] && allPlayers[id].name; return n && !isHostName(n); }); }
 
   const bombOf = (st) => (st && st.bombs ? st.bombs[st.bombIdx] : null);
-  const isDefuser = () => { const b = bombOf(latestState); return !!b && b.defuser === playerId; };
-  const amDefuser = () => isDefuser() || isHost;     // wer die Bombe sieht (Spielleiter schaut nur zu)
+  const ownerOf = (i) => ((bombOf(latestState) || {}).owners || [])[i];
+  const readerOf = (i) => ((bombOf(latestState) || {}).readers || [])[i];
+  const mayOperate = (i) => ownerOf(i) === playerId || (isHost && hostAssist);
+  const amDefuser = () => true;    // alle sehen den Rechner (updateModules)
   const started = (st) => now() >= (st.startsAt || 0);
-  const canAct = () => !!latestState && latestState.status === "playing" && isDefuser() && started(latestState) && now() < latestState.endsAt;
+  const running = () => !!latestState && latestState.status === "playing" && started(latestState) && now() < latestState.endsAt;
+  const canAct = (i) => running() && i !== undefined && mayOperate(i);
+  const maxStrikes = (st) => (st && st.maxStrikes) || MAX_STRIKES;
   function solvedCount(st) { const b = bombOf(st); const m = st.mods || {}; return b.modules.filter((_, k) => m["m" + k] && m["m" + k].solved).length; }
 
   // Jede Änderung läuft als Transaktion auf den ganzen Spielstand - so zählt nichts doppelt
@@ -537,10 +554,14 @@
     });
   }
   function finishBomb(s, defused, reason) {
-    const b = bombOf(s);
+    const b = bombOf(s), mods = s.mods || {};
+    const ownSolved = {};
+    // Bonus nur, wenn der Besitzer seinen Einschub selbst geschafft hat (nicht, wenn der Admin eingesprungen ist)
+    b.modules.forEach((_, k) => { const mm = mods["m" + k]; if (mm && mm.solved && mm.by === b.owners[k]) { const o = b.owners[k]; ownSolved[o] = (ownSolved[o] || 0) + 1; } });
     s.results = s.results || {};
     s.results["b" + s.bombIdx] = { defused, reason, solved: solvedCount(s), total: b.modules.length,
-      secLeft: defused ? Math.max(0, Math.ceil((s.endsAt - now()) / 1000)) : 0, strikes: s.strikes || 0, defuser: b.defuser };
+      secLeft: defused ? Math.max(0, Math.ceil((s.endsAt - now()) / 1000)) : 0, strikes: s.strikes || 0,
+      strikeBy: s.strikeBy || null, ownSolved };
     s.status = "between";
   }
   function setModProgress(i, patch) {
@@ -557,26 +578,28 @@
   function strike(i) {
     const box = document.getElementById("mod" + i);
     if (box) { box.classList.remove("flash"); void box.offsetWidth; box.classList.add("flash"); setTimeout(() => box.classList.remove("flash"), 700); }
-    if (!canAct()) return;
+    if (!canAct(i)) return;
     sfx.strike(); flashScreen();
     const bi = latestState.bombIdx;
     strikeSeen = bi + ":" + ((latestState.strikes || 0) + 1);
     tx((s) => {
       if (s.status !== "playing" || s.bombIdx !== bi) return false;
       s.strikes = (s.strikes || 0) + 1;
-      if (s.strikes >= MAX_STRIKES) finishBomb(s, false, "strikes");
+      s.strikeBy = s.strikeBy || {};
+      s.strikeBy[playerId] = (s.strikeBy[playerId] || 0) + 1;
+      if (s.strikes >= maxStrikes(s)) finishBomb(s, false, "strikes");
       else s.endsAt -= STRIKE_PENALTY_MS;
     });
   }
   function solveMod(i, extra = {}) {
-    if (!canAct()) return;
+    if (!canAct(i)) return;
     sfx.ok();
     const bi = latestState.bombIdx;
     tx((s) => {
       if (s.status !== "playing" || s.bombIdx !== bi) return false;
       const mods = (s.mods = s.mods || {});
       const old = mods["m" + i] || {};
-      mods["m" + i] = { ...old, ...extra, cut: { ...(old.cut || {}), ...(extra.cut || {}) }, solved: true };
+      mods["m" + i] = { ...old, ...extra, cut: { ...(old.cut || {}), ...(extra.cut || {}) }, solved: true, by: playerId };
       const b = bombOf(s);
       if (b.modules.every((_, k) => mods["m" + k] && mods["m" + k].solved)) finishBomb(s, true, "defused");
     });
@@ -585,19 +608,26 @@
   // ==== Spielleiter ====
   function hostStart() {
     const ids = shuffle(activePlayerIds());
-    if (ids.length < 2) { alert("Mindestens 2 Spieler nötig: einer schraubt, mindestens einer ist die Hotline."); return; }
-    const bombs = Array.from({ length: settings.bombs }, (_, i) => { const b = genBombLevel(i, settings.level); b.defuser = ids[i % ids.length]; return b; });
+    if (ids.length < 2) { alert("Mindestens 2 Spieler nötig – jeder schraubt und ist gleichzeitig Hotline für einen anderen."); return; }
+    const n = ids.length, count = Math.min(6, Math.max(3, n));
+    const bombs = Array.from({ length: settings.bombs }, (_, i) => {
+      const b = genBombLevel(i, settings.level, count);
+      // jeder bekommt einen Einschub (bei 2 Spielern auch mal zwei); das Handbuch dafür hat der nächste Spieler
+      b.owners = b.modules.map((_, k) => ids[(k + i) % n]);
+      b.readers = b.owners.map((o) => ids[(ids.indexOf(o) + 1) % n]);
+      return b;
+    });
     const t = now() + INTRO_MS;
     set(ref(db, CHAT), null);
-    set(ref(db, STATE), { status: "playing", level: settings.level, order: ids, bombs, bombIdx: 0,
+    set(ref(db, STATE), { status: "playing", level: settings.level, order: ids, bombs, bombIdx: 0, maxStrikes: n >= 5 ? 4 : 3,
       startsAt: t, endsAt: t + bombs[0].durationMs, strikes: 0, startedAt: now() });
-    push(ref(db, "gameLog"), { text: "🖥️ CCC Rechner: " + bombs.length + " Rechner eingeschaltet", at: Date.now() });
+    push(ref(db, "gameLog"), { text: "🖥️ CCC Rechner: " + bombs.length + " Rechner eingeschaltet, " + n + " Leute schrauben", at: Date.now() });
   }
   function hostNext() {
     tx((s) => {
       if (s.status !== "between") return false;
       if (s.bombIdx + 1 < s.bombs.length) {
-        s.bombIdx += 1; s.status = "playing"; s.strikes = 0; s.mods = null;
+        s.bombIdx += 1; s.status = "playing"; s.strikes = 0; s.strikeBy = null; s.mods = null;
         const t = now() + INTRO_MS;
         s.startsAt = t; s.endsAt = t + s.bombs[s.bombIdx].durationMs;
       } else s.status = "finished";
@@ -609,11 +639,11 @@
     set(ref(db, CHAT), null);
     update(ref(db, "gameState"), { status: "cockpit" });
   }
-  // Punkte (wie in Quizwarz): je Modul für alle, Entschärfen für alle, Entschärfer extra, Restzeit-Bonus
+  // Punkte: je erledigtem Einschub für alle, Game läuft für alle, Restzeit-Bonus – und extra für jeden eigenen erledigten Einschub
   function pointsFor(r, id) {
     if (!r) return 0;
-    let p = PTS_MODULE * (r.solved || 0);
-    if (r.defused) { p += PTS_DEFUSED + Math.floor((r.secLeft || 0) / SEC_PER_BONUS_PT); if (id === r.defuser) p += PTS_DEFUSER; }
+    let p = PTS_MODULE * (r.solved || 0) + PTS_OWN * ((r.ownSolved || {})[id] || 0);
+    if (r.defused) p += PTS_DEFUSED + Math.floor((r.secLeft || 0) / SEC_PER_BONUS_PT);
     return p;
   }
   function hostPayout(st) {
@@ -629,55 +659,53 @@
           if (p > 0) runTransaction(ref(db, "players/" + id + "/score"), (cur) => (cur || 0) + p);
         });
         const n = Number(key.slice(1)) + 1;
-        push(ref(db, "gameLog"), { text: (r.defused ? "🎮 Rechner " + n + " läuft – geschraubt von " : "💥 Rechner " + n + " explodiert bei ") + nameOf(r.defuser) +
+        push(ref(db, "gameLog"), { text: (r.defused ? "🎮 Rechner " + n + " läuft" : "💥 Rechner " + n + " explodiert") +
           " – " + order.map((id) => nameOf(id) + " +" + pointsFor(r, id)).join(", "), at: Date.now() });
       });
     });
   }
 
-  // ==== Ansicht je Rolle ====
-  // Handbuch-Verteilung reihum: jede Modulseite der aktuellen Bombe geht an einen Experten; wer leer ausgeht, bekommt eine Seite doppelt
-  function myPages(st) {
-    const b = bombOf(st);
-    const types = b.modules.map((m) => m.type);
-    const experts = (st.order || []).filter((id) => id !== b.defuser);
-    const k = experts.indexOf(playerId);
-    if (k < 0 || experts.length <= 1 || showAllPages) return types;
-    const mine = types.filter((_, j) => j % experts.length === k);
-    if (!mine.length) mine.push(types[k % types.length]);
-    return mine;
+  // ==== Ansicht je Spieler ====
+  const modLabel = (m) => MOD_ICONS[m.type] + " " + MOD_NAMES[m.type];
+  function myJobs() { const b = bombOf(latestState); return b.modules.map((m, i) => i).filter((i) => b.owners[i] === playerId); }
+  function myReads() { const b = bombOf(latestState); return b.modules.map((m, i) => i).filter((i) => b.readers[i] === playerId); }
+  function jobText() {
+    const b = bombOf(latestState);
+    return myJobs().map((i) => `<b>${modLabel(b.modules[i])}</b> (Handbuch hat <b>${esc(nameOf(readerOf(i)))}</b>)`).join(" und ");
   }
-  function pageNames(types) { return types.map((t) => MOD_ICONS[t] + " " + MOD_NAMES[t]).join(", "); }
+  function readText() {
+    const b = bombOf(latestState);
+    return myReads().map((i) => `<b>${esc(nameOf(ownerOf(i)))}s</b> ${modLabel(b.modules[i])}`).join(" und ");
+  }
+  function manualFor(i) {
+    const m = bombOf(latestState).modules[i];
+    const who = ownerOf(i) === playerId ? "deinen eigenen Einschub" : `<b>${esc(nameOf(ownerOf(i)))}</b>`;
+    return MANUAL[m.type]().replace('<div class="page">', `<div class="page"><div class="forWho">☎️ Hotline für ${who}</div>`);
+  }
 
   function buildView() {
     const st = latestState, bomb = bombOf(st);
-    const bombEl = document.getElementById("bomb"), manEl = document.getElementById("manual");
+    const manEl = document.getElementById("manual");
     const banner = document.getElementById("roleBanner");
     Object.keys(local).forEach((k) => delete local[k]);
-    if (isDefuser() || isHost) {
-      buildBombView();
-      bombEl.classList.remove("hide");
-    } else { bombEl.innerHTML = ""; bombEl.classList.add("hide"); }
-    if (isDefuser()) {
-      banner.innerHTML = `🔧 Du bist der <span style="color:var(--yellow)">SCHRAUBER</span>!<small>Beschreib der Hotline, was du siehst – im Handbuch steht, was zu tun ist.</small>`;
-      manEl.innerHTML = ""; manEl.classList.add("hide");
-      bombEl.classList.add("solo");
-    } else if (isHost) {
-      banner.innerHTML = `🎬 Du leitest das Spiel – <span style="color:var(--yellow)">${esc(nameOf(bomb.defuser))}</span> schraubt gerade.<small>Du schaust nur zu. Links der Rechner, rechts das ganze Handbuch.</small>`;
-      bombEl.classList.remove("solo");
-      manEl.classList.remove("hide", "solo");
-      manEl.innerHTML = manualGeneralPage() + bomb.modules.map((m) => MANUAL[m.type]()).join("");
+    buildBombView();
+    const inGame = (st.order || []).includes(playerId);
+    let idx;
+    if (isHost) {
+      banner.innerHTML = `🎬 Du leitest das Spiel – <span style="color:var(--yellow)">alle schrauben gleichzeitig</span>.<small>Links der Rechner, rechts das ganze Handbuch. Fällt jemand aus, kannst du mit „Admin springt ein“ seinen Einschub übernehmen.</small>`;
+      idx = bomb.modules.map((_, i) => i);
+    } else if (!inGame) {
+      banner.innerHTML = `👀 Du schaust zu.<small>Diese Runde wurde ohne dich verteilt – in der nächsten Runde bist du dabei, wenn der Admin neu startet.</small>`;
+      idx = bomb.modules.map((_, i) => i);
     } else {
-      const pages = myPages(st);
-      banner.innerHTML = `☎️ Du bist die <span style="color:var(--cyan)">HOTLINE</span> – <span style="color:var(--yellow)">${esc(nameOf(bomb.defuser))}</span> schraubt.<small>Deine Handbuchseiten: ${pageNames(pages)}. Frag nach, welche Einschübe im Rechner sind!</small>`;
-      manEl.classList.remove("hide"); manEl.classList.add("solo");
-      const all = bomb.modules.map((m) => m.type);
-      manEl.innerHTML = manualGeneralPage() + pages.map((t) => MANUAL[t]()).join("") +
-        (pages.length < all.length ? `<div id="manualNote">Die anderen Seiten haben deine Mitspieler. Fehlt jemand?
-          <br><button class="smallBtn" id="allPagesBtn">📖 Ganzes Handbuch zeigen</button></div>` : "");
-      const btn = document.getElementById("allPagesBtn");
-      if (btn) btn.addEventListener("click", () => { showAllPages = true; buildView(); });
+      banner.innerHTML = `🔧 Dein Einschub: ${jobText()}<small>☎️ Und du bist Hotline für ${readText()} – das Handbuch dazu steht rechts.</small>`;
+      idx = showAllPages ? bomb.modules.map((_, i) => i) : myReads();
     }
+    manEl.innerHTML = idx.map(manualFor).join("") + manualGeneralPage() +
+      (!isHost && inGame && !showAllPages ? `<div id="manualNote">Die anderen Seiten haben deine Mitspieler. Fehlt jemand?
+        <br><button class="smallBtn" id="allPagesBtn">📖 Ganzes Handbuch zeigen</button></div>` : "");
+    const btn = document.getElementById("allPagesBtn");
+    if (btn) btn.addEventListener("click", () => { showAllPages = true; buildView(); });
   }
 
   function buildBombView() {
@@ -695,10 +723,13 @@
     bomb.modules.forEach((m, i) => {
       const box = document.createElement("div");
       box.className = "mod"; box.id = "mod" + i;
-      box.innerHTML = `<div class="led"></div><h4>${MOD_ICONS[m.type]} ${MOD_NAMES[m.type]}</h4><div class="body"></div>`;
+      const own = ownerOf(i);
+      box.innerHTML = `<div class="owner">${own === playerId ? "👉 DEIN EINSCHUB" : "🔧 " + esc(nameOf(own))}</div><div class="led"></div><h4>${MOD_ICONS[m.type]} ${MOD_NAMES[m.type]}</h4><div class="body"></div>`;
       mods.appendChild(box);
       BUILD[m.type](box.querySelector(".body"), m, i, bomb);
     });
+    // eigene Einschübe zuerst
+    [...mods.children].sort((a, b) => (ownerOf(+b.id.slice(3)) === playerId) - (ownerOf(+a.id.slice(3)) === playerId)).forEach((c) => mods.appendChild(c));
   }
 
   function showGame(on) {
@@ -719,13 +750,17 @@
     showGame(true);
     const bomb = bombOf(st);
     const key = st.bombIdx + ":" + st.startsAt;
-    if (key !== viewKey) { viewKey = key; showAllPages = false; buildView(); }
+    if (key !== viewKey) {
+      viewKey = key; showAllPages = false; buildView();
+      document.getElementById("strikes").innerHTML = "Kurzschlüsse" + '<span class="s"></span>'.repeat(maxStrikes(st));
+    }
     document.getElementById("bombChip").textContent = `Rechner ${st.bombIdx + 1}/${st.bombs.length}`;
-    document.getElementById("defuserChip").textContent = `🔧 ${nameOf(bomb.defuser)}`;
+    document.getElementById("defuserChip").textContent = `👥 ${(st.order || []).length} Schrauber`;
     document.querySelectorAll("#strikes .s").forEach((el, i) => el.classList.toggle("on", i < (st.strikes || 0)));
     document.getElementById("solvedChip").textContent = `✅ ${solvedCount(st)}/${bomb.modules.length} Einschübe`;
-    document.getElementById("bomb").classList.toggle("locked", !canAct());
-    // Strike auch auf den anderen Geräten hören und sehen
+    document.getElementById("bomb").classList.toggle("locked", !running());
+    bomb.modules.forEach((_, i) => { const box = document.getElementById("mod" + i); if (box) { box.classList.toggle("mine", mayOperate(i)); box.classList.toggle("notmine", !mayOperate(i)); } });
+    // Kurzschluss auch auf den anderen Geräten hören und sehen
     const sk = st.bombIdx + ":" + (st.strikes || 0);
     if ((st.strikes || 0) > 0 && sk !== strikeSeen && st.status === "playing") { strikeSeen = sk; if (Date.now() - PAGE_LOADED > 2500) { sfx.strike(); flashScreen(); } }
     updateModules(st);
@@ -746,7 +781,7 @@
         showIntro(st, st.startsAt - t);
         return;
       }
-      if (overlayMode === "intro") { hideOverlay(); document.getElementById("bomb").classList.toggle("locked", !canAct()); sfx.go(); }
+      if (overlayMode === "intro") { hideOverlay(); document.getElementById("bomb").classList.toggle("locked", !running()); sfx.go(); }
       const left = st.endsAt - t;
       timerEl.textContent = fmtTime(left);
       document.body.classList.toggle("danger", left <= 30000);
@@ -767,7 +802,7 @@
         <div class="wire" data-k="${k}"><span class="num">${k + 1}</span><span class="term"></span>
         <span class="bar" style="background:${WIRE_HEX[c]}"></span><span class="term"></span></div>`).join("")}</div>`;
       body.querySelectorAll(".wire").forEach((w) => w.addEventListener("click", () => {
-        if (!canAct() || w.classList.contains("cut")) return;
+        if (!canAct(i) || w.classList.contains("cut")) return;
         const k = Number(w.dataset.k);
         w.classList.add("cut");
         sfx.snip();
@@ -783,7 +818,7 @@
       const strip = body.querySelector(".strip");
       let downAt = null, holdTimer = null;
       btn.addEventListener("pointerdown", (e) => {
-        if (!canAct()) return;
+        if (!canAct(i)) return;
         downAt = Date.now();
         btn.classList.add("down");
         try { btn.setPointerCapture(e.pointerId); } catch (err) {}
@@ -801,7 +836,7 @@
         btn.classList.remove("down");
         strip.style.background = "";
         strip.style.boxShadow = "";
-        if (!canAct()) return;
+        if (!canAct(i)) return;
         const mustHold = buttonMustHold(m, bomb);
         if (dur < HOLD_MS) { if (mustHold) strike(i); else solveMod(i); return; }
         if (!mustHold) { strike(i); return; }
@@ -815,7 +850,7 @@
     symbole(body, m, i) {
       body.innerHTML = `<div class="keys">${m.syms.map((s, k) => `<div class="key" data-k="${k}">${s}</div>`).join("")}</div>`;
       body.querySelectorAll(".key").forEach((key) => key.addEventListener("click", () => {
-        if (!canAct() || key.classList.contains("ok")) return;
+        if (!canAct(i) || key.classList.contains("ok")) return;
         const order = symbolOrder(m);
         const pressed = ((latestState.mods || {})["m" + i] || {}).pressed || 0;
         const sym = m.syms[Number(key.dataset.k)];
@@ -836,7 +871,7 @@
       const stateStage = ((latestState.mods || {})["m" + i] || {}).stage || 0;
       local["sim" + i] = { stage: stateStage, input: [], lastInput: Date.now() - 1500, t0: Date.now() };
       body.querySelectorAll(".pad").forEach((pad) => pad.addEventListener("pointerdown", () => {
-        if (!canAct()) return;
+        if (!canAct(i)) return;
         const sim = local["sim" + i];
         const now = Date.now();
         sim.lastInput = now;
@@ -869,14 +904,14 @@
       const draw = () => m.cols.forEach((col, k) => { document.getElementById(`pw${i}_${k}`).textContent = col[local["pw" + i][k]]; });
       draw();
       body.querySelectorAll(".arr").forEach((b) => b.addEventListener("click", () => {
-        if (!canAct()) return;
+        if (!canAct(i)) return;
         const k = Number(b.dataset.k);
         local["pw" + i][k] = (local["pw" + i][k] + Number(b.dataset.d) + 6) % 6;
         sfx.click();
         draw();
       }));
       body.querySelector(".send").addEventListener("click", () => {
-        if (!canAct()) return;
+        if (!canAct(i)) return;
         sfx.click();
         const word = m.cols.map((col, k) => col[local["pw" + i][k]]).join("");
         if (word === passwordWord(m)) solveMod(i); else strike(i);
@@ -892,13 +927,13 @@
     const draw = () => body.querySelectorAll(".dip").forEach((d) => d.classList.toggle("on", !!local["dip" + i][Number(d.dataset.k)]));
     draw();
     body.querySelectorAll(".dip").forEach((d) => d.addEventListener("click", () => {
-      if (!canAct()) return;
+      if (!canAct(i)) return;
       const k = Number(d.dataset.k);
       local["dip" + i][k] = !local["dip" + i][k];
       sfx.click(); draw();
     }));
     body.querySelector(".send").addEventListener("click", () => {
-      if (!canAct()) return;
+      if (!canAct(i)) return;
       const want = dipSolution(m, bomb);
       if (want.every((v, k) => v === !!local["dip" + i][k])) solveMod(i); else strike(i);
     });
@@ -1050,12 +1085,11 @@
     return `<div class="page">
       <h3>📖 Hotline-Handbuch</h3>
       <ul>
-        <li>Du bist die <b>Hotline</b>: Du siehst den Rechner nicht. Lass dir vom Schrauber beschreiben, was drin ist.</li>
-        <li>Ein Rechner hat 3 bis 5 Einschübe. Jeder hat oben rechts eine Lampe – <b>grün</b> heißt erledigt. Sind alle grün, startet das AAA-Game.</li>
-        <li>Jeder Fehler ist ein <b>Kurzschluss</b> und kostet <b>15 Sekunden</b>. Beim <b>3. Kurzschluss</b> explodiert der Rechner.</li>
-        <li>Viele Regeln hängen zusammen: Sie brauchen die <b>Seriennummer</b> (Aufkleber) oder die Zahl der <b>Lüfter</b> – beides sieht der Schrauber. Vokale sind A, E, I, O, U.</li>
+        <li>Du bist die <b>Hotline</b> für einen Mitspieler: Er schraubt an dem Einschub, für den du die Seite unten hast. Lass ihn beschreiben, was er sieht, und sag ihm, was zu tun ist.</li>
+        <li>Ein Rechner hat 3 bis 6 Einschübe. Jeder hat oben rechts eine Lampe – <b>grün</b> heißt erledigt. Sind alle grün, startet das AAA-Game.</li>
+        <li>Jeder Fehler ist ein <b>Kurzschluss</b> und kostet <b>15 Sekunden</b>. Beim <b>3. Kurzschluss</b> (ab 5 Spielern beim 4.) explodiert der Rechner.</li>
+        <li>Viele Regeln hängen zusammen: Sie brauchen die <b>Seriennummer</b> (Aufkleber) oder die Zahl der <b>Lüfter</b> – beides steht oben auf dem Rechner. Vokale sind A, E, I, O, U.</li>
         <li>Zahlen wie „das erste“ zählen von oben nach unten bzw. von links nach rechts.</li>
-        <li>Frag zuerst, <b>welche Einschübe</b> im Rechner sind, und blättert dann zur passenden Seite.</li>
       </ul>
     </div>`;
   }
@@ -1071,9 +1105,9 @@
       card.className = "card";
       const head = `<p class="muted">Rechner ${st.bombIdx + 1} von ${st.bombs.length} · ${bomb.modules.length} Einschübe · ${fmtTime(bomb.durationMs)}</p>`;
       let body;
-      if (isDefuser()) body = `<h2>🔧 DU SCHRAUBST!</h2><p>Nur du siehst gleich das Innenleben. Schau nicht ins Handbuch – beschreib der Hotline, was du siehst.</p>`;
-      else if (isHost) body = `<h2>🖥️ RECHNER ${st.bombIdx + 1}</h2><p><b>${esc(nameOf(bomb.defuser))}</b> schraubt. Du schaust zu.</p>`;
-      else body = `<h2>☎️ HOTLINE</h2><p><b>${esc(nameOf(bomb.defuser))}</b> schraubt. Deine Handbuchseiten:<br><b>${pageNames(myPages(st))}</b></p>`;
+      if (isHost || !(st.order || []).includes(playerId)) body = `<h2>🖥️ RECHNER ${st.bombIdx + 1}</h2><p>Alle ${(st.order || []).length} schrauben gleichzeitig. Du schaust zu.</p>`;
+      else body = `<h2>🔧 ALLE SCHRAUBEN!</h2><p>Dein Einschub: ${jobText()}</p><p>☎️ Du bist Hotline für ${readText()}.</p>
+        <p class="muted">Dein eigenes Handbuch hast du nicht – lass dir helfen und hilf den anderen!</p>`;
       card.innerHTML = head + body + `<div class="bigNum" id="introNum"></div><p class="muted">C:\\&gt; Rechner fährt hoch …</p>`;
       document.getElementById("overlay").classList.remove("hide");
     }
@@ -1082,7 +1116,7 @@
   }
   function reasonText(r) {
     if (r.defused) return `Das AAA-Game läuft – mit <b>${fmtTime(r.secLeft * 1000)}</b> Luft bis zur Überhitzung!`;
-    if (r.reason === "strikes") return "Drei Kurzschlüsse – die Kiste ist in die Luft geflogen.";
+    if (r.reason === "strikes") return r.strikes + " Kurzschlüsse – die Kiste ist in die Luft geflogen.";
     return "Überhitzt – die Zeit ist abgelaufen, die Kiste ist explodiert.";
   }
   function hostWaitLine(text) { return isHost ? "" : `<p class="muted" style="margin-top:10px">⏳ ${text}</p>`; }
@@ -1099,14 +1133,14 @@
     const card = document.getElementById("overlayCard");
     card.className = "card" + (r.defused ? " win" : " lose");
     const mine = (st.order || []).includes(playerId) ? `<div class="row ptsRow"><span>Deine Punkte</span><span class="pts">+${pointsFor(r, playerId)}</span></div>` : "";
-    const nextDef = last ? "" : `<p class="muted" style="margin-top:8px">Nächster Rechner – es schraubt: <b>${esc(nameOf(st.bombs[st.bombIdx + 1].defuser))}</b></p>`;
+    const nextDef = last ? "" : `<p class="muted" style="margin-top:8px">Beim nächsten Rechner werden die Einschübe neu verteilt.</p>`;
+    const sb = r.strikeBy ? Object.entries(r.strikeBy).sort((a, b) => b[1] - a[1]).map(([id, n]) => esc(nameOf(id)) + " " + n).join(", ") : "";
     card.innerHTML = `
       <h2>${r.defused ? "🎮 ES LÄUFT!" : "💥 KISTE EXPLODIERT!"}</h2>
       ${r.defused ? `<div class="boot" id="bootLog"></div>` : `<div class="boot">C:\\&gt; SPIEL.EXE\n<span style="color:#ff6a00">*** FATALER FEHLER: RECHNER BRENNT ***\nRauchmelder ausgelöst. Bitte Fenster öffnen.</span></div>`}
       <p>${reasonText(r)}</p>
-      <div class="row"><span>Schrauber</span><span>${esc(nameOf(r.defuser))}</span></div>
       <div class="row"><span>Einschübe erledigt</span><span>${r.solved}/${r.total}</span></div>
-      <div class="row"><span>Kurzschlüsse</span><span>${r.strikes}</span></div>
+      <div class="row"><span>Kurzschlüsse</span><span>${r.strikes}${sb ? " (" + sb + ")" : ""}</span></div>
       ${mine}
       ${nextDef}
       ${isHost ? `<button id="nextBtn">${last ? "Zum Ergebnis ➜" : "Nächster Rechner ➜"}</button>` : hostWaitLine(last ? "Gleich kommt das Ergebnis." : "Der Spielleiter schaltet gleich den nächsten Rechner ein.")}`;
@@ -1127,7 +1161,7 @@
       <h2>${defused === st.bombs.length ? "🏆 ALLE RECHNER LAUFEN!" : defused ? "😅 TEILWEISE GEZOCKT" : "💀 ALLES ABGEFACKELT"}</h2>
       <p>${defused} von ${st.bombs.length} Rechnern haben das AAA-Game zum Laufen gebracht.</p>
       ${st.bombs.map((b, i) => { const r = (st.results || {})["b" + i] || {};
-        return `<div class="row"><span>${r.defused ? "🎮" : "💥"} Rechner ${i + 1} · ${esc(nameOf(b.defuser))}</span><span>${r.solved || 0}/${b.modules.length} Einschübe${r.defused ? ` · ${fmtTime(r.secLeft * 1000)} übrig` : ""}</span></div>`; }).join("")}
+        return `<div class="row"><span>${r.defused ? "🎮" : "💥"} Rechner ${i + 1}</span><span>${r.solved || 0}/${b.modules.length} Einschübe${r.defused ? ` · ${fmtTime(r.secLeft * 1000)} übrig` : ""}</span></div>`; }).join("")}
       <p style="margin-top:12px"><b>Punkte aus diesem Spiel</b></p>
       ${totals.map(([id, p]) => `<div class="row"><span>${id === playerId ? "👉 " : ""}${esc(nameOf(id))}</span><span class="pts">+${p}</span></div>`).join("")}
       ${isHost ? `<button id="backBtn">🏠 Alle zurück ins Cockpit</button>` : hostWaitLine("Der Spielleiter bringt euch gleich zurück ins Cockpit.")}`;
@@ -1252,12 +1286,16 @@
     seg("optLevel", Object.entries(LEVELS).map(([k, v]) => [k, v.label]), "level");
     document.getElementById("goBtn").addEventListener("click", () => { audio(); hostStart(); });
     document.getElementById("hostEndBtn").addEventListener("click", () => hostEnd(true));
+    document.getElementById("hostAssistBtn").addEventListener("click", (e) => {
+      hostAssist = !hostAssist;
+      e.currentTarget.textContent = "🛠️ Admin springt ein: " + (hostAssist ? "AN – du kannst alle Einschübe bedienen" : "AUS");
+      render();
+    });
     get(ref(db, "players/" + playerId)).then((snap) => {
       const data = snap.val();
       isHost = !!(data && isHostName(data.name));
       onValue(ref(db, "players"), (s) => {
         allPlayers = s.val() || {};
-        if (isHost && !latestState) { const n = Math.min(6, Math.max(1, activePlayerIds().length)); if (!settings._touched) { settings.bombs = n; seg("optBombs", [1, 2, 3, 4, 5, 6].map((x) => [x, String(x)]), "bombs"); } }
         render();
       });
       onValue(ref(db, STATE), (s) => { latestState = s.val(); render(); });
