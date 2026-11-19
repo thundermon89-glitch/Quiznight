@@ -265,8 +265,13 @@
         // einen fremden Panzer trifft - läuft dadurch ohne Verzögerung durch einen Umweg über
         // das (evtl. langsamere) Opfer-Gerät. Vorher flogen Geschosse teils sichtbar durch
         // andere Panzer hindurch, weil nur das Opfer selbst den Treffer erkannt hat.
+        // Eigene Kugeln treffen auch den eigenen Panzer - aber erst, wenn sie ihn einmal verlassen haben
+        // (sonst würde man sich beim Abfeuern sofort selbst treffen)
+        const inMine = my && !iAmDead && bl.x > my.x && bl.x < my.x + TANK_SIZE && bl.y > my.y && bl.y < my.y + TANK_SIZE;
+        if (!inMine) bl.armed = true;
         let hitTankId = null;
-        for (const tid in allTanks) {
+        if (inMine && bl.armed) hitTankId = playerId;
+        if (!hitTankId) for (const tid in allTanks) {
           if (tid === playerId) continue;
           const t = allTanks[tid];
           if (!t || t.alive === false) continue;
@@ -280,6 +285,13 @@
           broadcastHitEvent(bl.x, bl.y);
           remove(ref(db, 'panzerState/bullets/' + bid));
           delete myBullets[bid];
+          if (hitTankId === playerId) {
+            // Selbst getroffen: direkt lokal ein Leben abziehen (meine Position/Leben schreibe ich ohnehin selbst)
+            my.lives = Math.max(0, (my.lives == null ? START_LIVES : my.lives) - 1);
+            if (my.lives <= 0) { my.alive = false; iAmDead = true; }
+            writeMyTank();
+            continue;
+          }
           runTransaction(ref(db, 'panzerState/tanks/' + hitTankId + '/lives'), (current) => {
             const cur = (current === null || current === undefined) ? START_LIVES : current;
             return Math.max(0, cur - 1);
@@ -287,7 +299,7 @@
             const newLives = result.snapshot.val();
             if (newLives <= 0) {
               update(ref(db, 'panzerState/tanks/' + hitTankId), { alive: false });
-              runTransaction(ref(db, 'panzerState/kills/' + playerId), (c) => (c || 0) + 1);
+              if (hitTankId !== playerId) runTransaction(ref(db, 'panzerState/kills/' + playerId), (c) => (c || 0) + 1);   // sich selbst abschießen zählt nicht
             }
           });
           continue;
