@@ -41,13 +41,14 @@
     'vier-gewinnt': 'Vier Gewinnt',
     panzer: 'Panzerschlacht',
     ochsvormberg: 'Ochs vorm Berg',
-    bombtick: 'Bomb is ticking',
+    burstpipe: 'Burst Pipe',
+    'ccc-rechner': 'CCC Rechner',
     fighter: 'Hirnschmalz-Fighter'
   };
 
   // Standard-Hintergründe im Repo (intros/<seite>.jpg) - gelten, solange im Editor kein eigenes Bild gesetzt ist
   const DEFAULT_IMAGES = ['spiel1', 'spiel2', 'spiel3', 'spiel5', 'spiel6', 'spiel7', 'spiel8', 'spiel9',
-    'snake', 'goldregen', 'vier-gewinnt', 'ochsvormberg', 'bombtick', 'fighter'];
+    'snake', 'goldregen', 'vier-gewinnt', 'ochsvormberg', 'fighter'];
   const defaultImage = (p) => DEFAULT_IMAGES.includes(p) ? BASE + 'intros/' + p + '.jpg' : '';
 
   // Figuren (Dateipräfix in fighter/ + Spezialwurf aus dem Fighter-Spiel)
@@ -711,16 +712,18 @@
           ctx.restore();
         }
       },
-      // Bomb is ticking: ein Zombie trägt eine Bombe mit Countdown - KABUMM
-      bombtick: {
-        lines: ['Tick … tack …', 'Welcher Draht?', 'Rot oder Blau?'],
-        words: ['BONK!', 'ZACK!', 'WUMMS!'],
+      // CCC Rechner: ein Zombie schleppt einen uralten PC, der überhitzt - Countdown - KABUMM
+      'ccc-rechner': {
+        lines: ['Läuft das auf Windows 95?', 'Mehr RAM …', 'Hast du es schon mit Neustarten versucht?', 'Treiber … Hiiirn …'],
+        words: ['BLUESCREEN!', 'ABGESTÜRZT!', 'STRG+ALT+ENTF!', 'BONK!'],
         init() { const z = zombies[1] || zombies[0]; if (z) z.bomber = true; },
         acc(g, z, b) {
           if (!z.bomber) return;
-          g.fillStyle = '#1a1a1a'; g.beginPath(); g.arc(12, -5 + b, 3.8, 0, 7); g.fill();
-          g.strokeStyle = '#c9a227'; g.lineWidth = 0.7; g.beginPath(); g.moveTo(13.5, -8.5 + b); g.lineTo(15.5, -10.5 + b); g.stroke();
-          g.fillStyle = Math.floor(now / 80) % 2 ? '#ffd23f' : '#ff7a1a'; g.fillRect(15, -11.8 + b, 1.8, 1.8);
+          // beiger Röhrenmonitor über dem Kopf, raucht und flackert
+          g.fillStyle = '#d8cfb4'; g.fillRect(7, -9 + b, 10, 7.5); g.fillStyle = '#b8ae92'; g.fillRect(7, -2 + b, 10, 0.8);
+          g.fillStyle = Math.floor(now / 120) % 2 ? '#1f4fd1' : '#2a64ff'; g.fillRect(8.2, -8 + b, 7.6, 5);
+          g.fillStyle = '#fff'; g.fillRect(9, -7 + b, 3, 0.6); g.fillRect(9, -5.8 + b, 5, 0.6);
+          g.fillStyle = 'rgba(120,120,120,.8)'; g.beginPath(); g.arc(15 + Math.sin(now / 200), -11 + b, 1.3, 0, 7); g.fill();
           g.fillStyle = '#8fbf6a'; g.fillRect(8, -2 + b, 1.5, 4); g.fillRect(14.5, -2 + b, 1.5, 4);
         },
         tick() { zombies.forEach(z => { if (!z.bomber || !zAlive(z)) return; if (!z.fuseAt && z.x < W - FH * 0.5) z.fuseAt = now + 2700; if (z.fuseAt && now > z.fuseAt) bombBoom(z); }); },
@@ -734,6 +737,21 @@
             ctx.lineWidth = fs * 0.16; ctx.strokeStyle = '#1a1a2e'; ctx.strokeText(n, z.x + U * 0.5, GY - FH * 1.45);
             ctx.fillStyle = '#ff2e2e'; ctx.fillText(n, z.x + U * 0.5, GY - FH * 1.45); ctx.restore();
           });
+        }
+      },
+      // Burst Pipe: Säure-Zombies - getroffen zerlaufen sie zu grüner Pampe, der Boden blubbert
+      burstpipe: {
+        lines: ['Steigt das schon wieder?', 'Ätzend hier …', 'Wer hat das Rohr kaputt gemacht?', 'Hiiirn … glüht …'],
+        words: ['ÄTZEND!', 'BLUBB!', 'ZISCH!', 'BONK!'], wordColor: '#7dff3a',
+        acc(g, z, b) { g.fillStyle = '#ffd23f'; g.fillRect(7, -1 + b, 10, 2.5); g.fillRect(6, 1 + b, 12, 0.8); g.fillStyle = '#1a1a1a'; g.fillRect(11, -0.6 + b, 2, 1.6); },
+        onKill(z) {
+          for (let i = 0; i < 18; i++) parts.push({ x: z.x, y: GY - FH * rnd(0.2, 0.9), vx: rnd(-1, 1) * FH * 2, vy: -rnd(0.5, 1.5) * FH * 2.2, s: rnd(0.06, 0.12) * FH, c: pick(['#7dff3a', '#4fd11c', '#b8ff6a']), round: true, life: rnd(0.8, 1.3), splat: true });
+          return false;
+        },
+        drawBack() {
+          ctx.save(); ctx.fillStyle = 'rgba(125,255,58,.18)'; ctx.fillRect(0, GY - 2, W, H - GY + 2);
+          for (let i = 0; i < 9; i++) { const x = ((i * 137 + now * 0.05) % W), r = FH * (0.03 + 0.03 * Math.abs(Math.sin(now / 300 + i))); ctx.fillStyle = 'rgba(160,255,90,.55)'; ctx.beginPath(); ctx.arc(x, GY + 4, r, 0, 7); ctx.fill(); }
+          ctx.restore();
         }
       },
       // Hirnschmalz-Fighter: "Runde 1 - FIGHT!", ein Zombie blockt, am Ende "PERFECT!"
@@ -762,9 +780,9 @@
       z.bomber = false; z.state = 'gone'; T.flash = now;
       sfx('boom', 1); setTimeout(() => sfx('boom', 1), 90);
       gore(z.x, GY, z.vi, 30); blood(z.x, GY - FH * 0.6, 20, 1);
-      word(z.x, GY - FH * 1.6, 'KABUMM!', '#ff7a1a', 1.5);
+      word(z.x, GY - FH * 1.6, pick(['KABUMM!', 'BLUESCREEN!']), '#ff7a1a', 1.5);
       zombies.forEach(o => { if (o !== z && zAlive(o) && Math.abs(o.x - z.x) < FH * 2.6) killZombie(o, 'fly', o.x >= z.x ? 1 : -1); });
-      heroes.forEach(h => { if (h.state === 'walk' && Math.abs(h.x - z.x) < FH * 1.6) { h.state = 'slip'; h.anim = 'ko'; h.t0 = now; h.dur = 1500; say(h, pick(['Hust!', 'Meine Haare!', 'Welcher Draht war das?!']), 1300); } });
+      heroes.forEach(h => { if (h.state === 'walk' && Math.abs(h.x - z.x) < FH * 1.6) { h.state = 'slip'; h.anim = 'ko'; h.t0 = now; h.dur = 1500; say(h, pick(['Hust!', 'Meine Haare!', 'Das war das Netzteil!', 'Garantie futsch!']), 1300); } });
     }
     theme = THEMES[cfg.page] || {};
     if (theme.initZombie) zombies.forEach(theme.initZombie);

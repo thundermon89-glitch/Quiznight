@@ -3,6 +3,7 @@
 <head>
   <script src="gif-keep.js"></script>
   <script src="sounds/hs-audio.js"></script>
+  <script src="game-intro.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Hirnschmalz-Arena - Burst Pipe</title>
@@ -81,7 +82,7 @@
     const MOVE_ACCEL = 0.55, MAX_HSPEED = 3.4, FRICTION = 0.9;
     const WATER_RISE_PER_MS = 0.014;
     // ---------- Mehrspieler ----------
-    const START_DELAY_MS = 5000;      // Countdown, damit alle Geräte geladen haben
+    const START_DELAY_MS = 14000;     // 9 s Spiel-Intro (game-intro.js) + Countdown, damit alle Geräte geladen haben
     const JOIN_GRACE_MS = 4000;       // so lange nach "LOS" darf man noch einsteigen
     const SYNC_MS = 100;              // eigene Position so oft melden
     const STALE_MS = 12000;           // wer so lange nichts meldet, gilt als ausgeschieden
