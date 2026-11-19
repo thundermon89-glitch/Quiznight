@@ -325,6 +325,8 @@
 
     // ---- Spielfiguren ----
     const order = FIGHTERS.slice().sort(() => Math.random() - 0.5);
+    // Ablauf: normal (Jungs hauen Zombies um) / Zombies gewinnen / Jungs fallen von oben ins Bild
+    const SCN = cfg.scenario || (() => { const r = Math.random(); return r < 0.5 ? 'normal' : r < 0.75 ? 'zwin' : 'drop'; })();
     // Rollen: vorne 3 Kämpfer, dahinter Mitläufer - einer davon dreht manchmal ab der Hälfte um
     const roles = ['fighter', 'fighter', 'fighter', 'tail', 'tail', Math.random() < 0.6 ? 'turn' : 'tail'];
     const heroes = order.map((f, i) => ({
@@ -332,8 +334,13 @@
       hitDone: false, target: null, rolled: new Set(), bubble: null,
       role: roles[i] || 'tail', dir: 1, turnAt: rnd(0.42, 0.58) * DURATION
     }));
+    if (SCN === 'zwin') heroes.forEach(h => { h.role = 'victim'; });          // keiner wehrt sich
+    if (SCN === 'drop') heroes.forEach((h, i) => {                              // fallen nacheinander vom Himmel
+      h.state = 'drop'; h.x = W * (0.06 + i * 0.075) + rnd(-FH * 0.1, FH * 0.1); h.y = H + FH * 2; h.vy = 0;
+      h.dropAt = 250 + i * rnd(380, 560); h.role = i < 3 ? 'fighter' : 'tail';
+    });
     // ---- Zombies ----
-    const zCount = W < 700 ? 4 : 5;
+    const zCount = (W < 700 ? 4 : 5) + (SCN === 'zwin' ? 2 : 0);
     const zombies = [];
     let theme = {};                       // Spiel-Thema (wird weiter unten gesetzt)
     function newZombie(x) {
@@ -364,8 +371,20 @@
     function say(who, text, ms) { who.bubble = { text, until: now + (ms || 1300) }; }
     function word(x, y, text, color, big) { words.push({ x, y, text, color: color || theme.wordColor || '#ffd23f', t: 0, rot: rnd(-0.25, 0.25), big: big || 1, life: big ? 1.3 : 0.9 }); }
     function blood(x, y, n, dir) {
-      for (let i = 0; i < n; i++) parts.push({ x, y, vx: (dir || 1) * rnd(0.2, 1) * FH * 3 + rnd(-1, 1) * FH, vy: -rnd(0.5, 1.6) * FH * 2.4,
-        s: rnd(0.035, 0.07) * FH, c: Math.random() < 0.7 ? '#b3001b' : '#e0182d', life: rnd(0.7, 1.3), splat: true });
+      n = Math.round(n * 2.2);                                                   // deutlich blutiger
+      for (let i = 0; i < n; i++) parts.push({ x, y, vx: (dir || 1) * rnd(0.2, 1.1) * FH * 3.2 + rnd(-1, 1) * FH * 1.2, vy: -rnd(0.4, 1.9) * FH * 2.6,
+        s: rnd(0.035, 0.09) * FH, c: pick(['#8a0012', '#b3001b', '#b3001b', '#e0182d']), life: rnd(0.8, 1.5), splat: true });
+      // Blutfontäne: ein paar große Tropfen steil nach oben
+      for (let i = 0; i < Math.round(n / 6); i++) parts.push({ x, y, vx: rnd(-0.4, 0.4) * FH, vy: -rnd(2.2, 3.2) * FH * 2, s: rnd(0.07, 0.11) * FH, c: '#9c0015', life: 2, splat: true });
+      if (Math.random() < 0.35) screenSplat();
+    }
+    // Blutspritzer auf der "Kamera" (laufen langsam runter)
+    const camBlood = [];
+    function screenSplat() {
+      const x = rnd(0.05, 0.95) * W, y = rnd(0.25, 0.75) * H, r = FH * rnd(0.12, 0.3);
+      const dots = []; for (let i = 0; i < 9; i++) { const a = rnd(0, 6.28), d = r * rnd(0.6, 1.8); dots.push([Math.cos(a) * d, Math.sin(a) * d, r * rnd(0.12, 0.3)]); }
+      camBlood.push({ x, y, r, dots, drip: 0, dripMax: rnd(0.5, 1.6) * r * 3, a: 0.85 });
+      if (camBlood.length > 7) camBlood.shift();
     }
     function gore(x, y, vi, n) {
       const v = Z_VARIANTS[vi];
@@ -848,6 +867,32 @@
       if (!frozen) animT += dt * 1000;
       if (!frozen) heroes.forEach(h => {
         const el = t - h.t0, p = h.dur ? clamp(el / h.dur, 0, 1) : 0;
+        if (h.state === 'drop') {
+          h.anim = 'jump';
+          if (t < h.dropAt) return;
+          if (h.y > H) h.y = GY + FH * 0.4;                                       // erscheint oben am Bildrand
+          h.vy -= FH * 9 * dt; h.y += h.vy * dt;
+          if (h.y <= 0) {
+            h.y = 0; h.state = 'walk'; sfx('drop', 1); barShake = Math.max(barShake, 0.4);
+            for (let i = 0; i < 12; i++) parts.push({ x: h.x + rnd(-0.3, 0.3) * FH, y: GY - 2, vx: rnd(-1, 1) * FH * 1.5, vy: -rnd(0.2, 0.8) * FH, s: rnd(0.06, 0.12) * FH, c: 'rgba(160,150,140,.7)', round: true, life: 0.6, grav: 0.3 });
+            zombies.forEach(z => { if (zAlive(z) && Math.abs(z.x - h.x) < FH * 0.45) killZombie(z, 'squash', 1); });   // drauf gelandet
+            if (Math.random() < 0.6) say(h, pick(['Bin da!', 'Landung!', 'Autsch, meine Knie.', 'Wer hat gerufen?']), 1100);
+          }
+          return;
+        }
+        if (h.state === 'down') { h.anim = 'ko'; return; }                      // liegt am Boden
+        if (h.role === 'victim' && h.state === 'walk') {
+          h.anim = 'walk'; h.y = 0; h.x += speed * dt * 0.8;
+          const z = zombies.find(z => zAlive(z) && !z.feed && z.x - h.x > -FH * 0.1 && z.x - h.x < FH * 0.42);
+          if (z) {
+            // Zombie schnappt ihn sich
+            h.state = 'down'; h.t0 = t; h.anim = 'ko'; z.feed = t + 1800; z.claimed = null;
+            blood(h.x + FH * 0.1, GY - FH * 0.7, 16, -1); word(h.x, GY - FH * 1.3, pick(['MAMPF!', 'NOM!', 'SCHMATZ!', 'HAPS!']), '#e0182d');
+            sfx('boom', 0.6); say(z, pick(['Hiiirn! Endlich!', 'Lecker!', 'Schmaaalz!', 'Mjam.']), 1500);
+            if (Math.random() < 0.5) setTimeout(() => say(h, pick(['Nicht mein Hirn!', 'Ich brauch das noch!', 'Hilfeee!']), 1300), 200);
+          }
+          return;
+        }
         if (h.state === 'walk') {
           h.anim = 'walk'; h.y = 0;
           // Umdreher: ab der Hälfte in die andere Richtung
@@ -916,7 +961,9 @@
           const h = z.claimed;
           const near = h && Math.abs(z.x - h.x) < FH * 0.75;
           z.state = near ? 'grab' : 'walk';
-          let stop = near || (frozen && !z.cheat) || (z.hold && now < z.hold);
+          let stop = near || (frozen && !z.cheat) || (z.hold && now < z.hold) || (z.feed && now < z.feed);
+          if (z.feed && now < z.feed && Math.random() < 0.08) blood(z.x - FH * 0.2, GY - FH * 0.3, 2, -1);
+          if (z.feed && now >= z.feed) z.feed = 0;
           if (!stop && theme.queue) stop = zombies.some(o => o !== z && zAlive(o) && o.x < z.x && o.x > z.x - FH * 0.4);
           if (!stop) { z.x -= zSpeed() * dt; z.ph += dt * 5; }
           if (theme.zombieY) z.y = theme.zombieY(z);
@@ -965,7 +1012,9 @@
         }
       });
       for (let i = parts.length - 1; i >= 0; i--) if (parts[i].life <= 0) parts.splice(i, 1);
-      splats.forEach(s => s.a -= dt * 0.12);
+      splats.forEach(s => s.a -= dt * 0.05);   // Blutlachen bleiben länger liegen
+      camBlood.forEach(c => { if (c.drip < c.dripMax) c.drip += dt * FH * 0.35; c.a -= dt * 0.08; });
+      for (let i = camBlood.length - 1; i >= 0; i--) if (camBlood[i].a <= 0) camBlood.splice(i, 1);
       for (let i = splats.length - 1; i >= 0; i--) if (splats[i].a <= 0) splats.splice(i, 1);
       words.forEach(w => w.t += dt);
       for (let i = words.length - 1; i >= 0; i--) if (words[i].t > words[i].life) words.splice(i, 1);
@@ -999,6 +1048,8 @@
       let fi;
       if (h.state === 'walk') fi = Math.floor(animT / 1000 * clamp(speed / FH * 3.5, 6, 10)) % n;
       else if (h.state === 'dance') fi = Math.floor(el / 1000 * 7) % n;
+      else if (h.state === 'down') fi = Math.min(n - 1, Math.floor(el / 600 * n));
+      else if (h.state === 'drop') fi = h.vy > 0 ? 1 : Math.min(n - 1, Math.floor(n * 0.6));
       else if (h.state === 'slip') {
         // hinfallen (0,55 s) - liegen bleiben - wieder aufstehen (rückwärts)
         const down = 550, lie = 650, up = h.dur - down - lie;
@@ -1026,6 +1077,7 @@
       if (z.state === 'walk') {
         anim = pick((z.hold && now < z.hold) || (frozen && !z.cheat) ? 'talk' : (theme.zWalk || 'walk'));
         fi = anim === 'talk' ? Math.floor(now / 170) : Math.floor(z.ph * 1.0);
+        if (z.feed && now < z.feed && zReady(ch, 'grab')) { anim = 'grab'; fi = Math.floor(now / 120); }
       } else if (z.state === 'grab') { anim = pick('grab'); fi = Math.floor(now / 140); }
       else if (z.state === 'fly' || z.state === 'portal') { anim = pick('fly'); fi = Math.floor((now - (z.killAt || 0)) / 70); rot = z.rot * 0.35; }
       else if (z.state === 'fall') { anim = pick('ko'); fi = Math.floor(Math.min(1, z.rot / (Math.PI / 2)) * (nOf(anim) - 1)); }
@@ -1244,6 +1296,15 @@
         ctx.restore();
       });
       if (theme.drawFront) theme.drawFront();
+      // Blut auf der Kamera
+      camBlood.forEach(c => {
+        ctx.save(); ctx.globalAlpha = Math.max(0, Math.min(0.85, c.a)); ctx.fillStyle = '#8a0012';
+        ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, 7); ctx.fill();
+        c.dots.forEach(([dx, dy, dr]) => { ctx.beginPath(); ctx.arc(c.x + dx, c.y + dy, dr, 0, 7); ctx.fill(); });
+        ctx.fillRect(c.x - c.r * 0.12, c.y, c.r * 0.24, c.drip); ctx.beginPath(); ctx.arc(c.x, c.y + c.drip, c.r * 0.16, 0, 7); ctx.fill();
+        ctx.restore();
+      });
+      if (SCN === 'zwin' && now > DURATION * 0.8) bigText('DIE ZOMBIES GEWINNEN!', H * 0.47, '#e0182d', 0.75 + Math.sin(now / 150) * 0.03);
     }
 
     // Bilder kurz vorladen (max. 1,5 s), damit die Figuren nicht mitten im Intro den Stil wechseln
