@@ -99,8 +99,9 @@
     el.style.backgroundImage = `url('${BASE}eggs/stefan_walk.png')`; el.style.backgroundSize = `${6 * FW}px ${H}px`;
     document.body.appendChild(el);
     const W = () => window.innerWidth;
-    let x = -FW, state = 'walk', t0 = performance.now(), clicks = 0, last = t0, speed = 70, eatUntil = 0, ended = false;
+    let x = -FW, state = 'walk', t0 = performance.now(), clicks = 0, last = t0, speed = 55, eatUntil = 0, ended = false, disturbed = false;
     const stopAt = W() * rnd(0.3, 0.6);
+    const STARE_MS = 9000;   // in Ruhe gelassen: so lange steht er da, starrt dich an und isst
     const LINES = ['Na?', 'Hm, lecker.', 'Was guckst du?', 'Ich bin gar nicht da.', 'Snack?'];
     const HIT = ['Hey!', 'Lass das!', 'Mein Snack!'];
     function frame(now) {
@@ -110,11 +111,11 @@
         x += speed * dt;
         el.style.backgroundImage = `url('${BASE}eggs/stefan_walk.png')`; el.style.backgroundSize = `${6 * FW}px ${H}px`;
         el.style.backgroundPosition = `-${(Math.floor(now / 140) % 6) * FW}px 0`;
-        if (!eatUntil && x >= stopAt) { state = 'eat'; eatUntil = now + 3500; bubble(el, LINES[Math.floor(Math.random() * LINES.length)], 1800); }
+        if (!eatUntil && x >= stopAt) { state = 'eat'; eatUntil = now + STARE_MS; setTimeout(() => { if (state === 'eat' && !disturbed) bubble(el, LINES[Math.floor(Math.random() * LINES.length)], 2000); }, 3500); }
         if (x > W() + 20) return finish(false);
       } else if (state === 'eat') {
         el.style.backgroundImage = `url('${BASE}eggs/stefan_eat.png')`; el.style.backgroundSize = `${9 * FW}px ${H}px`;
-        el.style.backgroundPosition = `-${(Math.floor(now / 160) % 9) * FW}px 0`;
+        el.style.backgroundPosition = `-${(Math.floor(now / 220) % 9) * FW}px 0`;   // gemütlich kauen
         if (now > eatUntil) { state = 'walk'; }
       }
       el.style.left = x + 'px';
@@ -137,7 +138,7 @@
       } else {
         pop(e.clientX, e.clientY, clicks + '/' + CLICKS);
         bubble(el, HIT[clicks - 1] || 'Hey!', 1100);
-        state = 'walk'; eatUntil = eatUntil || 1; speed = 120 + clicks * 60;   // wird schneller
+        disturbed = true; state = 'walk'; eatUntil = eatUntil || 1; speed = 120 + clicks * 60;   // gestört: läuft weiter, wird schneller
       }
     });
     function finish(found) {

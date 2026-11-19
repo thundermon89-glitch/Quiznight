@@ -93,23 +93,56 @@
     // ==== TMDb-ANBINDUNG FÜR FILM-AUTOVERVOLLSTÄNDIGUNG (aktiver Read-Access-Token) ====
     const TMDB_READ_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJmMTE5YzVlNTg0ZTE0ZTVhMGJlOTdmOTdiYmVlY2Q5YiIsIm5iZiI6MTc4ODg0NjQxNC44NDYwMDAyLCJzdWIiOiI2YTlmYTE0ZTgwMTc5ZDRmM2Y0YjA2NGQiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.HJ7IcWqgamMS7d0l1u6KBmcQtBT-SfSA8qMK3v2o2QU";
 
+    // Filmsuche (TMDb): deutscher Titel + Originaltitel, nach Bekanntheit sortiert.
+    // Ältere, langsamere Anfragen werden abgebrochen, damit nie veraltete Vorschläge auftauchen.
+    let suggestAbort = null;
     async function searchMovies(query) {
       if (!query || query.length < 2) return [];
-      try {
-        const res = await fetch(`https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query)}&language=de-DE`, {
-          headers: { 'Authorization': `Bearer ${TMDB_READ_TOKEN}`, 'accept': 'application/json' }
-        });
-        const data = await res.json();
-        return (data.results || []).slice(0, 6).map(m => m.title + (m.release_date ? ` (${m.release_date.slice(0, 4)})` : ''));
-      } catch (e) {
-        return [];
-      }
+      if (suggestAbort) suggestAbort.abort();
+      suggestAbort = new AbortController();
+      const res = await fetch(`https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query)}&language=de-DE&include_adult=false`, {
+        headers: { 'Authorization': `Bearer ${TMDB_READ_TOKEN}`, 'accept': 'application/json' }, signal: suggestAbort.signal
+      });
+      const data = await res.json();
+      const seen = new Set();
+      return (data.results || [])
+        .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
+        .map(m => ({ title: m.title || m.original_title, original: m.original_title && m.original_title !== m.title ? m.original_title : '', year: (m.release_date || '').slice(0, 4) }))
+        .filter(m => { const k = m.title + '|' + m.year; if (seen.has(k)) return false; seen.add(k); return true; })
+        .slice(0, 7);
     }
+    let movieSuggestions = [];      // aktuell angezeigte Vorschläge
+    let chosenMovie = null;         // ausgewählter Vorschlag (deutscher und Originaltitel zählen)
+    let suggestSeq = 0;
+
 
     // ==== FILMRUNDEN-DATEN ====
     // Jetzt YouTube statt Rumble - deutlich zuverlässiger einzubetten.
-    const MOVIE_START_POINTS = 500;
+    const MOVIE_START_POINTS = 150;
+    const CLIP_SHOW = 3, CLIP_PAUSE = 3;   // Sekunden: Ausschnitt zeigen / schwarze Pause
     const MOVIE_DURATION_MS = 60000; // 1 Minute - die Zündschnur brennt in dieser Zeit ab
+    const MOVIE_LEAD_MS = 4000;      // so lange vor dem gemeinsamen Start wird das Video schon geladen (3-2-1)
+
+    // Gemeinsame Uhr für alle Geräte (Firebase-Serverzeit), damit alle zeitgleich starten
+    let serverOffset = 0;
+    const serverNow = () => Date.now() + serverOffset;
+    // Videos aus dem Repo direkt von der eigenen Seite (GitHub Pages) laden - viel schneller als raw.githubusercontent.com
+    function videoSrc(url) {
+      const RAW = 'https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/';
+      return url && url.indexOf(RAW) === 0 ? url.slice(RAW.length) : url;
+    }
+    // Nächsten Trailer schon im Hintergrund vorladen, während alle warten
+    let preloadEl = null;
+    function preloadVideo(url) {
+      const src = videoSrc(url);
+      if (!src || (preloadEl && preloadEl.dataset.src === src)) return;
+      if (preloadEl) preloadEl.remove();
+      preloadEl = document.createElement('video');
+      preloadEl.preload = 'auto'; preloadEl.muted = true; preloadEl.dataset.src = src; preloadEl.src = src;
+      preloadEl.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-10px;top:-10px';
+      document.body.appendChild(preloadEl);
+      try { preloadEl.load(); } catch (e) {}
+    }
 
     // Filmtitel vom Nutzer bestätigt, englische Originaltitel als Hauptantwort (IMDb/TMDb-
     // Schreibweise), deutsche/gängige Varianten als Alternativen für robustere Erkennung.
@@ -130,12 +163,11 @@
       { id: 12, videoUrl: "https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/12-der-schakal.mp4", videoType: "video/mp4", answer: "The Jackal", altAnswers: ["Der Schakal"] }
     ].filter(r => r.videoUrl); // Runden ohne (noch fehlende) Video-URL werden übersprungen
 
+    // Punkte: 150 direkt beim Start, dann gleichmäßig weniger - wenn die Zündschnur abgebrannt ist, gibt es nichts mehr
     function currentMoviePoints(startedAt) {
-      const elapsed = Date.now() - startedAt;
+      const elapsed = Math.max(0, serverNow() - startedAt);
       const remaining = Math.max(0, MOVIE_DURATION_MS - elapsed);
-      // Mindestens 50 Punkte für jeden richtigen Tipp, auch für den langsamsten Rater -
-      // sonst könnte es bei sehr später Antwort auf (fast) 0 Punkte hinauslaufen.
-      return Math.max(50, Math.round(MOVIE_START_POINTS * (remaining / MOVIE_DURATION_MS)));
+      return Math.round(MOVIE_START_POINTS * (remaining / MOVIE_DURATION_MS));
     }
 
     function normalizeGuess(s) {
@@ -144,7 +176,9 @@
       // Antwort überein, obwohl der Filmtitel selbst korrekt war.
       return (s || "").trim().toLowerCase()
         .replace(/\s*\(\d{4}\)\s*$/, "")
-        .replace(/[^a-z0-9äöüß ]/gi, "");
+        .replace(/&/g, " und ")
+        .replace(/[^a-z0-9äöüß ]/gi, " ")
+        .replace(/\s+/g, " ").trim();
     }
 
     function getActivePlayerIds() {
@@ -217,7 +251,7 @@
         set(ref(db, 'game6State'), {
           stage: 'movie_playing',
           movieRoundId: round.id,
-          movieStartedAt: Date.now(),
+          movieStartedAt: serverNow() + MOVIE_LEAD_MS,   // alle laden vor und starten gleichzeitig
           movieGuesses: null,
           roundsCompleted: completed // wird erst beim Beenden dieser Runde hochgezählt
         });
@@ -238,7 +272,7 @@
         set(ref(db, 'game6State'), {
           stage: 'movie_playing',
           movieRoundId: roundId,
-          movieStartedAt: Date.now(),
+          movieStartedAt: serverNow() + MOVIE_LEAD_MS,
           movieGuesses: null,
           roundsCompleted: state.roundsCompleted || 0
         });
@@ -270,16 +304,29 @@
       clearTimeout(movieSuggestDebounce);
       const box = document.getElementById("movie-suggestions");
       movieSuggestionIndex = -1;
-      if (!value || value.length < 2) { box.classList.add("hidden"); return; }
+      if (chosenMovie && value !== chosenMovie.title) chosenMovie = null;   // weitergetippt
+      const mySeq = ++suggestSeq;
+      if (!value || value.trim().length < 2) { box.classList.add("hidden"); box.replaceChildren(); movieSuggestionCount = 0; return; }
       movieSuggestDebounce = setTimeout(async () => {
-        const suggestions = await searchMovies(value);
-        movieSuggestionCount = suggestions.length;
-        if (suggestions.length === 0) { box.classList.add("hidden"); return; }
-        box.innerHTML = suggestions.map((s, i) =>
-          `<div class="movie-suggestion-item p-2.5 cursor-pointer text-sm" data-idx="${i}" onclick="selectMovieSuggestion('${s.replace(/'/g, "\\'")}')">${s}</div>`
-        ).join('');
+        let list = [];
+        try { list = await searchMovies(value.trim()); } catch (e) { if (e.name === 'AbortError') return; }
+        if (mySeq !== suggestSeq) return;                                   // inzwischen weitergetippt
+        const input = document.getElementById("movie-guess-input");
+        if (!input || input.value !== value) return;
+        movieSuggestions = list; movieSuggestionCount = list.length;
+        box.replaceChildren();
+        if (!list.length) { box.classList.add("hidden"); return; }
+        list.forEach((m, i) => {
+          const el = document.createElement('div');
+          el.className = 'movie-suggestion-item p-2.5 cursor-pointer text-sm'; el.dataset.idx = i;
+          el.innerHTML = '<b></b><span class="text-[#1a1a2e]/50"></span>';
+          el.querySelector('b').textContent = m.title;
+          el.querySelector('span').textContent = (m.year ? ' (' + m.year + ')' : '') + (m.original ? ' · ' + m.original : '');
+          el.addEventListener('mousedown', (ev) => { ev.preventDefault(); selectMovieSuggestion(i); });
+          box.appendChild(el);
+        });
         box.classList.remove("hidden");
-      }, 300);
+      }, 180);
     };
 
     // Pfeiltasten wandern durch die Vorschlagsliste, Enter übernimmt die gerade markierte
@@ -303,8 +350,7 @@
       if (e.key === 'Enter') {
         e.preventDefault();
         if (visible && movieSuggestionIndex >= 0) {
-          const item = box.querySelector(`.movie-suggestion-item[data-idx="${movieSuggestionIndex}"]`);
-          if (item) { selectMovieSuggestion(item.innerText); return; }
+          selectMovieSuggestion(movieSuggestionIndex); submitMovieGuess(document.getElementById("movie-guess-input").value); return;
         }
         submitMovieGuess(e.target.value);
       }
@@ -324,24 +370,36 @@
       });
     }
 
-    window.selectMovieSuggestion = function(text) {
-      document.getElementById("movie-guess-input").value = text;
+    window.selectMovieSuggestion = function(i) {
+      const m = movieSuggestions[i]; if (!m) return;
+      chosenMovie = m;
+      document.getElementById("movie-guess-input").value = m.title;
       document.getElementById("movie-suggestions").classList.add("hidden");
-      movieSuggestionIndex = -1;
+      movieSuggestionIndex = -1; ++suggestSeq;
     };
+    function clearMovieGuessInput() {
+      const input = document.getElementById("movie-guess-input");
+      if (input) input.value = "";
+      const box = document.getElementById("movie-suggestions");
+      if (box) { box.classList.add("hidden"); box.replaceChildren(); }
+      movieSuggestions = []; movieSuggestionCount = 0; movieSuggestionIndex = -1; chosenMovie = null; ++suggestSeq;
+      clearTimeout(movieSuggestDebounce);
+    }
 
     window.submitMovieGuess = function(guessRaw) {
       if (isHost || mySolved) return;
       document.getElementById("movie-suggestions")?.classList.add("hidden");
       const guess = normalizeGuess(guessRaw);
       if (!guess) return;
+      const candidates = [guess];
+      if (chosenMovie && guessRaw === chosenMovie.title && chosenMovie.original) candidates.push(normalizeGuess(chosenMovie.original));
 
       get(ref(db, 'game6State')).then((snap) => {
         const state = snap.val() || {};
         if (state.stage !== 'movie_playing') return;
         const round = movieRounds.find(r => r.id === state.movieRoundId) || movieRounds[0];
         const validAnswers = [round.answer, ...(round.altAnswers || [])].map(normalizeGuess);
-        if (!validAnswers.includes(guess)) {
+        if (!candidates.some(c => validAnswers.includes(c))) {
           showWrongGuessFeedback(); // sichtbare Rückmeldung - sonst wirkt's wie "Button tut nichts"
           return;
         }
@@ -350,7 +408,9 @@
         // eigenen Punkten zum Zeitpunkt seiner Antwort - kein "nur der Erste gewinnt" mehr.
         // Punkte werden anhand des tatsächlichen Video-Startzeitpunkts bei DIESER Person
         // berechnet (konsistent mit der angezeigten Zündschnur), nicht der Firebase-Zeit.
-        const referenceStart = myVideoPlaybackStartedAt || state.movieStartedAt;
+        const referenceStart = state.movieStartedAt;
+        if (serverNow() < referenceStart) return;                                   // läuft noch gar nicht
+        if (currentMoviePoints(referenceStart) <= 0) { showWrongGuessFeedback(); return; }   // Zündschnur abgebrannt
         runTransaction(ref(db, 'game6State/movieGuesses/' + playerId), (current) => {
           if (current) return current; // schon gelöst, nicht doppelt schreiben
           return { points: currentMoviePoints(referenceStart), guessedAt: Date.now() };
@@ -387,6 +447,7 @@
         input.parentElement?.appendChild(hint);
       }
       hint.innerText = "❌ Leider falsch - versuch's nochmal!";
+      clearMovieGuessInput();   // Feld und Vorauswahl leeren
       try { window.HSAudio && HSAudio.result(false); } catch (e) {}
       clearTimeout(hint._hideTimeout);
       hint._hideTimeout = setTimeout(() => { hint.innerText = ""; }, 2000);
@@ -475,9 +536,9 @@
         myVideoPlaybackStartedAt = null;
         // Eingabefeld für die nächste Runde wieder leeren - sonst stand beim nächsten
         // Trailer noch der alte Tipp von der Runde davor drin.
-        const inputEl = document.getElementById("movie-guess-input");
-        if (inputEl) inputEl.value = "";
-        document.getElementById("movie-suggestions")?.classList.add("hidden");
+        clearMovieGuessInput();
+        const nextRound = movieRounds[state.roundsCompleted || 0];
+        if (nextRound) preloadVideo(nextRound.videoUrl);
         return;
       }
 
@@ -530,43 +591,66 @@
             // mehr nötig - sie startet einfach an ihrem eigenen Anfang.
             const freshVideo = document.createElement("video");
             freshVideo.className = "absolute inset-0 w-full h-full object-cover";
-            freshVideo.autoplay = true;
+            freshVideo.autoplay = false;   // startet erst zum gemeinsamen Zeitpunkt
+            freshVideo.preload = "auto";
             freshVideo.playsInline = true;
             freshVideo.muted = false;
             freshVideo.controls = false;
             freshVideo.disablePictureInPicture = true;
             freshVideo.setAttribute("controlsList", "nodownload noplaybackrate nofullscreen");
             const source = document.createElement("source");
-            source.src = round.videoUrl;
+            source.src = videoSrc(round.videoUrl);
             source.type = round.videoType || "video/mp4";
             freshVideo.appendChild(source);
             // WICHTIG: der Punkte-Countdown startet erst, wenn das Video bei DIESER Person
             // tatsächlich zu spielen beginnt - nicht schon beim synchronen Firebase-Zeitstempel.
             // Sonst verliert, wer langsamer lädt (z.B. schlechtere Verbindung), unfair schon
             // Punkte, bevor bei ihm überhaupt etwas zu sehen ist.
-            freshVideo.addEventListener('playing', () => {
-              if (!myVideoPlaybackStartedAt) myVideoPlaybackStartedAt = Date.now();
-            }, { once: true });
             iframeWrap.appendChild(freshVideo);
             iframeWrap.dataset.loadedFor = String(state.movieStartedAt);
-            // Manche Browser blockieren Autoplay mit Ton ohne direkte Nutzerinteraktion -
-            // im Fehlerfall automatisch stummgeschaltet nochmal versuchen, lieber stumm
-            // laufendes Video als gar keins.
-            freshVideo.play().catch(() => {
-              freshVideo.muted = true;
-              freshVideo.play().catch(() => {});
-            });
+            if (preloadEl) { preloadEl.remove(); preloadEl = null; }
           }
           clearInterval(movieTickInterval);
+          const startAt = state.movieStartedAt;
+          let endSent = false;
           const tick = () => {
-            // Solange das Video bei dieser Person noch gar nicht angesprungen ist, zeigt die
-            // Zündschnur die vollen Punkte an und tickt noch nicht runter - fair für alle,
-            // unabhängig von Ladezeit.
-            const referenceStart = myVideoPlaybackStartedAt || Date.now();
-            const pts = updateFuse(referenceStart);
-            if (myVideoPlaybackStartedAt && pts <= 0) {
-              clearInterval(movieTickInterval);
-              if (isHost) update(ref(db, 'game6State'), { stage: 'movie_result' });
+            const vid = iframeWrap && iframeWrap.querySelector('video');
+            const left = startAt - serverNow();
+            const cd = document.getElementById("movie-countdown");
+            if (left > 0) {
+              // Countdown 3-2-1, alle starten gleichzeitig
+              if (cd) { cd.classList.remove("hidden"); cd.innerText = Math.ceil(left / 1000); }
+              updateFuse(startAt);
+              return;
+            }
+            if (cd) cd.classList.add("hidden");
+            if (vid) {
+              // Häppchen: 3 s zeigen, 3 s Pause (schwarz), dann die nächsten 3 s - bei allen gleichzeitig
+              const e = (serverNow() - startAt) / 1000;
+              const cyc = Math.floor(e / (CLIP_SHOW + CLIP_PAUSE)), inCyc = e - cyc * (CLIP_SHOW + CLIP_PAUSE);
+              const showing = inCyc < CLIP_SHOW;
+              const should = cyc * CLIP_SHOW + Math.min(inCyc, CLIP_SHOW);
+              const pauseEl = document.getElementById("movie-pause");
+              const atEnd = vid.duration && should >= vid.duration - 0.05;
+              if (showing && !atEnd) {
+                if (pauseEl) pauseEl.classList.add("hidden");
+                if (vid.readyState >= 1 && Math.abs(vid.currentTime - should) > 0.6) { try { vid.currentTime = should; } catch (err) {} }
+                if (vid.paused) vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); });
+              } else {
+                if (!vid.paused) vid.pause();
+                if (pauseEl) {
+                  pauseEl.classList.remove("hidden");
+                  pauseEl.querySelector('span').innerText = atEnd ? 'Mehr gibt es nicht!' : 'weiter in ' + Math.ceil(CLIP_SHOW + CLIP_PAUSE - inCyc) + ' …';
+                }
+              }
+              if (!myVideoPlaybackStartedAt) myVideoPlaybackStartedAt = Date.now();
+            }
+            const pts = updateFuse(startAt);
+            if (pts <= 0) {
+              // Zündschnur abgebrannt: Runde vorbei, keine Punkte mehr
+              const gw = document.getElementById("movie-guess-wrap"); if (gw) gw.classList.add("hidden");
+              if (vid) vid.pause();
+              if (isHost && !endSent) { endSent = true; clearInterval(movieTickInterval); hostEndMovieRound(); }
             }
           };
           tick();
@@ -630,6 +714,8 @@
       });
     });
     });
+
+    onValue(ref(db, '.info/serverTimeOffset'), (snap) => { serverOffset = snap.val() || 0; });
 
     window.onload = () => {
       if (!playerId) { window.location.href = "index.html"; return; }
@@ -721,12 +807,14 @@
           <div id="fuse-burnt"></div>
           <div id="fuse-spark"><span>🔥</span></div>
         </div>
-        <div class="font-jax font-extrabold text-4xl text-[#ff8a3d]" id="movie-points-live">500</div>
-        <div class="text-[10px] text-[#1a1a2e]/50">Punkte - schmelzen in 1 Minute auf 0</div>
+        <div class="font-jax font-extrabold text-4xl text-[#ff8a3d]" id="movie-points-live">150</div>
+        <div class="text-[10px] text-[#1a1a2e]/50">Punkte - schmelzen in 1 Minute auf 0, dann ist die Runde vorbei</div>
       </div>
 
       <div class="relative w-full max-w-md mx-auto" style="aspect-ratio: 16/9;">
         <div id="movie-iframe-wrap" class="absolute inset-0 w-full h-full rounded-2xl overflow-hidden border-4 border-[#1a1a2e]"></div>
+        <div id="movie-pause" class="hidden absolute inset-0 flex items-center justify-center bg-black rounded-2xl pointer-events-none"><span class="font-jax font-extrabold text-2xl text-white/70">weiter in 3 …</span></div>
+        <div id="movie-countdown" class="hidden absolute inset-0 flex items-center justify-center font-jax font-extrabold text-8xl text-[#ffd23f] bg-black/60 rounded-2xl pointer-events-none" style="-webkit-text-stroke:3px #1a1a2e">3</div>
         <!-- Unsichtbare Klick-Sperre über dem Video: verhindert Pausieren, Rechtsklick-Infos,
              Doppelklick-Vollbild - Spieler haben keinerlei Kontrolle über den Player. -->
         <div class="absolute inset-0 z-10" oncontextmenu="return false;" ondblclick="return false;" style="cursor: default;"></div>
@@ -747,7 +835,7 @@
       <div id="movie-solved-wrap" class="hidden space-y-4">
         <div class="text-5xl">🏆</div>
         <div class="font-jax font-extrabold text-2xl text-[#7ed957]">Richtig gelöst!</div>
-        <div id="my-solved-points" class="font-jax font-extrabold text-3xl text-[#ffd23f]">+500 Punkte</div>
+        <div id="my-solved-points" class="font-jax font-extrabold text-3xl text-[#ffd23f]">+150 Punkte</div>
         <div class="text-xs text-[#1a1a2e]/50">Live-Rangliste (aktualisiert sich, sobald andere auch lösen):</div>
         <div id="movie-leaderboard-live" class="space-y-1.5 max-w-xs mx-auto"></div>
       </div>
