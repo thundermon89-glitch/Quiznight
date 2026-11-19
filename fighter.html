@@ -1547,6 +1547,7 @@
         ctx.fillStyle = 'rgba(255,240,200,0.10)'; ctx.beginPath(); ctx.ellipse(tx, GROUND + 8, 120, 22, 0, 0, Math.PI * 2); ctx.fill();
       });
       ctx.restore();
+      drawMissingPoster(WORLD_W - 263, 262, 0.05);   // am Maschendraht
     }
     // Vordere Käfigpfosten werden ÜBER die Kämpfer gezeichnet - so stehen sie wirklich im Käfig
     function drawCageForeground() {
@@ -1556,6 +1557,23 @@
       ctx.fillStyle = 'rgba(170,175,190,0.25)';
       for (let y = 150; y < H; y += 9) { ctx.fillRect(24, y, 30, 3); ctx.fillRect(WW - 54, y, 30, 3); }
       ctx.fillStyle = '#141318'; ctx.fillRect(0, H - 18, WW, 18); ctx.fillStyle = '#3a3843'; ctx.fillRect(0, H - 18, WW, 3);
+    }
+
+    // Easter Egg: Vermisst-Zettel an der Wand ("Haben Sie Timmy gesehen?")
+    function drawMissingPoster(x, y, rot) {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(-22, -29, 48, 64);          // Schatten
+      ctx.fillStyle = '#e9e1c8'; ctx.fillRect(-24, -32, 48, 64);                   // Papier
+      ctx.fillStyle = '#d6cdb0'; ctx.fillRect(-24, 22, 48, 10);                    // vergilbter Rand unten
+      ctx.fillStyle = 'rgba(220,220,200,0.75)'; ctx.fillRect(-28, -35, 14, 6); ctx.fillRect(14, -35, 14, 6);   // Klebestreifen
+      ctx.fillStyle = '#b9b09a'; ctx.fillRect(-15, -22, 30, 22);                   // Fotofeld ohne Foto
+      ctx.fillStyle = '#5a5246'; ctx.font = 'bold 18px "Baloo 2", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('?', 0, -10);
+      ctx.fillStyle = '#1d1a16';
+      ctx.font = 'bold 6px "Baloo 2", sans-serif'; ctx.fillText('HABEN SIE', 0, 5);
+      ctx.font = 'bold 10px "Baloo 2", sans-serif'; ctx.fillText('TIMMY', 0, 14);
+      ctx.font = 'bold 6px "Baloo 2", sans-serif'; ctx.fillText('GESEHEN?', 0, 23);
+      ctx.restore();
     }
 
     function drawStage(t) {
@@ -1617,6 +1635,7 @@
       ctx.font = 'bold 18px "Baloo 2", sans-serif'; ctx.shadowColor = '#38bdf8'; ctx.fillStyle = '#d6f3ff';
       ctx.fillText('ARENA', 120, 130);
       ctx.restore();
+      drawMissingPoster(206, 246, -0.06);
     }
 
     // --- Blut, Wunden, Dellen ---------------------------------------------------------------
