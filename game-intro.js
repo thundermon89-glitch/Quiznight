@@ -254,15 +254,16 @@
     // ---- Zombies ----
     const zCount = W < 700 ? 4 : 5;
     const zombies = [];
-    for (let i = 0; i < zCount; i++) {
-      zombies.push({ x: W * (0.38 + i * (0.95 / zCount)) + rnd(-FH * 0.3, FH * 0.3), y: 0, vi: Math.floor(Math.random() * Z_VARIANTS.length),
-        state: 'walk', claimed: null, rot: 0, vx: 0, vy: 0, vr: 0, alpha: 1, ph: Math.random() * 6, bubble: null, jumped: new Set() });
+    let theme = {};                       // Spiel-Thema (wird weiter unten gesetzt)
+    function newZombie(x) {
+      const z = { x, y: 0, vi: Math.floor(Math.random() * Z_VARIANTS.length),
+        state: 'walk', claimed: null, rot: 0, vx: 0, vy: 0, vr: 0, alpha: 1, ph: Math.random() * 6, bubble: null, jumped: new Set() };
+      if (theme.initZombie) theme.initZombie(z);
+      return z;
     }
+    for (let i = 0; i < zCount; i++) zombies.push(newZombie(W * (0.38 + i * (0.95 / zCount)) + rnd(-FH * 0.3, FH * 0.3)));
     const zSpeed = () => FH * 0.32;
-    function spawnZombie() {
-      zombies.push({ x: W + FH * rnd(0.5, 1.2), y: 0, vi: Math.floor(Math.random() * Z_VARIANTS.length),
-        state: 'walk', claimed: null, rot: 0, vx: 0, vy: 0, vr: 0, alpha: 1, ph: Math.random() * 6, bubble: null, jumped: new Set() });
-    }
+    function spawnZombie() { zombies.push(newZombie(W + FH * rnd(0.5, 1.2))); }
     let nextSpawn = rnd(1800, 2600);
     // ---- Effekte ----
     const parts = [], splats = [], words = [], projs = [];
@@ -273,9 +274,12 @@
       zombieTalk: rnd(0.15, 0.4) * DURATION
     };
     let loadLine = pick(LOAD_LINES), loadLineAt = 0, barShake = 0, barKicked = false;
+    let frozen = false, timeScale = 1, animT = 0, realNow = 0;   // für Zeitlupe / Standbild / Erstarren
+    const zAlive = (z) => z.state === 'walk' || z.state === 'grab';
+    const onScreen = (z) => zAlive(z) && z.x > FH * 0.5 && z.x < W - FH * 0.3;
 
     function say(who, text, ms) { who.bubble = { text, until: now + (ms || 1300) }; }
-    function word(x, y, text, color) { words.push({ x, y, text, color: color || '#ffd23f', t: 0, rot: rnd(-0.25, 0.25) }); }
+    function word(x, y, text, color, big) { words.push({ x, y, text, color: color || theme.wordColor || '#ffd23f', t: 0, rot: rnd(-0.25, 0.25), big: big || 1, life: big ? 1.3 : 0.9 }); }
     function blood(x, y, n, dir) {
       for (let i = 0; i < n; i++) parts.push({ x, y, vx: (dir || 1) * rnd(0.2, 1) * FH * 3 + rnd(-1, 1) * FH, vy: -rnd(0.5, 1.6) * FH * 2.4,
         s: rnd(0.035, 0.07) * FH, c: Math.random() < 0.7 ? '#b3001b' : '#e0182d', life: rnd(0.7, 1.3), splat: true });
@@ -287,10 +291,13 @@
     }
     function killZombie(z, how, dir) {
       if (z.state !== 'walk' && z.state !== 'grab') return false;
-      z.claimed = null;
+      if (theme.preKill && theme.preKill(z, how)) return false;    // z.B. geblockt
+      z.claimed = null; z.kx = z.x;
       const zx = z.x, zy = GY - FH * 0.55;
       sfx('boom', 0.7);
-      word(zx, GY - FH * 1.35, pick(HIT_WORDS));
+      word(zx, GY - FH * 1.35, pick(theme.words || HIT_WORDS));
+      if (theme.onKill && theme.onKill(z, how, dir)) return true;
+      if (how === 'squash') { blood(zx, GY - FH * 0.1, 10, 1); z.state = 'squash'; z.sy = 1; return true; }
       if (how === 'burst') { gore(zx, GY, z.vi, 26); blood(zx, zy, 14, dir); z.state = 'gone'; return true; }
       blood(zx, zy, 12, dir);
       if (how === 'head') {      // Kopf fliegt weg, Körper kippt um
@@ -318,6 +325,372 @@
 
     let now = 0, startAt = 0, raf = 0, ended = false, last = 0;
     function lead() { return heroes.reduce((m, h) => (h.x > m.x ? h : m), heroes[0]); }
+    function bigText(txt, y, col, k) {
+      const fs = clamp(FH * 0.55, 34, 110) * (k || 1);
+      ctx.save(); ctx.font = `800 ${fs}px 'Baloo 2', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round'; ctx.lineWidth = fs * 0.16; ctx.strokeStyle = '#1a1a2e'; ctx.strokeText(txt, W / 2, y);
+      ctx.fillStyle = col || '#fff'; ctx.fillText(txt, W / 2, y); ctx.restore();
+    }
+
+    // =================================================================================
+    // SPIEL-THEMEN: in jedem Spiel passiert mit den Zombies etwas anderes
+    //   lines/words: Sprüche der Zombies / Treffer-Wörter      acc: Zubehör am Zombie
+    //   init/initZombie/tick/onKill/preKill/onLand: Ablauf     drawBack/drawMid/drawFront: Extras
+    // =================================================================================
+    const T = {};
+    const THEMES = {
+      // Kreuzverhör: Sträflinge in Handschellen, einer kommt ins Verhör-Scheinwerferlicht
+      spiel1: {
+        lines: ["Ich war's nicht!", 'Ich sag nix ohne Anwalt!', 'Ich hab ein Alibi …', 'Hiiirn? Nie gehört!'],
+        words: ['ÜBERFÜHRT!', 'GESTÄNDNIS!', 'ABGEFÜHRT!', 'BONK!'],
+        acc(g, z, b) {
+          g.fillStyle = 'rgba(15,15,15,.85)'; for (let y = 11; y < 21; y += 3) g.fillRect(8, y + b, 8, 1);
+          g.strokeStyle = '#c0c6cc'; g.lineWidth = 0.8; g.beginPath(); g.arc(1, 14 + b, 1.4, 0, 7); g.stroke();
+        },
+        tick() {
+          if (!T.z && now > DURATION * 0.25) {
+            const z = zombies.find(z => onScreen(z) && !z.claimed && z.x > W * 0.5);
+            if (z) { T.z = z; z.hold = now + 1900; say(z, "Ich war's nicht!", 1700); sfx('tick'); }
+          }
+          if (T.z && !T.said && now > T.z.hold - 800) { T.said = true; say(lead(), pick(['Lüge!', 'Gestehe!', 'Wo warst du um acht?']), 1200); }
+        },
+        drawBack() {
+          const z = T.z; if (!z || !zAlive(z) || now > z.hold + 300) return;
+          ctx.save(); const gr = ctx.createLinearGradient(0, 0, 0, GY);
+          gr.addColorStop(0, 'rgba(255,246,176,.6)'); gr.addColorStop(1, 'rgba(255,246,176,.15)');
+          ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(z.x - FH * 0.1, 0); ctx.lineTo(z.x + FH * 0.1, 0);
+          ctx.lineTo(z.x + FH * 0.6, GY + 4); ctx.lineTo(z.x - FH * 0.6, GY + 4); ctx.fill();
+          ctx.fillStyle = '#222'; ctx.fillRect(z.x - FH * 0.15, 0, FH * 0.3, FH * 0.1); ctx.restore();
+        }
+      },
+      // Rätselfeuer: Zombies mit Marshmallow-Spieß - getroffen rennen sie brennend davon
+      spiel2: {
+        lines: ['Erzähl mir eine Gruselgeschichte …', 'Wer bin ich?', 'Marshmallow …', 'Rätsel? Hiiirn!'],
+        words: ['HEISS!', 'ZISCH!', 'AUTSCH!', 'BONK!'],
+        acc(g, z, b) {
+          g.strokeStyle = '#6b4a2a'; g.lineWidth = 0.7; g.beginPath(); g.moveTo(1, 13 + b); g.lineTo(-4, 5 + b); g.stroke();
+          g.fillStyle = '#fff8e8'; g.fillRect(-5.5, 2.8 + b, 2.4, 2.8); g.fillStyle = '#c98a3a'; g.fillRect(-5.5, 2.8 + b, 2.4, 0.9);
+        },
+        onKill(z, how) { if (how === 'burst' || how === 'squash') return false; z.state = 'burn'; z.bt = 0; say(z, pick(['HEISS!', 'Aaah!', 'Feuer!']), 900); return true; }
+      },
+      // Schaf oder Wolf: Zombies im Schafspelz, dazwischen ein echtes Schaf
+      spiel3: {
+        lines: ['Mäh …', 'Ich bin ein Schaf. Ehrlich.', 'Määäh … Hiiirn!', 'Hier gibt es keine Wölfe.'],
+        words: ['WOLF!', 'ENTLARVT!', 'MÄH!', 'BONK!'],
+        acc(g, z, b) {
+          g.fillStyle = '#f4f4f0';
+          [[9, 12], [12, 11], [15, 12], [9, 15.5], [12.5, 15], [15.5, 15.5], [10, 18.5], [14, 18.5], [10, 1], [13, 0], [15.5, 1]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y + b, 2.2, 0, 7); g.fill(); });
+          g.fillStyle = '#2b2b2b'; g.fillRect(15.5, 3 + b, 2, 3);
+        },
+        onKill(z) {
+          for (let i = 0; i < 14; i++) parts.push({ x: z.x, y: GY - FH * rnd(0.3, 0.8), vx: rnd(-1, 1) * FH * 2.5, vy: -rnd(0.5, 1.5) * FH * 2, s: rnd(0.08, 0.14) * FH, c: '#f4f4f0', life: rnd(0.8, 1.4), round: true, grav: 0.25 });
+          return false;
+        },
+        init() { T.sheep = { x: W + FH * 0.6 }; },
+        tick(dt) { const s = T.sheep; if (!frozen) s.x -= FH * 0.9 * dt; if (!T.bub && s.x < W * 0.8) T.bub = now + 1600; },
+        drawMid() {
+          const s = T.sheep; if (s.x < -FH) return;
+          const y = GY - FH * 0.32, hop = Math.abs(Math.sin(now / 140)) * FH * 0.04;
+          ctx.fillStyle = '#1a1a1a'; [-0.15, -0.05, 0.08, 0.18].forEach(o => ctx.fillRect(s.x + o * FH, y + FH * 0.1, FH * 0.04, FH * 0.22));
+          ctx.fillStyle = '#f4f4f0'; ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.ellipse(s.x, y - hop, FH * 0.3, FH * 0.19, 0, 0, 7); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.ellipse(s.x - FH * 0.3, y - FH * 0.08 - hop, FH * 0.09, FH * 0.07, -0.3, 0, 7); ctx.fill();
+          if (T.bub && now < T.bub) bubble(s.x, y - FH * 0.25, 'Mäh! Ich bin echt!');
+        }
+      },
+      // Pi mal Daumen: jeder Flug wird vermessen
+      spiel4: {
+        lines: ['Ungefähr Hirn …', 'Pi mal Hiiirn …', 'Schätz mal!'],
+        words: ['PI MAL DAUMEN!', 'WEIT!', 'BONK!'],
+        acc(g, z, b) { g.fillStyle = '#ffd23f'; g.fillRect(-4, 12 + b, 6, 1.3); g.fillStyle = '#1a1a2e'; for (let i = -4; i < 2; i += 1.5) g.fillRect(i, 12 + b, 0.3, 0.7); },
+        onLand(z) { const m = Math.abs(z.x - z.kx) / FH * 1.8; (T.marks = T.marks || []).push({ a: z.kx, b: z.x, t: now, txt: '≈ ' + m.toFixed(2).replace('.', ',') + ' m' }); },
+        drawBack() {
+          (T.marks || []).forEach(mk => {
+            const age = (now - mk.t) / 1000; if (age > 1.8) return;
+            const y = GY - FH * 0.12; ctx.save(); ctx.globalAlpha = Math.min(1, (1.8 - age) * 2);
+            ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 3; ctx.setLineDash([8, 5]);
+            ctx.beginPath(); ctx.moveTo(mk.a, y); ctx.lineTo(mk.b, y); ctx.stroke(); ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(mk.a, y - 8); ctx.lineTo(mk.a, y + 8); ctx.moveTo(mk.b, y - 8); ctx.lineTo(mk.b, y + 8); ctx.stroke();
+            const fs = clamp(FH * 0.2, 14, 30); ctx.font = `800 ${fs}px 'Baloo 2', system-ui, sans-serif`; ctx.textAlign = 'center';
+            ctx.lineWidth = fs * 0.18; ctx.strokeStyle = '#1a1a2e'; ctx.strokeText(mk.txt, (mk.a + mk.b) / 2, y - 12);
+            ctx.fillStyle = '#ffd23f'; ctx.fillText(mk.txt, (mk.a + mk.b) / 2, y - 12); ctx.restore();
+          });
+        }
+      },
+      // Verpixelt: manche Zombies sind verpixelt, umgehauene bekommen einen Zensurbalken
+      spiel5: {
+        lines: ['Wer bin ich?', 'Erkennst du mich?', '*verpixeltes Stöhnen*'],
+        words: ['ENTPIXELT!', 'BONK!', 'ZACK!'],
+        initZombie(z) { z.pixel = Math.random() < 0.65; },
+        onKill(z) { if (z.pixel) { z.pixel = false; word(z.x, GY - FH * 1.75, pick(['Ach, DER!', 'Erkannt!', 'Der schon wieder!']), '#7ed957'); } return false; },
+        drawFront() {
+          zombies.forEach(z => {
+            if (!['fly', 'fall', 'dead'].includes(z.state)) return;
+            ctx.save(); ctx.globalAlpha = Math.max(0, z.alpha);
+            ctx.translate(z.x, GY + z.y - (z.state === 'dead' ? 9 : 15) * U); ctx.rotate(z.rot);
+            ctx.fillStyle = '#000'; ctx.fillRect(-8 * U, -14 * U, 14 * U, 4 * U);
+            ctx.fillStyle = '#fff'; ctx.font = `800 ${Math.max(7, 2.6 * U)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('ZENSIERT', -U, -12 * U); ctx.restore();
+          });
+        }
+      },
+      // Film-Zündschnur: Popcorn-Zombies - und mittendrin: Standbild in Schwarzweiß, "Klappe!"
+      spiel6: {
+        lines: ['Popcorn …', 'Pssst, der Film läuft!', 'Spoiler: Hiiirn!'],
+        words: ['CUT!', 'ACTION!', 'BONK!'],
+        acc(g, z, b) {
+          g.fillStyle = '#fffbe6'; [[-1.5, 11.5], [0.5, 11], [2.2, 11.6]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y + b, 1.3, 0, 7); g.fill(); });
+          g.fillStyle = '#e63946'; g.fillRect(-2.5, 12 + b, 5.5, 5); g.fillStyle = '#fff'; g.fillRect(-1.2, 12 + b, 1, 5); g.fillRect(1, 12 + b, 1, 5);
+        },
+        onKill(z) { for (let i = 0; i < 16; i++) parts.push({ x: z.x - FH * 0.25, y: GY - FH * 0.55, vx: rnd(-1, 1) * FH * 2.2, vy: -rnd(0.8, 1.8) * FH * 2.2, s: rnd(0.05, 0.09) * FH, c: pick(['#fffbe6', '#ffe9a8', '#ffffff']), round: true, life: rnd(1, 1.5), grav: 0.8 }); return false; },
+        tick() {
+          if (!T.done && now > DURATION * 0.45) { T.done = true; T.until = realNow + 1200; timeScale = 0; root.style.filter = 'grayscale(1) contrast(1.15)'; sfx('tick'); }
+          if (T.until && realNow > T.until) { T.until = 0; timeScale = 1; root.style.filter = ''; sfx('blip'); }
+        },
+        drawFront() {
+          if (!T.until) return;
+          const cw = clamp(FH * 1.8, 150, 320), ch = cw * 0.62, x = W / 2 - cw / 2, y = H * 0.38;
+          const open = (T.until - realNow) > 500 ? -0.35 : 0;
+          ctx.save(); ctx.fillStyle = '#111'; ctx.fillRect(x, y, cw, ch);
+          ctx.fillStyle = '#fff'; ctx.font = `800 ${ch * 0.2}px 'Baloo 2', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('SZENE 1', W / 2, y + ch * 0.38); ctx.fillText('TAKE 2', W / 2, y + ch * 0.7);
+          ctx.translate(x, y); ctx.rotate(open);
+          ctx.fillStyle = '#111'; ctx.fillRect(0, -ch * 0.22, cw, ch * 0.2);
+          ctx.fillStyle = '#fff'; for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.moveTo(i * cw / 6 + cw * 0.04, -ch * 0.22); ctx.lineTo(i * cw / 6 + cw * 0.11, -ch * 0.22); ctx.lineTo(i * cw / 6 + cw * 0.07, -ch * 0.02); ctx.lineTo(i * cw / 6, -ch * 0.02); ctx.fill(); }
+          ctx.restore();
+          if (open === 0) bigText('KLAPPE!', y - ch * 0.35, '#fff', 0.8);
+        }
+      },
+      // Mythos-Check: Zombies mit Hörnerhelm - der Helm fliegt, Stempel "MYTHOS!"
+      spiel7: {
+        lines: ['Wir nutzen nur 10 % vom Hirn!', 'Wikinger hatten Hörner!', 'Goldfische vergessen alles …', 'Blitze schlagen nie zweimal ein!'],
+        words: ['MYTHOS!', 'WIDERLEGT!', 'FAKE!'], wordColor: '#ff2e93',
+        acc(g, z, b) { if (!z.noAcc) helmet(g, b); },
+        onKill(z) {
+          z.noAcc = true;
+          parts.push({ x: z.x, y: GY - FH * 0.95, vx: FH * rnd(-1, 1.5), vy: -FH * rnd(3.5, 4.5), s: 0, rot: 0, vr: rnd(-12, 12), life: 2, bounce: 1,
+            draw(c) { c.scale(U, U); c.translate(-12, -1); helmet(c, 0); } });
+          return false;
+        }
+      },
+      // Schriftzug-Salat: Zombies zerfallen in Buchstaben, Treffer-Wörter sind verdreht
+      spiel8: {
+        lines: ['Hrin …', 'Shcmlaz …', 'Iirhn!', 'Fargen …'],
+        words: ['KNOB!', 'TSCHKLAP!', 'MUWMS!', 'CAKZ!'],
+        onKill(z) {
+          const L = 'HIRNSCHMALZ';
+          for (let i = 0; i < 11; i++) parts.push({ x: z.x, y: GY - FH * rnd(0.2, 0.9), vx: rnd(-1, 1) * FH * 2.5, vy: -rnd(0.6, 1.6) * FH * 2.4, ch: L[i],
+            c: pick(['#ffd23f', '#7ed957', '#3ecbff', '#ff2e93', '#ffffff']), s: FH * rnd(0.16, 0.26), life: rnd(1, 1.5), rot: 0, vr: rnd(-8, 8) });
+          blood(z.x, GY - FH * 0.5, 6, 1); z.state = 'gone'; return true;
+        }
+      },
+      // Zeitreise: getroffene Zombies werden ins Zeitportal gesaugt
+      spiel9: {
+        lines: ['Welches Jahr haben wir?', 'Ich komm aus 1999!', 'Moorhuhn?', 'Hiiirn … von gestern.'],
+        words: ['WUSCH!', 'ZACK!', 'BONK!'],
+        acc(g, z, b) { g.fillStyle = '#111'; g.fillRect(6.5, 3 + b, 5, 1.7); g.fillStyle = '#ff2e93'; g.fillRect(7, 3.3 + b, 1.5, 0.8); },
+        onKill(z, how) {
+          if (how === 'squash') return false;
+          z.state = 'portal'; z.scale = 1; z.tx = W * 0.86; z.ty = H * 0.42 - GY + 15 * U;
+          word(z.x, GY - FH * 1.75, '→ ' + pick([1983, 1987, 1991, 1996, 1999, 2004, 1885, 3000]) + '!', '#3ecbff');
+          return true;
+        },
+        drawBack() {
+          const x = W * 0.86, y = H * 0.42, r = FH * 0.65;
+          ctx.save(); ctx.translate(x, y);
+          for (let i = 0; i < 5; i++) {
+            ctx.rotate(now / 400 + i); ctx.strokeStyle = ['#3ecbff', '#7017c9', '#ff2e93', '#ffd23f', '#ffffff'][i]; ctx.lineWidth = r * 0.12;
+            ctx.beginPath(); ctx.arc(0, 0, r * (1 - i * 0.17), 0, Math.PI * 1.3); ctx.stroke();
+          }
+          ctx.restore();
+        }
+      },
+      // Zeitreise 2: beim ersten Treffer läuft alles in Zeitlupe
+      spiel10: {
+        lines: ['Wie spät ist es?', 'Tick … tack … Hiiirn …', 'Noch fünf Minuten!'],
+        words: ['ZACK!', 'BONK!', 'WUMMS!'],
+        acc(g, z, b) {
+          g.fillStyle = '#c9a227'; g.fillRect(-2.5, 10 + b, 5, 0.9); g.fillRect(-2.5, 16 + b, 5, 0.9);
+          g.fillStyle = '#f4e3b0'; g.beginPath(); g.moveTo(-2, 11 + b); g.lineTo(2, 11 + b); g.lineTo(0, 13 + b); g.lineTo(2, 16 + b); g.lineTo(-2, 16 + b); g.lineTo(0, 13 + b); g.fill();
+        },
+        onKill() { if (!T.done && now > DURATION * 0.22) { T.done = true; T.until = realNow + 1500; timeScale = 0.2; } return false; },
+        tick() { if (T.until && realNow > T.until) { T.until = 0; timeScale = 1; } },
+        drawFront() {
+          if (!T.until) return;
+          ctx.save(); ctx.fillStyle = 'rgba(60,140,255,.12)'; ctx.fillRect(0, 0, W, H); ctx.restore();
+          bigText('Z E I T L U P E', H * 0.45, '#3ecbff', 0.7 + Math.sin(realNow / 120) * 0.04);
+        }
+      },
+      // Sekwars: jeder Zombie wird beim Umhauen gewogen
+      sekwars: {
+        lines: ['Wie schwer bin ich?', 'Schätz mal mein Hirn!', 'Ohne Hirn nur 3 kg …'],
+        words: ['GEWOGEN!', 'BONK!', 'ZACK!'],
+        acc(g, z, b) { g.fillStyle = '#fff'; g.fillRect(15.5, 13 + b, 3.5, 2.5); g.fillStyle = '#e63946'; g.fillRect(16, 13.6 + b, 2.5, 0.6); },
+        onKill(z) { word(z.x, GY - FH * 1.8, '≈ ' + Math.round(rnd(45, 140)) + ' kg', '#3ecbff'); return false; }
+      },
+      // Snake: die Zombies kommen als Polonaise-Schlange
+      snake: {
+        lines: ['Ssss …', 'Hiiirnsss …', 'Polonaise!'],
+        words: ['+1', 'HAPPS!', 'BONK!'], wordColor: '#7ed957',
+        queue: true, noSpawn: true,
+        init() { zombies.length = 0; const n = W < 700 ? 6 : 8; for (let i = 0; i < n; i++) { const z = newZombie(W * 0.6 + i * FH * 0.42); z.conga = i; zombies.push(z); } },
+        zombieY(z) { return -Math.abs(Math.sin(now / 170 + z.conga * 0.7)) * FH * 0.12; },
+        acc(g, z, b) {
+          if (z.conga !== 0) return;
+          g.fillStyle = '#39ff8c'; g.fillRect(7, -1.5 + b, 9, 2); g.fillRect(8, -3 + b, 2, 1.5); g.fillRect(11, -3 + b, 2, 1.5); g.fillRect(14, -3 + b, 2, 1.5);
+          g.fillStyle = '#ff2e93'; g.fillRect(4.5, 6 + b, 3, 0.7); g.fillRect(4, 5.5 + b, 1, 0.7); g.fillRect(4, 6.7 + b, 1, 0.7);
+        }
+      },
+      // Goldregen: aus jedem Zombie platzen Münzen
+      goldregen: {
+        lines: ['Gold … Hiiirn …', 'Meins!', 'Ich bin reich!'],
+        words: ['+10', 'KLING!', 'JACKPOT!'], wordColor: '#ffd23f',
+        acc(g, z, b) { g.fillStyle = '#a0763a'; g.beginPath(); g.arc(-0.5, 16 + b, 2.6, 0, 7); g.fill(); g.fillStyle = '#ffd23f'; g.fillRect(-1.5, 13 + b, 2, 1); },
+        onKill(z) {
+          for (let i = 0; i < 16; i++) parts.push({ x: z.x, y: GY - FH * rnd(0.3, 0.9), vx: rnd(-1, 1) * FH * 2.4, vy: -rnd(0.8, 1.8) * FH * 2.4, s: FH * rnd(0.07, 0.1), c: '#ffd23f', round: true, coin: true, life: rnd(1.2, 1.8), bounce: 2 });
+          sfx('coin', 0.8); return false;
+        }
+      },
+      // Vier Gewinnt: Spielsteine fallen den Zombies auf den Kopf
+      'vier-gewinnt': {
+        lines: ['Rot oder Gelb?', 'Ich bin dran!', 'Vier … Hiiirne!'],
+        words: ['PLONK!', 'VIER GEWINNT!', 'BONK!'],
+        initZombie(z) { z.dc = Math.random() < 0.5 ? '#e63946' : '#ffd23f'; },
+        acc(g, z, b) { g.fillStyle = '#1a1a2e'; g.beginPath(); g.ellipse(11.5, -0.3 + b, 5.6, 2, 0, 0, 7); g.fill(); g.fillStyle = z.dc; g.beginPath(); g.ellipse(11.5, -0.6 + b, 5, 1.5, 0, 0, 7); g.fill(); },
+        tick(dt) {
+          if (!T.discs && now > DURATION * 0.3) {
+            T.discs = zombies.filter(onScreen).slice(0, 3).map((z, i) => ({ x: z.x, y: -FH * (0.5 + i * 0.9), vy: 0, z, c: i % 2 ? '#ffd23f' : '#e63946' }));
+          }
+          (T.discs || []).forEach(d => {
+            if (d.landed) return;
+            d.vy += FH * 14 * dt; d.y += d.vy * dt; if (zAlive(d.z)) d.x = d.z.x;
+            if (zAlive(d.z) && d.y >= GY - FH * 0.95) killZombie(d.z, 'squash', 1);
+            if (d.y >= GY - FH * 0.14) { d.y = GY - FH * 0.14; d.landed = true; sfx('drop', 1); }
+          });
+        },
+        drawMid() {
+          (T.discs || []).forEach(d => {
+            const r = FH * 0.28; ctx.save(); ctx.translate(d.x, d.y);
+            if (d.landed) ctx.scale(1, 0.45);
+            ctx.fillStyle = d.c; ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); ctx.stroke();
+            ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(0, 0, r * 0.65, 0, 7); ctx.stroke(); ctx.restore();
+          });
+        }
+      },
+      // Panzerschlacht: ein Panzer rollt durch und macht die Zombies platt
+      panzer: {
+        lines: ['Was rattert da?', 'Hiiirn … Panzer?!', 'Deckung!'],
+        words: ['PLATT!', 'KAWUMM!', 'BONK!'],
+        acc(g, z, b) { g.fillStyle = '#4b5d2f'; g.fillRect(6.5, -1 + b, 10.5, 3); g.fillRect(5.5, 1.5 + b, 12.5, 1); },
+        tick(dt) {
+          if (!T.tank && now > DURATION * 0.36) { T.tank = { x: -FH * 1.2 }; sfx('boom', 0.4); }
+          const tk = T.tank; if (!tk) return;
+          tk.x += speed * 1.9 * dt;
+          zombies.forEach(z => { if (zAlive(z) && Math.abs(z.x - (tk.x + FH * 0.35)) < FH * 0.3) killZombie(z, 'squash', 1); });
+          if (!tk.shot && tk.x > W * 0.3) {
+            tk.shot = true; sfx('shot', 1); word(tk.x + FH * 0.9, GY - FH * 0.9, 'FEUER!', '#ff7a1a');
+            projs.push({ type: 'shell', x: tk.x + FH * 0.9, y: GY - FH * 0.42, vx: FH * 8, r: 0, from: {} });
+          }
+          if (Math.random() < 0.35) parts.push({ x: tk.x - FH * 0.45, y: GY - FH * 0.2, vx: -FH * 0.5, vy: -FH * 0.6, s: FH * rnd(0.08, 0.14), c: 'rgba(120,120,120,.6)', round: true, life: 0.7, grav: -0.05 });
+        },
+        drawMid() {
+          const tk = T.tank; if (!tk || tk.x > W + FH * 2) return;
+          const x = tk.x, y = GY, u = FH / 10;
+          ctx.save(); ctx.translate(x, y);
+          ctx.fillStyle = '#2b2b2b'; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(-5 * u, -2.2 * u, 10 * u, 2.2 * u, u); else ctx.rect(-5 * u, -2.2 * u, 10 * u, 2.2 * u); ctx.fill();
+          ctx.fillStyle = '#555'; for (let i = -4; i <= 4; i += 2) { ctx.beginPath(); ctx.arc(i * u, -1.1 * u, 0.75 * u, 0, 7); ctx.fill(); }
+          ctx.fillStyle = '#5d7136'; ctx.fillRect(-4.6 * u, -4 * u, 9.2 * u, 2 * u);
+          ctx.fillStyle = '#4b5d2f'; ctx.fillRect(-2 * u, -5.6 * u, 4.4 * u, 1.8 * u); ctx.fillRect(2 * u, -5 * u, 5 * u, 0.7 * u);
+          ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 2; ctx.strokeRect(-4.6 * u, -4 * u, 9.2 * u, 2 * u); ctx.strokeRect(-2 * u, -5.6 * u, 4.4 * u, 1.8 * u);
+          ctx.restore();
+        }
+      },
+      // Ochs vorm Berg: Ampel springt auf Rot - alle erstarren, ein Zombie schummelt
+      ochsvormberg: {
+        lines: ['Ich bewege mich nicht …', 'Psst …', 'Ochs vorm Hiiirn!'],
+        words: ['BONK!', 'ZACK!', 'WUMMS!'],
+        tick() {
+          if (!T.red && now > DURATION * 0.35) {
+            T.red = now; frozen = true; sfx('tick');
+            say(lead(), 'STOPP!', 1200);
+            const c = zombies.filter(z => onScreen(z) && !z.claimed); if (c.length) { T.cheat = pick(c); T.cheat.cheat = true; say(T.cheat, 'Hehe …', 1300); }
+          }
+          if (T.red && frozen && now - T.red > 1600) {
+            frozen = false;
+            if (T.cheat && zAlive(T.cheat)) { T.cheat.cheat = false; T.zap = now; T.zapX = T.cheat.x; word(T.cheat.x, GY - FH * 1.7, 'ERWISCHT!', '#ff2e93', 1.2); killZombie(T.cheat, 'burst', 1); }
+          }
+        },
+        drawBack() {
+          if (!T.zap || now - T.zap > 250) return;
+          ctx.save(); ctx.strokeStyle = '#fff6b0'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(W - FH * 0.6, H * 0.3);
+          ctx.lineTo(T.zapX + FH * 0.3, GY - FH * 1.2); ctx.lineTo(T.zapX - FH * 0.1, GY - FH * 0.9); ctx.lineTo(T.zapX, GY - FH * 0.4); ctx.stroke(); ctx.restore();
+        },
+        drawFront() {
+          const red = frozen, x = W - FH * 0.6, y = H * 0.3, r = clamp(FH * 0.16, 12, 28);
+          ctx.save(); ctx.fillStyle = '#1a1a2e'; ctx.fillRect(x - r * 1.4, y - r * 2.6, r * 2.8, r * 5.2); ctx.fillRect(x - r * 0.2, y + r * 2.6, r * 0.4, r * 3);
+          ctx.fillStyle = red ? '#ff2e2e' : '#4a1010'; if (red) { ctx.shadowColor = '#ff2e2e'; ctx.shadowBlur = 24; } ctx.beginPath(); ctx.arc(x, y - r * 1.2, r, 0, 7); ctx.fill();
+          ctx.shadowBlur = 0; ctx.fillStyle = red ? '#103a1a' : '#39ff8c'; if (!red) { ctx.shadowColor = '#39ff8c'; ctx.shadowBlur = 24; } ctx.beginPath(); ctx.arc(x, y + r * 1.2, r, 0, 7); ctx.fill();
+          ctx.restore();
+        }
+      },
+      // Bomb is ticking: ein Zombie trägt eine Bombe mit Countdown - KABUMM
+      bombtick: {
+        lines: ['Tick … tack …', 'Welcher Draht?', 'Rot oder Blau?'],
+        words: ['BONK!', 'ZACK!', 'WUMMS!'],
+        init() { const z = zombies[1] || zombies[0]; if (z) z.bomber = true; },
+        acc(g, z, b) {
+          if (!z.bomber) return;
+          g.fillStyle = '#1a1a1a'; g.beginPath(); g.arc(12, -5 + b, 3.8, 0, 7); g.fill();
+          g.strokeStyle = '#c9a227'; g.lineWidth = 0.7; g.beginPath(); g.moveTo(13.5, -8.5 + b); g.lineTo(15.5, -10.5 + b); g.stroke();
+          g.fillStyle = Math.floor(now / 80) % 2 ? '#ffd23f' : '#ff7a1a'; g.fillRect(15, -11.8 + b, 1.8, 1.8);
+          g.fillStyle = '#8fbf6a'; g.fillRect(8, -2 + b, 1.5, 4); g.fillRect(14.5, -2 + b, 1.5, 4);
+        },
+        tick() { zombies.forEach(z => { if (!z.bomber || !zAlive(z)) return; if (!z.fuseAt && z.x < W - FH * 0.5) z.fuseAt = now + 2700; if (z.fuseAt && now > z.fuseAt) bombBoom(z); }); },
+        onKill(z) { if (z.bomber) { bombBoom(z); return true; } return false; },
+        drawBack() { if (T.flash && now - T.flash < 220) { ctx.fillStyle = 'rgba(255,240,200,' + (1 - (now - T.flash) / 220) * 0.8 + ')'; ctx.fillRect(0, 0, W, H); } },
+        drawFront() {
+          zombies.forEach(z => {
+            if (!z.bomber || !z.fuseAt || !zAlive(z)) return;
+            const n = Math.max(1, Math.ceil((z.fuseAt - now) / 1000)), fs = clamp(FH * 0.32, 20, 48);
+            ctx.save(); ctx.font = `800 ${fs}px 'Baloo 2', system-ui, sans-serif`; ctx.textAlign = 'center';
+            ctx.lineWidth = fs * 0.16; ctx.strokeStyle = '#1a1a2e'; ctx.strokeText(n, z.x + U * 0.5, GY - FH * 1.45);
+            ctx.fillStyle = '#ff2e2e'; ctx.fillText(n, z.x + U * 0.5, GY - FH * 1.45); ctx.restore();
+          });
+        }
+      },
+      // Hirnschmalz-Fighter: "Runde 1 - FIGHT!", ein Zombie blockt, am Ende "PERFECT!"
+      fighter: {
+        lines: ['Ich kann Karate!', 'Komm her!', 'Hiiirn … FIGHT!'],
+        words: ['K.O.!', 'COMBO!', 'VOLLTREFFER!', 'BONK!'],
+        acc(g, z, b) { g.fillStyle = '#e63946'; g.fillRect(7, 2 + b, 9, 1.4); g.fillRect(16, 2.4 + b, 3, 0.8); g.fillRect(17, 3.5 + b, 2.5, 0.8); },
+        init() { T.blocker = zombies[0]; },
+        preKill(z) {
+          if (z !== T.blocker || T.blocked) return false;
+          T.blocked = true; z.claimed = null; z.x += FH * 0.4;
+          word(z.x, GY - FH * 1.5, 'GEBLOCKT!', '#3ecbff'); say(z, 'Haha!', 900); sfx('blip', 1);
+          return true;
+        },
+        drawFront() {
+          if (now < 1800) bigText(now < 950 ? 'RUNDE 1' : 'FIGHT!', H * 0.5, now < 950 ? '#fff' : '#ff2e93', 0.8 + Math.min(0.3, ((now % 950) / 950) * 0.3));
+          if (now > DURATION * 0.84 && now < DURATION * 0.97) bigText('PERFECT!', H * 0.5, '#ffd23f', 0.9);
+        }
+      }
+    };
+    function helmet(g, b) {
+      g.fillStyle = '#8a8f98'; g.fillRect(7, -1 + b, 10, 3); g.fillStyle = '#6a6f78'; g.fillRect(7, 1 + b, 10, 1);
+      g.fillStyle = '#f1ead2'; g.fillRect(5, -3 + b, 2, 3); g.fillRect(4, -5 + b, 2, 2); g.fillRect(17, -3 + b, 2, 3); g.fillRect(18, -5 + b, 2, 2);
+    }
+    function bombBoom(z) {
+      z.bomber = false; z.state = 'gone'; T.flash = now;
+      sfx('boom', 1); setTimeout(() => sfx('boom', 1), 90);
+      gore(z.x, GY, z.vi, 30); blood(z.x, GY - FH * 0.6, 20, 1);
+      word(z.x, GY - FH * 1.6, 'KABUMM!', '#ff7a1a', 1.5);
+      zombies.forEach(o => { if (o !== z && zAlive(o) && Math.abs(o.x - z.x) < FH * 2.6) killZombie(o, 'fly', o.x >= z.x ? 1 : -1); });
+      heroes.forEach(h => { if (h.state === 'walk' && Math.abs(h.x - z.x) < FH * 1.6) { h.state = 'slip'; h.anim = 'ko'; h.t0 = now; h.dur = 1500; say(h, pick(['Hust!', 'Meine Haare!', 'Welcher Draht war das?!']), 1300); } });
+    }
+    theme = THEMES[cfg.page] || {};
+    if (theme.initZombie) zombies.forEach(theme.initZombie);
+    if (theme.init) theme.init();
 
     function update(dt) {
       const t = now;
@@ -325,12 +698,13 @@
       if (t - loadLineAt > 1700) { loadLineAt = t; loadLine = pick(LOAD_LINES); }
 
       // Nachschub von rechts
-      if (t > nextSpawn && t < DURATION * 0.72) { spawnZombie(); if (Math.random() < 0.3) spawnZombie(); nextSpawn = t + rnd(1100, 1900); }
+      if (theme.tick) theme.tick(dt);
+      if (!theme.noSpawn && t > nextSpawn && t < DURATION * 0.72) { spawnZombie(); if (Math.random() < 0.3) spawnZombie(); nextSpawn = t + rnd(1100, 1900); }
 
       // Zombie sagt etwas
       if (gags.zombieTalk && t > gags.zombieTalk) {
         const z = zombies.find(z => z.state === 'walk' && z.x < W * 0.95 && z.x > W * 0.2);
-        if (z) say(z, pick(ZOMBIE_LINES), 1500);
+        if (z) say(z, pick(theme.lines || ZOMBIE_LINES), 1500);
         gags.zombieTalk = Math.random() < 0.6 ? t + rnd(1800, 2800) : 0;
       }
 
@@ -340,7 +714,8 @@
         if (cands.length) { const h = pick(cands); h.state = 'dance'; h.anim = 'win'; h.t0 = t; h.dur = 1400; say(h, pick(DANCE_LINES), 1400); gags.dance.done = true; }
       }
 
-      heroes.forEach(h => {
+      if (!frozen) animT += dt * 1000;
+      if (!frozen) heroes.forEach(h => {
         const el = t - h.t0, p = h.dur ? clamp(el / h.dur, 0, 1) : 0;
         if (h.state === 'walk') {
           h.anim = 'walk'; h.y = 0;
@@ -402,13 +777,26 @@
           const h = z.claimed;
           const near = h && Math.abs(z.x - h.x) < FH * 0.75;
           z.state = near ? 'grab' : 'walk';
-          if (!near) z.x -= zSpeed() * dt;
-          z.ph += dt * 5;
+          let stop = near || (frozen && !z.cheat) || (z.hold && now < z.hold);
+          if (!stop && theme.queue) stop = zombies.some(o => o !== z && zAlive(o) && o.x < z.x && o.x > z.x - FH * 0.4);
+          if (!stop) { z.x -= zSpeed() * dt; z.ph += dt * 5; }
+          if (theme.zombieY) z.y = theme.zombieY(z);
           if (z.x < -FH * 2) z.state = 'gone';
         } else if (z.state === 'fly' || z.state === 'fall') {
           z.x += z.vx * dt; z.vy += FH * 12 * dt; z.y += z.vy * dt; z.rot += z.vr * dt;
           if (z.state === 'fall') { z.rot = Math.min(z.rot, Math.PI / 2); z.y = 0; if (z.rot >= Math.PI / 2) z.state = 'dead'; }
-          else if (z.y >= 0 && z.vy > 0) { z.y = 0; z.state = 'dead'; z.rot = Math.PI / 2 * (z.vx >= 0 ? 1 : -1); splats.push({ x: z.x, r: FH * 0.28, a: 0.8 }); }
+          else if (z.y >= 0 && z.vy > 0) { z.y = 0; z.state = 'dead'; z.rot = Math.PI / 2 * (z.vx >= 0 ? 1 : -1); splats.push({ x: z.x, r: FH * 0.28, a: 0.8 }); if (theme.onLand) theme.onLand(z); }
+        } else if (z.state === 'squash') {
+          z.sy = Math.max(0.16, z.sy - dt * 7); z.alpha -= dt * 0.45; if (z.alpha <= 0) z.state = 'gone';
+        } else if (z.state === 'portal') {
+          const k = Math.min(1, dt * 3); z.x += (z.tx - z.x) * k; z.y += (z.ty - z.y) * k; z.scale -= dt * 0.9; z.rot += dt * 12;
+          if (z.scale <= 0.05) z.state = 'gone';
+        } else if (z.state === 'burn') {
+          z.x += FH * 2.6 * dt; z.ph += dt * 12; z.bt += dt;
+          for (let i = 0; i < 2; i++) parts.push({ x: z.x + rnd(-0.2, 0.2) * FH, y: GY - FH * rnd(0.15, 0.95), vx: rnd(-0.3, 0.3) * FH, vy: -FH * rnd(0.6, 1.3), s: rnd(0.06, 0.12) * FH, c: pick(['#ff7a1a', '#ffd23f', '#ff3b1a']), round: true, life: rnd(0.25, 0.5), grav: -0.1 });
+          if (z.bt > 0.9) { z.state = 'ash'; z.alpha = 1; }
+        } else if (z.state === 'ash') {
+          z.alpha -= dt * 0.5; if (z.alpha <= 0) z.state = 'gone';
         } else if (z.state === 'dead') {
           z.alpha -= dt * 0.6; if (z.alpha <= 0) z.state = 'gone';
         }
@@ -418,17 +806,17 @@
       projs.forEach(p => {
         p.x += p.vx * dt; p.r += dt * 14;
         const z = zombies.find(z => (z.state === 'walk' || z.state === 'grab') && Math.abs(z.x - p.x) < FH * 0.3);
-        if (z) { killZombie(z, 'burst', 1); p.dead = true; if (p.from.target === z) p.from.target = null; }
+        if (z) { killZombie(z, 'burst', 1); p.dead = true; if (p.from && p.from.target === z) p.from.target = null; }
         if (p.x > W + FH) p.dead = true;
       });
       for (let i = projs.length - 1; i >= 0; i--) if (projs[i].dead) projs.splice(i, 1);
 
       // Partikel
       parts.forEach(q => {
-        q.vy += FH * 11 * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt;
-        if (q.head != null) q.rot += q.vr * dt;
+        q.vy += FH * 11 * dt * (q.grav == null ? 1 : q.grav); q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt;
+        if (q.vr) q.rot += q.vr * dt;
         if (q.y > GY) {
-          if (q.head != null && q.bounce > 0) { q.y = GY; q.vy *= -0.45; q.vx *= 0.6; q.vr *= 0.6; q.bounce--; }
+          if (q.bounce > 0) { q.y = GY; q.vy *= -0.45; q.vx *= 0.6; q.vr *= 0.6; q.bounce--; }
           else { if (q.splat) splats.push({ x: q.x, r: q.s * 1.6, a: 0.7 }); q.life = 0; }
         }
       });
@@ -436,7 +824,7 @@
       splats.forEach(s => s.a -= dt * 0.12);
       for (let i = splats.length - 1; i >= 0; i--) if (splats[i].a <= 0) splats.splice(i, 1);
       words.forEach(w => w.t += dt);
-      for (let i = words.length - 1; i >= 0; i--) if (words[i].t > 0.9) words.splice(i, 1);
+      for (let i = words.length - 1; i >= 0; i--) if (words[i].t > words[i].life) words.splice(i, 1);
       if (gags.banana && gags.banana.fly) { const f = gags.banana.fly; f.vy += FH * 10 * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.r += dt * 12; if (f.y > H + 50) gags.banana = null; }
       barShake = Math.max(0, barShake - dt * 3);
     }
@@ -465,7 +853,7 @@
       if (!n) { img = imgs.walk; n = framesOf(img); if (!n) return; }
       const el = now - h.t0;
       let fi;
-      if (h.state === 'walk') fi = Math.floor(now / 1000 * clamp(speed / FH * 5.5, 10, 20)) % n;
+      if (h.state === 'walk') fi = Math.floor(animT / 1000 * clamp(speed / FH * 5.5, 10, 20)) % n;
       else if (h.state === 'dance') fi = Math.floor(el / 1000 * 10) % n;
       else if (h.state === 'slip') {
         // hinfallen (0,55 s) - liegen bleiben - wieder aufstehen (rückwärts)
@@ -480,12 +868,23 @@
       ctx.beginPath(); ctx.ellipse(h.x, GY + 2, FH * 0.24, FH * 0.05, 0, 0, Math.PI * 2); ctx.fill();
       ctx.drawImage(img, fi * FRAME_W, 0, FRAME_W, FRAME_H, x, y, dw, dh);
     }
+    const pixCanvas = document.createElement('canvas'); pixCanvas.width = 6; pixCanvas.height = 8;
     function drawZombie(z) {
-      const frame = z.state === 'walk' ? (Math.floor(z.ph) % 2) : (z.state === 'grab' ? Math.floor(now / 160) % 2 : 0);
-      const spr = zombieSprite(z.vi, frame, z.headless ? 'body' : 'all');
+      const frame = (z.state === 'walk' || z.state === 'burn') ? (Math.floor(z.ph) % 2) : (z.state === 'grab' ? Math.floor(now / 160) % 2 : 0);
+      let spr = zombieSprite(z.vi, frame, z.headless ? 'body' : 'all');
       const w = Z_W * U, h = Z_H * U;
       ctx.save();
       ctx.globalAlpha = Math.max(0, z.alpha);
+      if (z.state === 'ash') {
+        ctx.fillStyle = '#3a3a3a'; ctx.beginPath(); ctx.ellipse(z.x, GY, FH * 0.22, FH * 0.08, 0, Math.PI, 0); ctx.fill();
+        ctx.fillStyle = '#777'; ctx.fillRect(z.x - FH * 0.05, GY - FH * 0.12, FH * 0.04, FH * 0.04); ctx.restore(); return;
+      }
+      if (z.state === 'squash') {
+        ctx.translate(z.x, GY + 2 * U); ctx.scale(1 + (1 - z.sy) * 0.7, z.sy); ctx.drawImage(spr, -w / 2, -h, w, h); ctx.restore(); return;
+      }
+      if (z.pixel && zAlive(z)) {   // grob verpixeln
+        const pg = pixCanvas.getContext('2d'); pg.imageSmoothingEnabled = true; pg.clearRect(0, 0, 6, 8); pg.drawImage(spr, 0, 0, 6, 8); spr = pixCanvas;
+      }
       if (z.state === 'walk' || z.state === 'grab') {
         ctx.fillStyle = 'rgba(0,0,0,.33)';
         ctx.beginPath(); ctx.ellipse(z.x, GY + 2, FH * 0.22, FH * 0.05, 0, 0, Math.PI * 2); ctx.fill();
@@ -493,7 +892,12 @@
       ctx.translate(z.x, GY + z.y - (z.state === 'dead' ? 9 : 15) * U);
       ctx.rotate(z.rot);
       if (z.state === 'grab') ctx.rotate(Math.sin(now / 90) * 0.05);
+      if (z.scale != null) ctx.scale(Math.max(0, z.scale), Math.max(0, z.scale));
       ctx.drawImage(spr, -w / 2, -h / 2, w, h);
+      if (theme.acc && !(z.pixel && zAlive(z))) {
+        ctx.translate(-w / 2, -h / 2); ctx.scale(U, U);
+        theme.acc(ctx, z, (zAlive(z) || z.state === 'burn') ? frame : 0);
+      }
       ctx.restore();
     }
     function drawProj(p) {
@@ -510,6 +914,7 @@
         else if (p.type === 'bottle') { ctx.fillStyle = '#6b3a12'; ctx.fillRect(-s * 0.9, -s * 0.35, s * 1.4, s * 0.7); ctx.fillRect(s * 0.5, -s * 0.15, s * 0.6, s * 0.3); }
         else if (p.type === 'cowbell') { ctx.fillStyle = '#e8b923'; ctx.beginPath(); ctx.moveTo(-s * 0.5, -s * 0.7); ctx.lineTo(s * 0.5, -s * 0.7); ctx.lineTo(s * 0.8, s * 0.6); ctx.lineTo(-s * 0.8, s * 0.6); ctx.closePath(); ctx.fill(); }
         else if (p.type === 'mustache') { ctx.fillStyle = '#3b2412'; ctx.beginPath(); ctx.ellipse(-s * 0.55, 0, s * 0.65, s * 0.25, 0.3, 0, Math.PI * 2); ctx.ellipse(s * 0.55, 0, s * 0.65, s * 0.25, -0.3, 0, Math.PI * 2); ctx.fill(); }
+        else if (p.type === 'shell') { ctx.rotate(-p.r); ctx.fillStyle = '#3a3a3a'; ctx.beginPath(); ctx.ellipse(0, 0, s, s * 0.45, 0, 0, Math.PI * 2); ctx.fill(); }
         else { ctx.fillStyle = '#ff2e93'; ctx.beginPath(); ctx.arc(0, 0, s * 0.7, 0, Math.PI * 2); ctx.fill(); }
       }
       ctx.restore();
@@ -562,6 +967,7 @@
       ctx.imageSmoothingEnabled = false;
       // Blutflecken auf dem Boden
       splats.forEach(s => { ctx.fillStyle = 'rgba(150,0,20,' + Math.max(0, s.a) + ')'; ctx.beginPath(); ctx.ellipse(s.x, GY + 3, s.r, s.r * 0.28, 0, 0, Math.PI * 2); ctx.fill(); });
+      if (theme.drawBack) theme.drawBack();
       // Bananenschale
       const b = gags.banana;
       if (b) {
@@ -575,6 +981,7 @@
       }
       zombies.forEach(z => { if (z.state !== 'gone') drawZombie(z); });
       heroes.slice().sort((a, c) => a.x - c.x).forEach(drawHero);
+      if (theme.drawMid) theme.drawMid();
       projs.forEach(drawProj);
       // Partikel (Blut, Zombie-Stücke, fliegende Köpfe)
       parts.forEach(q => {
@@ -582,6 +989,17 @@
           const spr = zombieSprite(q.head, 0, 'head');
           ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot);
           ctx.drawImage(spr, -11.5 * U, -5 * U, Z_W * U, Z_H * U); // nur der Kopf ist gefüllt, Mitte ca. (11.5|5)
+          ctx.restore();
+        } else if (q.draw) {
+          ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot || 0); q.draw(ctx, q); ctx.restore();
+        } else if (q.ch) {
+          ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot || 0); ctx.font = `800 ${q.s}px 'Baloo 2', system-ui, sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = q.s * 0.18; ctx.strokeStyle = '#1a1a2e'; ctx.strokeText(q.ch, 0, 0);
+          ctx.fillStyle = q.c; ctx.fillText(q.ch, 0, 0); ctx.restore();
+        } else if (q.round) {
+          ctx.save(); if (q.grav != null && q.grav < 0) ctx.globalAlpha = Math.max(0, Math.min(1, q.life * 2.5));
+          ctx.fillStyle = q.c; ctx.beginPath(); ctx.arc(q.x, q.y, q.s / 2, 0, Math.PI * 2); ctx.fill();
+          if (q.coin) { ctx.strokeStyle = '#b8860b'; ctx.lineWidth = Math.max(1, q.s * 0.15); ctx.stroke(); }
           ctx.restore();
         } else { ctx.fillStyle = q.c; ctx.fillRect(q.x - q.s / 2, q.y - q.s / 2, q.s, q.s); }
       });
@@ -591,21 +1009,24 @@
       zombies.forEach(z => { if (z.bubble && now < z.bubble.until && (z.state === 'walk' || z.state === 'grab')) bubble(z.x, GY - FH * 1.05, z.bubble.text); });
       // Comic-Wörter
       words.forEach(w => {
-        const k = Math.min(1, w.t / 0.12), fs = clamp(FH * 0.32, 20, 54) * (0.6 + 0.6 * k);
-        ctx.save(); ctx.globalAlpha = 1 - Math.max(0, (w.t - 0.55) / 0.35);
+        const k = Math.min(1, w.t / 0.12), fs = clamp(FH * 0.32, 20, 54) * (0.6 + 0.6 * k) * w.big;
+        ctx.save(); ctx.globalAlpha = Math.max(0, 1 - Math.max(0, (w.t - (w.life - 0.35)) / 0.35));
         ctx.translate(w.x, w.y - w.t * FH * 0.4); ctx.rotate(w.rot);
         ctx.font = `800 ${fs}px 'Baloo 2', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.lineWidth = fs * 0.16; ctx.strokeStyle = '#1a1a2e'; ctx.lineJoin = 'round'; ctx.strokeText(w.text, 0, 0);
         ctx.fillStyle = w.color; ctx.fillText(w.text, 0, 0);
         ctx.restore();
       });
+      if (theme.drawFront) theme.drawFront();
     }
 
     function frame(ts) {
       if (ended) return;
       if (!startAt) { startAt = ts; last = ts; }
-      const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
-      now = ts - startAt;
+      const rdt = Math.min(0.05, (ts - last) / 1000); last = ts;
+      realNow = ts - startAt;
+      const dt = rdt * timeScale;
+      now += dt * 1000;
       update(dt);
       draw();
       if (now >= DURATION) { finish(false); return; }
@@ -618,6 +1039,7 @@
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', layout);
       if (!instant) sfx('coin', 0.8);
+      root.style.filter = '';
       root.classList.add('hsi-out');
       setTimeout(() => { root.remove(); }, instant ? 0 : 600);
       running = null;
