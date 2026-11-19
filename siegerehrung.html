@@ -643,6 +643,68 @@
       }
     });
 
+    // ================= SONDERPREISE vor der Siegerehrung =================
+    // Gute wie schlechte "Errungenschaften" aus dem Spielverlauf - jede bringt Bonuspunkte,
+    // die noch VOR dem Podest verrechnet werden. Muss nicht fair sein, nur witzig.
+    function computeAwards(base, logEntries) {
+      const n = base.length;
+      if (n < 2) return [];
+      const ids = base.map(p => p.id);
+      const nameToId = {}; base.forEach(p => { nameToId[p.name] = p.id; });
+      const nm = (id) => (base.find(p => p.id === id) || {}).name || '?';
+      const deltas = {}, eggs = {}, fails = {}, coins = {};
+      ids.forEach(id => { deltas[id] = []; eggs[id] = 0; fails[id] = 0; coins[id] = 0; });
+      const EGG_RX = /hat (ein Gehirn|den Lemming|den Pickaxe-Lemming|die Katze|das Half-Life|die Truhe|den Clan-Tag|Stefan|die Goldene Ente|5 Bilder)/;
+      logEntries.forEach(e => {
+        const t = e.text || '';
+        let m = t.match(/^(📈|📉) (.+?): ([+-]?\d+) Punkte in (.+)$/);
+        if (m && nameToId[m[2]]) { deltas[nameToId[m[2]]].push({ v: parseInt(m[3], 10), game: m[4] }); return; }
+        m = t.match(/^\S+ (.+?) hat /);
+        const id = m && nameToId[m[1]];
+        if (!id) return;
+        if (EGG_RX.test(t)) eggs[id]++;
+        if (t.includes('angesagte Lösung nicht geschafft')) fails[id]++;
+        const c = t.match(/im Goldregen (\d+) Münzen/); if (c) coins[id] += parseInt(c[1], 10);
+      });
+      const maxBy = (fn) => { let best = -Infinity, who = []; ids.forEach(id => { const v = fn(id); if (v > best) { best = v; who = [id]; } else if (v === best) who.push(id); }); return { best, who }; };
+      const minBy = (fn) => { const r = maxBy(id => -fn(id)); return { best: -r.best, who: r.who }; };
+      const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      const awards = [];
+      const add = (icon, title, who, desc, points) => { if (who && who.length && who.length < n) awards.push({ icon, title, ids: who, desc, points }); };
+
+      // Schlecht, aber belohnt
+      add('🏮', 'Rote Laterne', [base[n - 1].id], 'Irgendwer muss ja das Licht ausmachen. Mitleidspunkte vom Erzähler.', 150);
+      let worst = null; ids.forEach(id => deltas[id].forEach(d => { if (!worst || d.v < worst.v) worst = { ...d, id }; }));
+      if (worst && worst.v < 0) add('📉', 'Absturz des Abends', [worst.id], `Hat in „${worst.game}“ ganze ${-worst.v} Punkte verbrannt. So viel Mut muss belohnt werden.`, 75);
+      const f = maxBy(id => fails[id]);
+      if (f.best > 0) add('📣', 'Großmaul', f.who, `Hat ${f.best}× lautstark angesagt, die Lösung zu wissen – und sie dann doch nicht gewusst.`, 40);
+      const fewest = minBy(id => new Set(deltas[id].filter(d => d.v > 0).map(d => d.game)).size);
+      add('🦥', 'Schlafmütze', fewest.who.length === 1 ? fewest.who : [pick(fewest.who)], 'War körperlich die ganze Zeit anwesend. Geistig eher so … teilweise.', 50);
+      if (n >= 3) add('🥈', 'Ewiger Zweiter', [base[1].id], 'So nah dran. Und doch so weit weg. Hier, ein Trostpflaster.', 60);
+      // Gut
+      const e = maxBy(id => eggs[id]);
+      if (e.best > 0) add('🥚', 'Eiersucher', e.who, `Hat ${e.best} Geheimnisse gefunden – mehr als manche Leute Fragen beantwortet haben.`, 100);
+      let bestJump = null; ids.forEach(id => deltas[id].forEach(d => { if (!bestJump || d.v > bestJump.v) bestJump = { ...d, id }; }));
+      if (bestJump && bestJump.v > 0) add('🚀', 'Raketenstart', [bestJump.id], `Hat in „${bestJump.game}“ auf einen Schlag ${bestJump.v} Punkte abgeräumt.`, 50);
+      const all = maxBy(id => new Set(deltas[id].filter(d => d.v > 0).map(d => d.game)).size);
+      if (all.best >= 2) add('🧩', 'Allrounder', all.who, `Hat in ${all.best} verschiedenen Spielen gepunktet. Kann alles, aber nichts richtig.`, 75);
+      const c = maxBy(id => coins[id]);
+      if (c.best > 0) add('🪙', 'Dagobert', c.who, `Hat ${c.best} Münzen abgeschossen und keine einzige davon ausgegeben.`, 40);
+      add('🤓', 'Streber des Abends', [base[0].id], 'Hat die ganze Nacht nur gewonnen. Zur Strafe gibt es … noch mehr Punkte.', 30);
+      add('🍀', 'Glückspilz', [pick(ids)], 'Kein Grund. Wirklich keiner. Clippy würfelt einfach gern.', 77);
+      return awards;
+    }
+
+    window.hostAwardNext = function() {
+      get(ref(db, 'ceremonyState')).then((snap) => {
+        const cs = snap.val() || {};
+        const len = (cs.awards || []).length;
+        const cur = cs.awardIndex || 0;
+        if (cur < len) update(ref(db, 'ceremonyState'), { awardIndex: cur + 1 });
+        else update(ref(db, 'ceremonyState'), { phase: 'podium' });
+      });
+    };
+
     window.hostRevealNext = function() {
       get(ref(db, 'ceremonyState/revealIndex')).then((snap) => {
         const cur = snap.val() || 0;
@@ -678,8 +740,21 @@
           const joins = Object.keys(players).map(id => players[id].joinedAt).filter(Boolean);
           const sessionStart = joins.length ? Math.min(...joins) - 60000 : Date.now() - 12 * 3600 * 1000;
           const logEntries = Object.values(logObj).filter(e => (e.at || 0) >= sessionStart).sort((a, b) => (a.at || 0) - (b.at || 0));
+          // Basis = Punkte OHNE einen evtl. früher schon verrechneten Sonderpreis-Bonus
+          const base = activeIds
+            .map(id => ({ id, name: players[id].name, score: (players[id].score || 0) - (players[id].ceremonyBonus || 0) }))
+            .sort((a, b) => b.score - a.score);
+          const awards = computeAwards(base, logEntries);
+          const bonus = {};
+          awards.forEach(a => a.ids.forEach(id => { bonus[id] = (bonus[id] || 0) + a.points; }));
+          const scoreUpd = {};
+          base.forEach(p => {
+            scoreUpd['players/' + p.id + '/score'] = p.score + (bonus[p.id] || 0);
+            scoreUpd['players/' + p.id + '/ceremonyBonus'] = bonus[p.id] || 0;
+          });
+          await update(ref(db), scoreUpd);
           const ranked = activeIds
-            .map(id => ({ id, name: players[id].name, score: players[id].score || 0, avatar: players[id].avatar || null, clanTag: players[id].clanTag || null, head: players[id].head || null }))
+            .map(id => ({ id, name: players[id].name, score: base.find(b => b.id === id).score + (bonus[id] || 0), bonus: bonus[id] || 0, avatar: players[id].avatar || null, clanTag: players[id].clanTag || null, head: players[id].head || null }))
             .sort((a, b) => b.score - a.score);
 
           const ach = computeAchievements(players, logEntries);
@@ -690,6 +765,9 @@
             achievements: ach,
             revealOrder: order,
             revealIndex: 0,
+            awards,
+            awardIndex: 0,
+            phase: awards.length ? 'awards' : 'podium',
             createdAt: Date.now()
           });
         }
@@ -715,6 +793,66 @@
       });
     };
 
+    let lastAwardShown = -1;
+    function renderAwards(cs) {
+      const stage = document.getElementById('awards-stage');
+      document.getElementById('podium-wrap').classList.add('invisible');
+      document.getElementById('host-next-btn')?.classList.add('hidden');
+      document.getElementById('achievement-banner').innerHTML = '';
+      document.getElementById('ceremony-status').innerText = 'Bevor es aufs Podest geht: die Sonderpreise!';
+      stage.classList.remove('hidden');
+      const awards = cs.awards || [];
+      const idx = cs.awardIndex || 0;
+      const btn = document.getElementById('host-award-btn');
+      if (btn) {
+        btn.classList.toggle('hidden', !isHost);
+        btn.innerText = idx === 0 ? '🏅 Ersten Sonderpreis enthüllen' : idx < awards.length ? '🏅 Nächster Sonderpreis' : '🏆 Weiter zur Siegerehrung';
+      }
+      if (idx === lastAwardShown) return;
+      const isNew = idx === lastAwardShown + 1;
+      lastAwardShown = idx;
+      const player = (id) => rankedPlayers.find(p => p.id === id) || { name: '?' };
+      const face = (p) => {
+        const img = p.head || p.clanTag || p.avatar;
+        return img ? `<img src="${img}" class="h-24 w-auto object-contain mx-auto" onerror="this.style.display='none'">`
+                   : `<div class="podium-initial mx-auto" style="width:80px;height:80px;font-size:2.2rem">${(p.name || '?').charAt(0).toUpperCase()}</div>`;
+      };
+      const done = awards.slice(0, Math.max(0, idx - 1));
+      let main;
+      if (idx === 0) {
+        main = `<div class="jax-card px-10 py-8 text-center title-pop max-w-xl">
+            <div class="text-6xl mb-2">🏅</div>
+            <div class="font-jax text-3xl font-extrabold text-[#1a1a2e]">Sonderpreise!</div>
+            <div class="text-[#7017c9] font-semibold mt-2">Vor der Siegerehrung verteilt die Jury noch ${awards.length} Sonderpreise – für Heldentaten und Totalausfälle. Jeder bringt Bonuspunkte!</div>
+          </div>`;
+      } else {
+        const a = awards[idx - 1];
+        main = `<div class="jax-card px-10 py-7 text-center ${isNew ? 'title-pop' : ''} max-w-2xl" style="border-color:#ffd23f">
+            <div class="text-xs font-black uppercase tracking-widest text-[#1a1a2e]/50">Sonderpreis ${idx} von ${awards.length}</div>
+            <div class="text-7xl my-2">${a.icon}</div>
+            <div class="font-jax text-4xl font-extrabold text-[#1a1a2e]">${a.title}</div>
+            <div class="flex justify-center gap-6 my-4">${a.ids.map(id => { const p = player(id); return `<div>${face(p)}<div class="font-jax font-extrabold text-xl text-[#7017c9] mt-1">${p.name}</div></div>`; }).join('')}</div>
+            <div class="text-[#1a1a2e]/80 font-semibold text-lg leading-snug">${a.desc}</div>
+            <div class="mt-4 inline-block bg-[#7ed957] border-[3px] border-[#1a1a2e] rounded-2xl px-5 py-1.5 font-jax font-extrabold text-2xl text-[#1a1a2e]">+${a.points} Punkte</div>
+          </div>`;
+      }
+      stage.innerHTML = `${main}
+        ${done.length ? `<div class="flex flex-wrap justify-center gap-2 mt-5 max-w-4xl">${done.map(a => `<div class="bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-sm text-white/80">${a.icon} <b>${a.title}</b>: ${a.ids.map(id => player(id).name).join(', ')} <span class="text-[#7ed957] font-bold">+${a.points}</span></div>`).join('')}</div>` : ''}`;
+      if (isNew && idx > 0) {
+        burstConfetti(50);
+        if (window.HSAudio) { try { HSAudio.play('platz_rest'); } catch (e) {} }
+      }
+    }
+    function leaveAwards() {
+      const stage = document.getElementById('awards-stage');
+      if (!stage || stage.classList.contains('hidden') && !document.getElementById('podium-wrap').classList.contains('invisible')) return;
+      stage.classList.add('hidden');
+      document.getElementById('host-award-btn')?.classList.add('hidden');
+      document.getElementById('podium-wrap').classList.remove('invisible');
+      document.getElementById('ceremony-status').innerText = 'Der Moderator enthüllt jetzt die Platzierungen …';
+      if (isHost && (lastRenderedRevealIndex < rankedPlayers.length)) document.getElementById('host-next-btn')?.classList.remove('hidden');
+    }
+
     function watchCeremonyState() {
       onValue(ref(db, 'ceremonyState'), (snapshot) => {
         const cs = snapshot.val();
@@ -729,6 +867,9 @@
           buildPodium();
           document.getElementById("host-next-btn")?.classList.toggle("hidden", !isHost);
         }
+
+        if ((cs.phase || 'podium') === 'awards') { renderAwards(cs); return; }
+        leaveAwards();
 
         const revealIndex = cs.revealIndex || 0;
         const catchUpCount = revealIndex - lastRenderedRevealIndex;
@@ -798,8 +939,10 @@
 
   <div id="achievement-banner" class="relative z-10 my-4 min-h-[110px] flex items-center justify-center w-full max-w-xl"></div>
 
+  <div id="awards-stage" class="hidden absolute inset-x-0 top-32 z-20 flex flex-col items-center px-6"></div>
   <div id="podium-wrap" class="relative z-10 flex items-end justify-center gap-2 md:gap-3 flex-1 pb-4 flex-wrap max-w-6xl"></div>
 
+  <button id="host-award-btn" onclick="hostAwardNext()" class="hidden relative z-30 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold px-6 py-3 mb-4">🏅 Ersten Sonderpreis enthüllen</button>
   <button id="host-next-btn" onclick="hostRevealNext()" class="hidden relative z-10 jax-btn bg-[#ffd23f] text-[#1a1a2e] font-jax font-bold px-6 py-3 mb-4">
     Nächsten Platz enthüllen ➡️
   </button>
