@@ -96,7 +96,9 @@
     return sprites;
   }
   // Eigene Gegenstände (props/<name>.png) - fehlt eine Datei, wird die Form selbst gezeichnet
-  const PROP_NAMES = ['banana', 'zombie_head', 'wrench', 'bottle', 'cowbell', 'fireball', 'mustache', 'shell'];
+  const PROP_NAMES = ['banana', 'zombie_head', 'wrench', 'bottle', 'cowbell', 'fireball', 'mustache', 'shell',
+    // Intro-Gags (fehlt eine Datei, zeichnet der Code eine einfache Ersatzform)
+    'tank', 'sheep', 'clapperboard', 'portal', 'traffic_red', 'traffic_green', 'old_pc', 'coin', 'disc_red', 'disc_yellow'];
   let props = null;
   function loadProps() {
     if (props) return props;
@@ -106,6 +108,7 @@
   }
   const propReady = (n) => { const i = props && props[n]; return i && i.complete && i.naturalWidth ? i : null; };
   // Bild mittig zeichnen, Breite w (Höhe nach Seitenverhältnis)
+  function drawPropBottom(ctx, img, x, bottom, w) { const h = w * img.naturalHeight / img.naturalWidth; ctx.drawImage(img, x - w / 2, bottom - h, w, h); return h; }
   function drawPropImg(ctx, img, w) { const h = w * img.naturalHeight / img.naturalWidth; ctx.drawImage(img, -w / 2, -h / 2, w, h); }
   // Zombie-Sprites aus PixelLab (zombies/basis_<anim>.png, Frames je 172 x 172, Blick nach links)
   // Fehlen sie, werden die kleinen Pixel-Zombies selbst gezeichnet.
@@ -470,6 +473,13 @@
         tick(dt) { const s = T.sheep; if (!frozen) s.x -= FH * 0.9 * dt; if (!T.bub && s.x < W * 0.8) T.bub = now + 1600; },
         drawMid() {
           const s = T.sheep; if (s.x < -FH) return;
+          const simg = propReady('sheep');
+          if (simg) {
+            const hop2 = Math.abs(Math.sin(now / 180)) * FH * 0.05;
+            const sh = drawPropBottom(ctx, simg, s.x, GY + 2 - hop2, FH * 0.95);
+            if (T.bub && now < T.bub) bubble(s.x, GY - sh - FH * 0.05, 'Mäh! Ich bin echt!');
+            return;
+          }
           const y = GY - FH * 0.32, hop = Math.abs(Math.sin(now / 140)) * FH * 0.04;
           ctx.fillStyle = '#1a1a1a'; [-0.15, -0.05, 0.08, 0.18].forEach(o => ctx.fillRect(s.x + o * FH, y + FH * 0.1, FH * 0.04, FH * 0.22));
           ctx.fillStyle = '#f4f4f0'; ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 2;
@@ -532,6 +542,12 @@
           if (!T.until) return;
           const cw = clamp(FH * 1.8, 150, 320), ch = cw * 0.62, x = W / 2 - cw / 2, y = H * 0.38;
           const open = (T.until - realNow) > 500 ? -0.35 : 0;
+          const cimg = propReady('clapperboard');
+          if (cimg) {
+            ctx.save(); ctx.translate(W / 2, y + ch / 2); ctx.rotate(open ? -0.08 : 0.04); drawPropImg(ctx, cimg, cw); ctx.restore();
+            if (open === 0) bigText('KLAPPE!', y - ch * 0.35, '#fff', 0.8);
+            return;
+          }
           ctx.save(); ctx.fillStyle = '#111'; ctx.fillRect(x, y, cw, ch);
           ctx.fillStyle = '#fff'; ctx.font = `800 ${ch * 0.2}px 'Baloo 2', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText('SZENE 1', W / 2, y + ch * 0.38); ctx.fillText('TAKE 2', W / 2, y + ch * 0.7);
@@ -573,6 +589,8 @@
         },
         drawBack() {
           const x = W * 0.86, y = H * 0.42, r = FH * 0.65;
+          const pimg = propReady('portal');
+          if (pimg) { ctx.save(); ctx.translate(x, y); ctx.rotate(now / 600); drawPropImg(ctx, pimg, r * 2.6); ctx.restore(); return; }
           ctx.save(); ctx.translate(x, y);
           for (let i = 0; i < 5; i++) {
             ctx.rotate(now / 400 + i); ctx.strokeStyle = ['#3ecbff', '#7017c9', '#ff2e93', '#ffd23f', '#ffffff'][i]; ctx.lineWidth = r * 0.12;
@@ -639,7 +657,10 @@
         },
         drawMid() {
           (T.discs || []).forEach(d => {
-            const r = FH * 0.28; ctx.save(); ctx.translate(d.x, d.y);
+            const r = FH * 0.28;
+            const dimg = propReady(d.c === '#e63946' ? 'disc_red' : 'disc_yellow');
+            if (dimg) { ctx.save(); ctx.translate(d.x, d.y); if (d.landed) ctx.scale(1, 0.45); drawPropImg(ctx, dimg, r * 2.1); ctx.restore(); return; }
+            ctx.save(); ctx.translate(d.x, d.y);
             if (d.landed) ctx.scale(1, 0.45);
             ctx.fillStyle = d.c; ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); ctx.stroke();
             ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(0, 0, r * 0.65, 0, 7); ctx.stroke(); ctx.restore();
@@ -655,15 +676,30 @@
           if (!T.tank && now > DURATION * 0.36) { T.tank = { x: -FH * 1.2 }; sfx('boom', 0.4); }
           const tk = T.tank; if (!tk) return;
           tk.x += speed * 1.9 * dt;
-          zombies.forEach(z => { if (zAlive(z) && Math.abs(z.x - (tk.x + FH * 0.35)) < FH * 0.3) killZombie(z, 'squash', 1); });
-          if (!tk.shot && tk.x > W * 0.3) {
-            tk.shot = true; sfx('shot', 1); word(tk.x + FH * 0.9, GY - FH * 0.9, 'FEUER!', '#ff7a1a');
-            projs.push({ type: 'shell', x: tk.x + FH * 0.9, y: GY - FH * 0.42, vx: FH * 8, r: 0, from: {} });
+          const front = tk.x + (propReady('tank') ? FH * 1.1 : FH * 0.35);
+          zombies.forEach(z => { if (zAlive(z) && Math.abs(z.x - front) < FH * 0.3) killZombie(z, 'squash', 1); });
+          if (!tk.shot && tk.x > W * 0.25) {
+            tk.shot = true; tk.shotAt = now; sfx('shot', 1); word(tk.x + FH * 1.2, GY - FH * 1.0, 'FEUER!', '#ff7a1a');
+            projs.push({ type: 'shell', x: tk.x + FH * 1.35, y: GY - FH * (propReady('tank') ? 0.85 : 0.42), vx: FH * 8, r: 0, from: {} });
           }
-          if (Math.random() < 0.35) parts.push({ x: tk.x - FH * 0.45, y: GY - FH * 0.2, vx: -FH * 0.5, vy: -FH * 0.6, s: FH * rnd(0.08, 0.14), c: 'rgba(120,120,120,.6)', round: true, life: 0.7, grav: -0.05 });
+          if (Math.random() < 0.35) parts.push({ x: tk.x - FH * (propReady('tank') ? 1.0 : 0.45), y: GY - FH * 0.2, vx: -FH * 0.5, vy: -FH * 0.6, s: FH * rnd(0.08, 0.14), c: 'rgba(120,120,120,.6)', round: true, life: 0.7, grav: -0.05 });
         },
-        drawMid() {
+        drawLane() {
           const tk = T.tank; if (!tk || tk.x > W + FH * 2) return;
+          const timg = propReady('tank');
+          if (timg) {
+            // echter Panzer: wippt beim Fahren, ruckt beim Schuss zurück, Mündungsfeuer
+            const recoil = tk.shotAt ? Math.max(0, 1 - (now - tk.shotAt) / 260) : 0;
+            const tw = FH * 2.3, bob = Math.round(Math.sin(now / 70) * 1.5);
+            ctx.save(); ctx.translate(tk.x - recoil * FH * 0.12, 0); ctx.rotate(-recoil * 0.04);
+            const th = drawPropBottom(ctx, timg, FH * 0.15, GY + 3 + bob, tw);
+            if (recoil > 0.3) {
+              const mx = FH * 0.15 + tw / 2 + FH * 0.05, my = GY - th * 0.78;
+              ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(mx, my, FH * 0.16 * recoil, 0, 7); ctx.fill();
+              ctx.fillStyle = '#fff6c4'; ctx.beginPath(); ctx.arc(mx, my, FH * 0.08 * recoil, 0, 7); ctx.fill();
+            }
+            ctx.restore(); return;
+          }
           const x = tk.x, y = GY, u = FH / 10;
           ctx.save(); ctx.translate(x, y);
           ctx.fillStyle = '#2b2b2b'; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(-5 * u, -2.2 * u, 10 * u, 2.2 * u, u); else ctx.rect(-5 * u, -2.2 * u, 10 * u, 2.2 * u); ctx.fill();
@@ -696,6 +732,8 @@
         },
         drawFront() {
           const red = frozen, x = W - FH * 0.6, y = H * 0.3, r = clamp(FH * 0.16, 12, 28);
+          const aimg = propReady(red ? 'traffic_red' : 'traffic_green');
+          if (aimg) { drawPropBottom(ctx, aimg, x, y + r * 5.6, r * 3.4); return; }
           ctx.save(); ctx.fillStyle = '#1a1a2e'; ctx.fillRect(x - r * 1.4, y - r * 2.6, r * 2.8, r * 5.2); ctx.fillRect(x - r * 0.2, y + r * 2.6, r * 0.4, r * 3);
           ctx.fillStyle = red ? '#ff2e2e' : '#4a1010'; if (red) { ctx.shadowColor = '#ff2e2e'; ctx.shadowBlur = 24; } ctx.beginPath(); ctx.arc(x, y - r * 1.2, r, 0, 7); ctx.fill();
           ctx.shadowBlur = 0; ctx.fillStyle = red ? '#103a1a' : '#39ff8c'; if (!red) { ctx.shadowColor = '#39ff8c'; ctx.shadowBlur = 24; } ctx.beginPath(); ctx.arc(x, y + r * 1.2, r, 0, 7); ctx.fill();
@@ -720,6 +758,13 @@
         onKill(z) { if (z.bomber) { bombBoom(z); return true; } return false; },
         drawBack() { if (T.flash && now - T.flash < 220) { ctx.fillStyle = 'rgba(255,240,200,' + (1 - (now - T.flash) / 220) * 0.8 + ')'; ctx.fillRect(0, 0, W, H); } },
         drawFront() {
+          const pc = propReady('old_pc');
+          if (pc) zombies.forEach(z => {
+            if (!z.bomber || !zAlive(z)) return;
+            const wob = Math.sin(now / 120) * 0.05;
+            ctx.save(); ctx.translate(z.x, GY + z.y - FH * 1.12); ctx.rotate(wob); drawPropImg(ctx, pc, FH * 0.62); ctx.restore();
+            if (Math.random() < 0.15) parts.push({ x: z.x + rnd(-0.1, 0.1) * FH, y: GY - FH * 1.3, vx: rnd(-0.2, 0.2) * FH, vy: -FH * 0.6, s: FH * rnd(0.06, 0.1), c: 'rgba(130,130,130,.6)', round: true, life: 0.8, grav: -0.05 });
+          });
           zombies.forEach(z => {
             if (!z.bomber || !z.fuseAt || !zAlive(z)) return;
             const n = Math.max(1, Math.ceil((z.fuseAt - now) / 1000)), fs = clamp(FH * 0.32, 20, 48);
@@ -1016,7 +1061,7 @@
       else ctx.drawImage(src, sx, 0, ZF, ZF, -Z_CX * s, -Z_FOOT * s, ZF * s, ZF * s);
       // Zubehör des Spiel-Themas: das 22 x 32 Raster der Pixel-Zombies wird in drei Bereichen
       // auf Kopf, Körper und Hand des Sprites gelegt (pro Frame ermittelt)
-      if (theme.acc && z.bomber && !(z.pixel && alive) && !lying && z.state !== 'squash' && z.state !== 'getup' && box.head) {   // nur der PC über dem Kopf
+      if (theme.acc && z.bomber && !propReady('old_pc') && !(z.pixel && alive) && !lying && z.state !== 'squash' && z.state !== 'getup' && box.head) {   // nur der PC über dem Kopf
         const hd = box.head, hs = (hd.x1 - hd.x0) / 9;           // Pixel pro Rasterfeld am Kopf
         const regions = [
           { clip: [[-60, -60], [60, -60], [60, 9.5], [6, 9.5], [6, 2], [-60, 2]], tx: hd.x0 - 7 * hs, ty: hd.y0 + (hd.y1 - hd.y0) * 0.55, sx: hs, sy: (hd.y1 - hd.y0) / 9 },   // etwas tiefer: die Haare stehen hoch
@@ -1156,6 +1201,7 @@
         }
       }
       zombies.forEach(z => { if (z.state !== 'gone') drawZombie(z); });
+      if (theme.drawLane) theme.drawLane();   // zwischen Zombies und Fightern (z. B. der Panzer)
       heroes.slice().sort((a, c) => a.x - c.x).forEach(drawHero);
       if (theme.drawMid) theme.drawMid();
       projs.forEach(drawProj);
@@ -1174,6 +1220,8 @@
           ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot || 0); ctx.font = `800 ${q.s}px 'Baloo 2', system-ui, sans-serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = q.s * 0.18; ctx.strokeStyle = '#1a1a2e'; ctx.strokeText(q.ch, 0, 0);
           ctx.fillStyle = q.c; ctx.fillText(q.ch, 0, 0); ctx.restore();
+        } else if (q.coin && propReady('coin')) {
+          ctx.save(); ctx.translate(q.x, q.y); ctx.scale(Math.abs(Math.cos(now / 120 + q.s)) * 0.8 + 0.2, 1); drawPropImg(ctx, propReady('coin'), q.s * 1.6); ctx.restore();
         } else if (q.round) {
           ctx.save(); if (q.grav != null && q.grav < 0) ctx.globalAlpha = Math.max(0, Math.min(1, q.life * 2.5));
           ctx.fillStyle = q.c; ctx.beginPath(); ctx.arc(q.x, q.y, q.s / 2, 0, Math.PI * 2); ctx.fill();
