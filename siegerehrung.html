@@ -567,6 +567,10 @@
 
     let revealOrder = [];
 
+    // Startzeit der aktuellen Siegerehrung (vom Cockpit gesetzt) - alles, was älter ist,
+    // stammt aus einer früheren Sitzung und wird ignoriert bzw. neu ausgezählt.
+    let ceremonyStartTime = 0;
+
     async function startCeremony() {
       renderStars();
 
@@ -574,16 +578,20 @@
       // anderen (und der Host selbst) lesen anschließend aus 'ceremonyState'.
       if (isHost) {
         const existing = await get(ref(db, 'ceremonyState'));
-        if (!existing.exists()) {
+        const ex = existing.val();
+        if (!ex || !ex.rankedPlayers || (ex.createdAt || 0) < ceremonyStartTime) {
           const [playersSnap, logSnap] = await Promise.all([
             get(ref(db, 'players/')),
             get(ref(db, 'gameLog/'))
           ]);
           const players = playersSnap.val() || {};
           const logObj = logSnap.val() || {};
-          const logEntries = Object.values(logObj).sort((a, b) => (a.at || 0) - (b.at || 0));
-
           const activeIds = Object.keys(players).filter(id => players[id].name && !players[id].name.includes("Host") && !players[id].name.includes("Admin"));
+          // Nur Log-Einträge seit Beginn DIESER Lobby (frühester Beitritt eines aktuellen Spielers;
+          // ohne Beitrittszeit: die letzten 12 Stunden) - sonst fließen alte Partien mit ein.
+          const joins = Object.keys(players).map(id => players[id].joinedAt).filter(Boolean);
+          const sessionStart = joins.length ? Math.min(...joins) - 60000 : Date.now() - 12 * 3600 * 1000;
+          const logEntries = Object.values(logObj).filter(e => (e.at || 0) >= sessionStart).sort((a, b) => (a.at || 0) - (b.at || 0));
           const ranked = activeIds
             .map(id => ({ id, name: players[id].name, score: players[id].score || 0, avatar: players[id].avatar || null, clanTag: players[id].clanTag || null, head: players[id].head || null }))
             .sort((a, b) => b.score - a.score);
@@ -613,8 +621,11 @@
         // Der Zeremonie-Zustand wird ERST JETZT beobachtet - also garantiert NACHDEM isHost
         // feststeht. Sonst könnte der Host-Button fälschlich für immer versteckt bleiben,
         // falls die Zeremonie-Daten schneller ankommen als dieser Check hier fertig ist.
-        watchCeremonyState();
-        startCeremony();
+        get(ref(db, 'gameState/startTime')).then((st) => {
+          ceremonyStartTime = st.val() || 0;
+          watchCeremonyState();
+          startCeremony();
+        });
       });
     };
 
@@ -622,6 +633,7 @@
       onValue(ref(db, 'ceremonyState'), (snapshot) => {
         const cs = snapshot.val();
         if (!cs || !cs.rankedPlayers) return;
+        if ((cs.createdAt || 0) < ceremonyStartTime) return;   // veraltete Zeremonie - auf die frische warten
 
         if (rankedPlayers.length === 0) {
           // Erster Aufbau (auf diesem Gerät) - Podest einmalig erzeugen
@@ -666,6 +678,7 @@
 
       // Zeremonie-Zustand löschen, damit sie beim nächsten Mal wieder frisch ausgezählt wird
       set(ref(db, 'ceremonyState'), null);
+      remove(ref(db, 'gameLog'));   // Verlauf der alten Partie mit wegräumen
 
       // Lobby wirklich komplett leeren: alle Spielerdaten (Punkte, Bereitschaft, gefundene
       // Gehirne usw.) werden gelöscht, nicht nur "auf null" gesetzt - für eine echte neue

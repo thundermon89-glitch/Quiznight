@@ -813,11 +813,12 @@
 
     window.launchSiegerehrung = function() {
       if (!confirm("Zur Siegerehrung wechseln? Alle Spieler werden jetzt dorthin mitgenommen.")) return;
-      set(ref(db, 'gameState'), {
+      // Alte Zeremonie wegwerfen - sie wird gleich frisch aus der AKTUELLEN Lobby ausgezählt
+      set(ref(db, 'ceremonyState'), null).then(() => set(ref(db, 'gameState'), {
         status: 'in_game',
         activeGame: 'siegerehrung.html',
         startTime: Date.now()
-      }).then(() => {
+      })).then(() => {
         logEvent('🏆 Siegerehrung gestartet');
       });
     };

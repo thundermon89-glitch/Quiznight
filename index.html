@@ -177,7 +177,8 @@
         clanTag: clanTagUrl,
         head: headUrl,
         score: 0,
-        isReady: false
+        isReady: false,
+        joinedAt: Date.now()   // damit die Siegerehrung nur Ereignisse DIESER Lobby auswertet
       }).then(() => {
         // Falls direkt vorher Stefan gewählt wurde: dieser Spieler bekommt jetzt den Bonus
         if (name !== "Stefan") {
