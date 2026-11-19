@@ -327,7 +327,8 @@
       }
 
       if (source === 'default') {
-        withResolvedImages(defaultImages);
+        // Standard = die im Editor gespeicherten Bilder; nur wenn dort nichts ist, die eingebauten
+        get(ref(db, 'content/spiel5/questions')).then((snap) => withResolvedImages(Array.isArray(snap.val()) ? snap.val().filter(Boolean) : null)).catch(() => withResolvedImages(defaultImages));
       } else if (source.indexOf('template:') === 0) {
         const templateName = source.slice('template:'.length);
         get(ref(db, 'content/spiel5/templates/' + templateName)).then((snap) => withResolvedImages(snap.val()));

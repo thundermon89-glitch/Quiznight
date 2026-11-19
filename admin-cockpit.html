@@ -626,12 +626,11 @@
       });
     };
 
-    // Spiel starten: eigene Bereitschafts-Prüfung, unabhängig vom Rad
+    // Spiel starten: der Admin entscheidet, wann es losgeht - keine Bereit-Meldung der
+    // Spieler mehr und keine Verschlafen-Strafpunkte.
     window.triggerAdminLaunch = function() {
-      checkAllReadyThenRun(() => {
-        EDITOR_GAMES.forEach(populateSourceSelect);
-        document.getElementById("admin-game-select-modal").classList.remove("hidden");
-      });
+      EDITOR_GAMES.forEach(populateSourceSelect);
+      document.getElementById("admin-game-select-modal").classList.remove("hidden");
     };
 
     // ==== FRAGENKATALOG-QUELLE: für Spiele mit Editor (1, 3, 7) kann der Host vor dem
@@ -1173,7 +1172,7 @@
             <img src="${p.avatar || ''}" class="w-6 h-6 rounded-full bg-black border border-yellow-500" onerror="this.style.visibility='hidden'">
             <div>
               <span class="text-white font-bold">${p.name}</span>
-              <span class="text-gray-400 block text-[10px]">${p.score || 0} Punkte | ${p.isReady ? '<span class="text-green-400 font-bold">Bereit</span>' : '<span class="text-red-400">Wartet</span>'}</span>
+              <span class="text-gray-400 block text-[10px]">${p.score || 0} Punkte</span>
             </div>
           </div>
           ${!p.name.includes("Host") && !p.name.includes("Admin") ? `<button onclick="kickPlayer('${id}', '${p.name}')" class="px-2 py-1 bg-red-900 hover:bg-red-800 text-red-200 rounded font-bold text-[10px]">KICK</button>` : '<span class="text-yellow-400 text-[10px] font-bold">ADMIN</span>'}
@@ -1182,7 +1181,6 @@
       }
 
       document.getElementById("stat-total-players").innerText = totalCount;
-      document.getElementById("stat-ready-players").innerText = readyCount;
     });
   </script>
 </head>
@@ -1203,7 +1201,6 @@
     <div class="flex items-center gap-2 flex-wrap">
       <div class="stat-chip flex items-center gap-3 text-[11px]">
         <span>👥 <span id="stat-total-players" class="font-bold text-white">0</span></span>
-        <span>✅ <span id="stat-ready-players" class="font-bold text-green-400">0</span></span>
       </div>
       <button onclick="toggleTheme()" id="theme-toggle-btn" class="theme-toggle-btn" title="Hell-/Dunkelmodus umschalten">🌙</button>
       <button onclick="openPaintWindow()" class="admin-btn admin-btn-sm admin-btn-purple" style="width:auto;" title="IcqDraw öffnen">
@@ -1228,7 +1225,7 @@
         </button>
 
         <button onclick="triggerAdminLaunch()" class="admin-btn admin-btn-gold">
-          <span>⚡</span><span>Spiel starten &amp; prüfen</span>
+          <span>⚡</span><span>Spiel starten</span>
         </button>
 
         <div id="chaos-overview" class="text-xs"></div>
@@ -1319,7 +1316,7 @@
   <!-- SPIEL-AUSWAHL MODAL (ADMIN) -->
   <div id="admin-game-select-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
     <div class="admin-panel p-6 w-full max-w-lg border-2 border-yellow-400 space-y-3 max-h-[85vh] overflow-y-auto">
-      <div class="text-yellow-300 font-bold text-sm">✅ Alle Crew-Mitglieder bereit! Welches Spiel soll starten?</div>
+      <div class="text-yellow-300 font-bold text-sm">Welches Spiel soll starten?</div>
       <div class="grid grid-cols-1 gap-2">
 
         <div class="bg-yellow-950/50 border border-yellow-500 rounded-lg p-3 space-y-2">

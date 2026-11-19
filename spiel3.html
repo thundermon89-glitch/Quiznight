@@ -523,7 +523,8 @@
       }
 
       if (source === 'default') {
-        withResolvedQuestions(defaultQuestions);
+        // Standard = die im Editor gespeicherten Fragen (inkl. Bilder); nur wenn dort nichts ist, die eingebauten
+        get(ref(db, 'content/spiel3/questions')).then((snap) => withResolvedQuestions(Array.isArray(snap.val()) ? snap.val().filter(Boolean) : null)).catch(() => withResolvedQuestions(defaultQuestions));
       } else if (source.indexOf('template:') === 0) {
         const templateName = source.slice('template:'.length);
         get(ref(db, 'content/spiel3/templates/' + templateName)).then((snap) => withResolvedQuestions(snap.val()));

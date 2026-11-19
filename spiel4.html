@@ -231,11 +231,13 @@
           const templateName = source.slice('template:'.length);
           return get(ref(db, 'content/spiel4/templates/' + templateName));
         }
-        return Promise.resolve({ val: () => null });
+        // "Standard": die im Editor gespeicherten Runden (inkl. Bilder) - nur wenn dort
+        // nichts gespeichert ist, gelten die eingebauten Runden oben.
+        return get(ref(db, 'content/spiel4/rounds'));
       }
       loadWithSource().then((snap) => {
-      const custom = snap.val();
-      if (Array.isArray(custom) && custom.length > 0) {
+      const custom = Array.isArray(snap.val()) ? snap.val().filter(Boolean) : null;
+      if (custom && custom.length > 0) {
         rounds.length = 0;
         // GitHub-"blob"-Ansichtslinks (falls im Editor versehentlich eingefügt) automatisch
         // in echte Rohbild-Links umwandeln, sonst laden Bilder gar nicht.

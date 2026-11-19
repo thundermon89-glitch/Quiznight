@@ -1334,10 +1334,10 @@
       const players = snapshot.val() || {};
       allPlayersCache = players;
 
-      if (players[playerId]) {
+      const btn = document.getElementById("ready-toggle-btn");
+      const statusText = document.getElementById("ready-status-text");
+      if (players[playerId] && btn && statusText) {   // Bereit-Knopf gibt es nicht mehr - der Admin startet die Spiele
         const isReady = players[playerId].isReady || false;
-        const btn = document.getElementById("ready-toggle-btn");
-        const statusText = document.getElementById("ready-status-text");
 
         if (isReady) {
           btn.className = "w-full py-6 bg-[#7ed957] jax-btn text-[#1a1a2e] font-jax font-extrabold text-xl flex items-center justify-center gap-2";
@@ -1363,7 +1363,6 @@
             : `<div class="w-9 h-9 rounded-full border-2 border-[#1a1a2e] bg-[#ffd23f] flex items-center justify-center text-[#1a1a2e] font-jax font-extrabold text-sm flex-shrink-0">${initial}</div>`
           }
           <span class="text-[#1a1a2e] font-bold text-sm flex-1 truncate">${p.name}</span>
-          <span class="jax-chip px-2 py-0.5 text-[10px] font-jax font-bold ${p.isReady ? 'bg-[#7ed957] text-[#1a1a2e]' : 'bg-[#ff2e93] text-white'}">${p.isReady ? 'BEREIT' : 'WARTET'}</span>
         `;
         crewOverview.appendChild(div);
       }
@@ -2136,10 +2135,6 @@
           </div>
         </div>
 
-        <button id="ready-toggle-btn" onclick="toggleReadyStatus()" class="w-full py-6 bg-[var(--c-pink)] jax-btn text-white font-jax font-extrabold text-xl flex items-center justify-center gap-2 jax-wiggle">
-          <span><svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 0-5 5v3.5c0 .8-.3 1.6-.9 2.2L4 16h16l-2.1-2.3a3 3 0 0 1-.9-2.2V8a5 5 0 0 0-5-5z"/><path d="M9.5 19a2.5 2.5 0 0 0 5 0"/></svg></span> <span>JETZT BEREIT MELDEN!</span>
-        </button>
-        <div id="ready-status-text" class="text-xs font-bold text-white/70">Noch nicht bereit gemeldet</div>
       </div>
     </div>
 

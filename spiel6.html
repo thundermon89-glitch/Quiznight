@@ -610,11 +610,12 @@
           const templateName = source.slice('template:'.length);
           return get(ref(db, 'content/spiel6/templates/' + templateName));
         }
-        return Promise.resolve({ val: () => null });
+        // "Standard": die im Editor gespeicherten Inhalte (inkl. Bilder) - sonst die eingebauten
+        return get(ref(db, 'content/spiel6/rounds'));
       }
       loadWithSource().then((snap) => {
-      const custom = snap.val();
-      if (Array.isArray(custom) && custom.length > 0) {
+      const custom = Array.isArray(snap.val()) ? snap.val().filter(Boolean) : null;
+      if (custom && custom.length > 0) {
         movieRounds.length = 0;
         movieRounds.push(...custom);
       }
