@@ -125,7 +125,11 @@
           block: { src: "fighter/ccc_block.png", frames: 13 },
           hit: { src: "fighter/ccc_hit.png", frames: 10 },
           ko: { src: "fighter/ccc_ko.png", frames: 11 },
-          win: { src: "fighter/ccc_win.png", frames: 11 }
+          win: { src: "fighter/ccc_win.png", frames: 11 },
+          lift: { src: "fighter/ccc_lift.png", frames: 5 },
+          throw: { src: "fighter/ccc_throw.png", frames: 7 },
+          combo: { src: "fighter/ccc_combo.png", frames: 16 },
+          hkick: { src: "fighter/ccc_hkick.png", frames: 8, peak: 3 }
         }
       },
       "Sörn1989": {
@@ -143,7 +147,10 @@
           block: { src: "fighter/soern_block.png", frames: 9 },
           hit: { src: "fighter/soern_hit.png", frames: 8 },
           ko: { src: "fighter/soern_ko.png", frames: 9 },
-          win: { src: "fighter/soern_win.png", frames: 13 }
+          win: { src: "fighter/soern_win.png", frames: 13 },
+          lift: { src: "fighter/soern_lift.png", frames: 5 },
+          combo: { src: "fighter/soern_combo.png", frames: 16 },
+          cross: { src: "fighter/soern_cross.png", frames: 6, peak: 5 }
         }
       },
       "Santax": {
@@ -161,7 +168,11 @@
           block: { src: "fighter/santax_block.png", frames: 11 },
           hit: { src: "fighter/santax_hit.png", frames: 12 },
           ko: { src: "fighter/santax_ko.png", frames: 9 },
-          win: { src: "fighter/santax_win.png", frames: 13 }
+          win: { src: "fighter/santax_win.png", frames: 13 },
+          lift: { src: "fighter/santax_lift.png", frames: 5 },
+          combo: { src: "fighter/santax_combo.png", frames: 16 },
+          hkick: { src: "fighter/santax_hkick.png", frames: 8, peak: 3 },
+          jumpf: { src: "fighter/santax_jumpf.png", frames: 9 }
         }
       },
       "Holzkohle": {
@@ -179,7 +190,11 @@
           block: { src: "fighter/holzkohle_block.png", frames: 9 },
           hit: { src: "fighter/holzkohle_hit.png", frames: 8 },
           ko: { src: "fighter/holzkohle_ko.png", frames: 11 },
-          win: { src: "fighter/holzkohle_win.png", frames: 11 }
+          win: { src: "fighter/holzkohle_win.png", frames: 11 },
+          lift: { src: "fighter/holzkohle_lift.png", frames: 5 },
+          throw: { src: "fighter/holzkohle_throw.png", frames: 7 },
+          combo: { src: "fighter/holzkohle_combo.png", frames: 16 },
+          hkick: { src: "fighter/holzkohle_hkick.png", frames: 8, peak: 4 }
         }
       },
       "breekibree": {
@@ -197,7 +212,11 @@
           block: { src: "fighter/breeki_block.png", frames: 9 },
           hit: { src: "fighter/breeki_hit.png", frames: 10 },
           ko: { src: "fighter/breeki_ko.png", frames: 11 },
-          win: { src: "fighter/breeki_win.png", frames: 11 }
+          win: { src: "fighter/breeki_win.png", frames: 11 },
+          lift: { src: "fighter/breeki_lift.png", frames: 5 },
+          throw: { src: "fighter/breeki_throw.png", frames: 7 },
+          carry: { src: "fighter/breeki_carry.png", frames: 5 },
+          carrywalk: { src: "fighter/breeki_carrywalk.png", frames: 17 }
         }
       },
       "skywalker161": {
@@ -215,19 +234,28 @@
           block: { src: "fighter/sky_block.png", frames: 9 },
           hit: { src: "fighter/sky_hit.png", frames: 8 },
           ko: { src: "fighter/sky_ko.png", frames: 9 },
-          win: { src: "fighter/sky_win.png", frames: 13 }
+          win: { src: "fighter/sky_win.png", frames: 13 },
+          lift: { src: "fighter/sky_lift.png", frames: 5 },
+          throw: { src: "fighter/sky_throw.png", frames: 7 },
+          carry: { src: "fighter/sky_carry.png", frames: 6 },
+          carrywalk: { src: "fighter/sky_carrywalk.png", frames: 4 },
+          combo: { src: "fighter/sky_combo.png", frames: 16 },
+          cross: { src: "fighter/sky_cross.png", frames: 6, peak: 5 }
         }
       }
     };
     const SPRITE_FALLBACK = {
       walkb: 'walk', cpunch: 'crouch', sweep: 'kick', jkick: 'kick', super: 'special',
       kd: 'ko', getup: 'ko', hit: 'idle', block: 'idle', win: 'idle', crouch: 'idle', jump: 'idle',
-      walk: 'idle', punch: 'idle', kick: 'idle', special: 'punch', ko: 'hit'
+      walk: 'idle', punch: 'idle', kick: 'idle', special: 'punch', ko: 'hit',
+      // neue Angriffe & Kisten - wer die Animation nicht hat, nimmt die normale
+      combo: 'punch', cross: 'punch', hkick: 'kick', jumpf: 'jump', lift: 'crouch', throw: 'punch', carry: 'idle', carrywalk: 'walk'
     };
     // Abspielweise je Animation: loop = Bilder/Sekunde, dur = über so viele Spiel-Frames einmal abspielen und letzten Frame halten
     const SPRITE_TIMING = {
       idle: { loop: 8 }, walk: { loop: 12 }, win: { loop: 8 },
-      crouch: { dur: 6 }, jump: { dur: 34 }, hit: { dur: 16 }, block: { dur: 8 }, ko: { dur: 26 }
+      crouch: { dur: 6 }, jump: { dur: 34 }, hit: { dur: 16 }, block: { dur: 8 }, ko: { dur: 26 },
+      jumpf: { dur: 34 }, combo: { dur: 30 }, lift: { dur: 22 }, throw: { dur: 24 }, carry: { loop: 6 }, carrywalk: { loop: 10 }
     };
     const SPRITE_FIGURE_H = 190; // sichtbare Figurenhöhe im Spiel (für das Namensschild)
     const spriteImages = {}; // name -> anim -> Image
@@ -248,6 +276,14 @@
       sweep:   { start: 8,  active: 6,  rec: 20, dmg: 9,  reach: 122, h1: 0,   h2: 45,  type: 'low',      stun: 0,  bstun: 12, kb: 6, en: 8, kd: true },
       jkick:   { start: 4,  active: 14, rec: 0,  dmg: 9,  reach: 84,  h1: -10, h2: 70,  type: 'overhead', stun: 16, bstun: 10, kb: 6, en: 7, air: true },
       special: { start: 12, active: 1,  rec: 18 },
+      // Doppelschlag: zweimal schnell Strg - trifft zweimal (hits)
+      combo:   { start: 5,  active: 14, rec: 11, dmg: 5,  reach: 96,  h1: 105, h2: 165, type: 'high',     stun: 15, bstun: 9,  kb: 4, en: 5, hits: 2 },
+      // Kreuzschlag: vorwärts + Strg
+      cross:   { start: 6,  active: 4,  rec: 13, dmg: 8,  reach: 100, h1: 105, h2: 165, type: 'high',     stun: 17, bstun: 10, kb: 7, en: 7 },
+      // Hoher Tritt: vorwärts + Y
+      hkick:   { start: 9,  active: 5,  rec: 18, dmg: 12, reach: 128, h1: 95,  h2: 170, type: 'high',     stun: 20, bstun: 13, kb: 9, en: 9 },
+      // Kiste werfen (kein Nahkampf-Treffer, die Kiste fliegt bei 'start' los)
+      throw:   { start: 8,  active: 1,  rec: 15 },
       super:   { start: 6,  active: 14, rec: 22, dmg: 26, reach: 100, h1: 0,   h2: 175, type: 'mid',      stun: 0,  bstun: 16, kb: 10, en: 0, kd: true }
     };
     const PROJ = { speed: 7, dmg: 9, h1: 92, h2: 128, type: 'mid', stun: 16, bstun: 10, kb: 6, en: 6, cooldown: 120 };
@@ -966,9 +1002,9 @@
 
     function setAct(act) {
       if (!my) return;
-      my.act = act; my.actF = 0; my.seq++; my.hitDone = false; my.thr = false;
-      if (['punch', 'cpunch'].includes(act)) sfx('whoosh');
-      else if (['kick', 'sweep', 'jkick', 'super'].includes(act)) sfx('whooshHeavy');
+      my.act = act; my.actF = 0; my.seq++; my.hitDone = false; my.thr = false; my.hitN = 0; my.hitAt = 0;
+      if (['punch', 'cpunch', 'combo', 'cross'].includes(act)) sfx('whoosh');
+      else if (['kick', 'sweep', 'jkick', 'super', 'hkick'].includes(act)) sfx('whooshHeavy');
       else if (act === 'jump') sfx('jump');
       writeMe(true);
     }
@@ -983,6 +1019,7 @@
         hp: my.hp, en: Math.round(my.en), cr: my.cr, bc: my.blockCr, rk: myRk,
         sp: my.sp > 0 ? 1 : 0, hid: my.hid, hh: my.hh, hd: my.hd,
         // Kisten: Schaden je Kiste, geworfene (Bitmaske), getragene, fliegende
+        jf: my.act === 'jump' && my.vx ? 1 : 0,
         cdm: my.cdm, cg: my.cg, ch: my.ch, ct: my.ct ? { x: Math.round(my.ct.x), y: Math.round(my.ct.y), r: Math.round(my.ct.r * 10) / 10 } : null
       });
     }
@@ -1080,12 +1117,13 @@
       if ((a === 'hit' || a === 'block') && my.actF >= my.stunF) { setAct(my.cr ? 'crouch' : 'idle'); }
       if (a === 'kd' && my.actF >= 55 && my.hp > 0) { setAct('getup'); }
       if (a === 'getup' && my.actF >= 18) { my.cr = false; setAct('idle'); }
+      if (a === 'lift' && my.actF >= 22) { setAct('idle'); }
 
       // --- Super: nach vorn stürmen ---
       if (my.act === 'super' && my.actF < MOVES.super.start + MOVES.super.active) my.x += my.face * 8;
 
       // --- Geschoss abfeuern ---
-      if (my.act === 'punch' && my.actF === MOVES.punch.start && my.thr) {
+      if (my.act === 'throw' && my.actF === MOVES.throw.start) {
         // Kiste werfen (statt Spezialgeschoss)
         if (my.ch >= 0) {
           my.ct = { i: my.ch, x: my.x + my.face * 40, y: my.y + 175, vx: my.face * 10.5, vy: 3.5, r: 0, dir: my.face };
@@ -1101,10 +1139,10 @@
       // --- Kisten: E hebt eine Kiste neben dir hoch, E oder ein Angriff wirft sie ---
       const freeNow = ['idle', 'walk', 'walkb', 'crouch'].includes(my.act) && grounded;
       if (fighting && freeNow && my.ch >= 0 && (keysPressed.has('grab') || atk)) {
-        my.cr = false; setAct('punch'); my.thr = true; atk = null; sfx('whooshHeavy');
+        my.cr = false; setAct('throw'); atk = null; sfx('whooshHeavy');
       } else if (fighting && freeNow && my.ch < 0 && !my.ct && keysPressed.has('grab')) {
         const ci = nearCrate(crates);
-        if (ci >= 0) { my.ch = ci; my.cr = false; setAct('idle'); sfx('block'); writeMe(true); }
+        if (ci >= 0) { my.ch = ci; my.cr = false; my.liftX = CRATES[ci].x; setAct('lift'); sfx('block'); writeMe(true); }
       }
 
       // --- Eingaben ---
@@ -1113,9 +1151,9 @@
         if (atk === 'special' && my.spCd <= 0 && !myProj) {
           my.cr = false; my.spCd = PROJ.cooldown; setAct('special');
         } else if (atk === 'punch' || atk === 'special') {
-          setAct(keysDown.has('down') ? 'cpunch' : 'punch');
+          setAct(keysDown.has('down') ? 'cpunch' : keysDown.has(forwardKey) ? 'cross' : 'punch');
         } else if (atk === 'kick') {
-          setAct(keysDown.has('down') ? 'sweep' : 'kick');
+          setAct(keysDown.has('down') ? 'sweep' : keysDown.has(forwardKey) ? 'hkick' : 'kick');
         } else if (keysDown.has('up')) {
           my.cr = false; my.vy = JUMP_V; my.dj = false;
           my.vx = keysDown.has('right') ? JUMP_VX : keysDown.has('left') ? -JUMP_VX : 0;
@@ -1147,11 +1185,14 @@
         my.vx = keysDown.has('right') ? JUMP_VX : keysDown.has('left') ? -JUMP_VX : my.vx;
         setAct('jump');
         spawnSpark(my.x, GROUND - my.y, '#38bdf8', 10);
+      } else if (fighting && grounded && my.act === 'punch' && atk === 'punch' && my.actF >= MOVES.punch.start + MOVES.punch.active - 2) {
+        // Zweimal schnell Strg = Doppelschlag
+        setAct('combo');
       } else if (fighting && my.act === 'jump' && !my.airAtk && atk) {
         my.airAtk = true; setAct('jkick');
       }
       if (['cpunch', 'sweep'].includes(my.act)) my.cr = true;
-      if (['punch', 'kick', 'special', 'super', 'jump', 'jkick', 'kd', 'getup', 'ko', 'win', 'hit'].includes(my.act)) my.cr = my.act === 'hit' ? my.cr : false;
+      if (['punch', 'kick', 'special', 'super', 'jump', 'jkick', 'kd', 'getup', 'ko', 'win', 'hit', 'combo', 'cross', 'hkick', 'throw', 'lift'].includes(my.act)) my.cr = my.act === 'hit' ? my.cr : false;
 
       // --- Blickrichtung zum Gegner ---
       if (opp && grounded && ['idle', 'walk', 'walkb', 'crouch'].includes(my.act)) {
@@ -1184,15 +1225,17 @@
 
       // --- Treffer prüfen (der Angreifer entscheidet, ob er trifft) ---
       const mv = MOVES[my.act];
-      if (fighting && mv && mv.dmg && !my.thr && !my.hitDone && my.actF >= mv.start && my.actF < mv.start + mv.active) {
+      // Mehrfach-Treffer (Doppelschlag): nach 8 Frames darf der nächste Treffer kommen
+      if (mv && mv.hits && my.hitDone && (my.hitN || 0) < mv.hits && my.actF - (my.hitAt || 0) >= 8) my.hitDone = false;
+      if (fighting && mv && mv.dmg && !my.hitDone && my.actF >= mv.start && my.actF < mv.start + mv.active) {
         const baseH = my.y;   // auf einer Kiste schlägt man von dort oben
         if (opp && overlapsOpponent(my.x, my.face, mv.reach, baseH + mv.h1, baseH + mv.h2, opp)) {
-          my.hitDone = true;
+          my.hitDone = true; my.hitN = (my.hitN || 0) + 1; my.hitAt = my.actF;
           sendHit(mv, my.face, opp);
         } else {
           const ci = crateHitBy(my.x, my.face, mv.reach, baseH + mv.h1, baseH + mv.h2, crates);
           if (ci >= 0) {
-            my.hitDone = true; hitstop = 3;
+            my.hitDone = true; my.hitN = (my.hitN || 0) + 1; my.hitAt = my.actF; hitstop = 3;
             my.cdm[ci] += Math.round(mv.dmg * (my.sp > 0 ? SUPER_DMG : 1));
             crateBurst(CRATES[ci].x - my.face * 20, GROUND - CRATE_H * 0.6, false);
             writeMe(true);
@@ -1343,8 +1386,8 @@
           if (pid !== playerId && f.act === 'block' && v.lastAct !== 'block' && !amFighting()) { spawnSpark(f.x, GROUND - f.y - (f.cr ? 60 : 120), '#7dd3fc', 8); sfx('block'); }
           if (pid !== playerId && v.seq !== -1) {
             // Bewegungs-Geräusche des anderen Kämpfers auch hören
-            if (['punch', 'cpunch'].includes(f.act)) sfx('whoosh');
-            else if (['kick', 'sweep', 'jkick'].includes(f.act)) sfx('whooshHeavy');
+            if (['punch', 'cpunch', 'combo', 'cross'].includes(f.act)) sfx('whoosh');
+            else if (['kick', 'sweep', 'jkick', 'hkick', 'throw'].includes(f.act)) sfx('whooshHeavy');
             else if (f.act === 'jump') sfx('jump');
             else if (['jump', 'jkick'].includes(v.lastAct) && ['idle', 'crouch', 'walk', 'walkb'].includes(f.act)) sfx('land');
           }
@@ -1949,6 +1992,11 @@
     const wg = woundCanvas.getContext('2d');
     function drawSpriteFighter(fd, name, cfg) {
       let anim = fd.act, guard = 0;
+      // Mit Kiste in der Hand: Trage-Animationen (falls die Figur sie hat), beim Vorwärtssprung den neuen Sprung
+      if (fd.ch >= 0 && ['idle', 'crouch'].includes(anim) && cfg.anims.carry) anim = 'carry';
+      else if (fd.ch >= 0 && ['walk', 'walkb'].includes(anim) && cfg.anims.carrywalk) anim = 'carrywalk';
+      else if (anim === 'jump' && fd.jf && cfg.anims.jumpf) anim = 'jumpf';
+      fd.drawnAnim = anim;
       const ready = (n) => cfg.anims[n] && spriteImages[name][n] && spriteImages[name][n].complete && spriteImages[name][n].naturalWidth > 0;
       while (anim && !ready(anim) && guard++ < 6) anim = SPRITE_FALLBACK[anim];
       if (!anim || !ready(anim)) return false;
@@ -1972,6 +2020,7 @@
         if (tm.loop) {
           fi = Math.floor(f / (60 / tm.loop)) % n;
           if (fd.act === 'walkb') fi = n - 1 - fi;
+          if (anim === 'carry' || anim === 'carrywalk') fi = Math.floor(performance.now() / (1000 / tm.loop)) % n;
         } else fi = Math.floor(Math.min(1, f / tm.dur) * (n - 1));
       }
       fi = Math.max(0, Math.min(n - 1, fi | 0));
@@ -2338,7 +2387,7 @@
             const al = Math.min(1, acc / (1000 / 60));
             const ix = my.px == null || Math.abs(my.x - my.px) > 40 ? my.x : my.px + (my.x - my.px) * al;
             const iy = my.py == null ? my.y : my.py + (my.y - my.py) * al;
-            fd = { x: ix, y: Math.max(0, iy), face: my.face, act: my.act, actF: my.actF + al, cr: my.cr, bc: my.blockCr, sp: my.sp > 0, hp: my.hp };
+            fd = { x: ix, y: Math.max(0, iy), face: my.face, act: my.act, actF: my.actF + al, cr: my.cr, bc: my.blockCr, sp: my.sp > 0, hp: my.hp, ch: my.ch, jf: my.act === 'jump' && my.vx ? 1 : 0, liftX: my.liftX };
           } else {
             const f = remoteF[pid], v = remoteVis[pid];
             if (f && v && f.rk === rk) {
@@ -2355,7 +2404,7 @@
                 }
               }
               v.x = x; v.y = y;
-              fd = { x, y: Math.max(0, y), face: f.face, act: f.act, actF: (t - v.actStart) / (1000 / 60), cr: f.cr, bc: f.bc, sp: !!f.sp, hp: f.hp };
+              fd = { x, y: Math.max(0, y), face: f.face, act: f.act, actF: (t - v.actStart) / (1000 / 60), cr: f.cr, bc: f.bc, sp: !!f.sp, hp: f.hp, ch: f.ch == null ? -1 : f.ch, jf: f.jf };
             } else {
               fd = { x: pid === p1 ? START_L : START_R, y: 0, face: pid === p1 ? 1 : -1, act: 'idle', actF: t / 16, cr: false };
             }
@@ -2366,7 +2415,15 @@
           // Getragene Kiste über dem Kopf
           const rf = remoteF[pid];
           const held = pid === playerId && my ? my.ch : (rf && rf.rk === rk && rf.ch != null ? rf.ch : -1);
-          if (held >= 0 && !['kd', 'ko'].includes(fd.act)) drawCrate(fd.x + fd.face * 6, GROUND - fd.y - 176, 0, 0);
+          if (held >= 0 && !['kd', 'ko'].includes(fd.act)) {
+            const top = GROUND - fd.y - (fd.drawnAnim === 'carry' || fd.drawnAnim === 'carrywalk' ? 196 : 176);
+            if (fd.act === 'lift') {
+              // Heben: Kiste wandert vom Boden vor den Füßen nach oben über den Kopf
+              const k = Math.min(1, Math.max(0, (fd.actF - 8) / 12));
+              const x0 = fd.liftX != null ? fd.liftX : fd.x + fd.face * 60;
+              drawCrate(x0 + (fd.x + fd.face * 6 - x0) * k, GROUND + (top - GROUND) * k, 0, 0);
+            } else drawCrate(fd.x + fd.face * 6, top, 0, 0);
+          }
         }
         // Fliegende Kisten
         if (my && my.ct) drawCrate(my.ct.x, GROUND - my.ct.y + CRATE_H / 2, my.ct.r, 0);
@@ -2557,6 +2614,7 @@
       <span class="key">Y</span> Tritt ·
       <span class="key">Strg</span>+<span class="key">Y</span> Spezialangriff ·
       <span class="key">E</span> Kiste heben / werfen ·
+      <span class="key">2× Strg</span> Doppelschlag · <span class="key">→</span>+<span class="key">Strg</span> Kreuzschlag · <span class="key">→</span>+<span class="key">Y</span> hoher Tritt ·
       zurück halten = blocken
       <div class="text-white/50">Volle Energie = 10 Sek. Superpower (Doppelsprung, härtere Treffer) · ↓+Y ist ein Feger · A/D/S gehen auch, statt Y auch X</div>
     </div>
