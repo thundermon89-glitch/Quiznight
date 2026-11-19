@@ -322,9 +322,12 @@
 
     // ---- Spielfiguren ----
     const order = FIGHTERS.slice().sort(() => Math.random() - 0.5);
+    // Rollen: vorne 3 Kämpfer, dahinter Mitläufer - einer davon dreht manchmal ab der Hälfte um
+    const roles = ['fighter', 'fighter', 'fighter', 'tail', 'tail', Math.random() < 0.6 ? 'turn' : 'tail'];
     const heroes = order.map((f, i) => ({
       f, x: -FH * 0.5 - i * gap, y: 0, state: 'walk', anim: 'walk', t0: 0, dur: 0, at: 0, rev: false,
-      hitDone: false, target: null, rolled: new Set(), bubble: null
+      hitDone: false, target: null, rolled: new Set(), bubble: null,
+      role: roles[i] || 'tail', dir: 1, turnAt: rnd(0.42, 0.58) * DURATION
     }));
     // ---- Zombies ----
     const zCount = W < 700 ? 4 : 5;
@@ -339,7 +342,7 @@
       return z;
     }
     for (let i = 0; i < zCount; i++) zombies.push(newZombie(W * (0.38 + i * (0.95 / zCount)) + rnd(-FH * 0.3, FH * 0.3)));
-    const zSpeed = () => FH * 0.32;
+    const zSpeed = () => FH * 0.26;
     function spawnZombie() { zombies.push(newZombie(W + FH * rnd(0.5, 1.2))); }
     let nextSpawn = rnd(1800, 2600);
     // ---- Effekte ----
@@ -387,12 +390,12 @@
 
     // Aktionen der Figuren
     const ACT = {
-      punch: { anim: 'punch', dur: 420, peak: 0.55, reach: 0.55, how: 'fly' },
-      kick: { anim: 'kick', dur: 520, peak: 0.6, reach: 0.68, how: 'head' },
-      sweep: { anim: 'sweep', dur: 560, peak: 0.55, reach: 0.68, how: 'sweep' },
-      jkick: { anim: 'jkick', dur: 640, peak: 0.6, reach: 0.95, how: 'fly', air: 0.75, move: 1.5 },
-      special: { anim: 'special', dur: 760, peak: 0.72, reach: 99, how: 'proj' },
-      jump: { anim: 'jump', dur: 680, air: 1.0, move: 2.3 }
+      punch: { anim: 'punch', dur: 600, peak: 0.55, reach: 0.55, how: 'fly' },
+      kick: { anim: 'kick', dur: 720, peak: 0.6, reach: 0.68, how: 'head' },
+      sweep: { anim: 'sweep', dur: 760, peak: 0.55, reach: 0.68, how: 'sweep' },
+      jkick: { anim: 'jkick', dur: 860, peak: 0.6, reach: 0.95, how: 'fly', air: 0.75, move: 1.2 },
+      special: { anim: 'special', dur: 1000, peak: 0.72, reach: 99, how: 'proj' },
+      jump: { anim: 'jump', dur: 900, air: 1.0, move: 1.8 }
     };
     function startAct(h, kind, z) {
       const a = ACT[kind];
@@ -544,12 +547,7 @@
         lines: ['Wir nutzen nur 10 % vom Hirn!', 'Wikinger hatten Hörner!', 'Goldfische vergessen alles …', 'Blitze schlagen nie zweimal ein!'],
         words: ['MYTHOS!', 'WIDERLEGT!', 'FAKE!'], wordColor: '#ff2e93',
         acc(g, z, b) { if (!z.noAcc) helmet(g, b); },
-        onKill(z) {
-          z.noAcc = true;
-          parts.push({ x: z.x, y: GY - FH * 0.95, vx: FH * rnd(-1, 1.5), vy: -FH * rnd(3.5, 4.5), s: 0, rot: 0, vr: rnd(-12, 12), life: 2, bounce: 1,
-            draw(c) { c.scale(U, U); c.translate(-12, -1); helmet(c, 0); } });
-          return false;
-        }
+        onKill(z) { z.noAcc = true; return false; }
       },
       // Schriftzug-Salat: Zombies zerfallen in Buchstaben, Treffer-Wörter sind verdreht
       spiel8: {
@@ -807,7 +805,15 @@
         const el = t - h.t0, p = h.dur ? clamp(el / h.dur, 0, 1) : 0;
         if (h.state === 'walk') {
           h.anim = 'walk'; h.y = 0;
-          h.x += speed * dt;
+          // Umdreher: ab der Hälfte in die andere Richtung
+          if (h.role === 'turn' && h.dir === 1 && t > h.turnAt && h.x > FH && h.x < W - FH) { h.dir = -1; say(h, pick(['Ach, vergessen …', 'Ich geh mal Pizza holen.', 'Nee, ohne mich.']), 1500); }
+          h.x += speed * dt * h.dir * (h.role === 'fighter' ? 1 : 0.92);
+          if (h.role !== 'fighter') {
+            // Mitläufer kämpfen nicht - steht ein Zombie im Weg, hüpfen sie drüber
+            const z = h.dir > 0 && zombies.find(z => zAlive(z) && !z.jumped.has(h) && z.x - h.x > 0 && z.x - h.x < FH * 0.55);
+            if (z) { z.jumped.add(h); startAct(h, 'jump', null); }
+            return;
+          }
           // Bananenschale
           const b = gags.banana;
           if (b && !b.used && Math.abs(h.x - b.x) < FH * 0.12) {
@@ -840,7 +846,7 @@
           }
         } else if (ACT[h.state]) {
           const a = ACT[h.state];
-          if (a.move) h.x += speed * a.move * dt * 0.7;
+          if (a.move) h.x += speed * a.move * dt * 0.7 * h.dir;
           h.y = a.air ? Math.sin(p * Math.PI) * FH * 0.85 * a.air : 0;
           if (!h.hitDone && a.peak && p >= a.peak) {
             h.hitDone = true;
@@ -946,8 +952,8 @@
       if (!n) { img = imgs.walk; n = framesOf(img); if (!n) return; }
       const el = now - h.t0;
       let fi;
-      if (h.state === 'walk') fi = Math.floor(animT / 1000 * clamp(speed / FH * 5.5, 10, 20)) % n;
-      else if (h.state === 'dance') fi = Math.floor(el / 1000 * 10) % n;
+      if (h.state === 'walk') fi = Math.floor(animT / 1000 * clamp(speed / FH * 3.5, 6, 10)) % n;
+      else if (h.state === 'dance') fi = Math.floor(el / 1000 * 7) % n;
       else if (h.state === 'slip') {
         // hinfallen (0,55 s) - liegen bleiben - wieder aufstehen (rückwärts)
         const down = 550, lie = 650, up = h.dur - down - lie;
@@ -955,11 +961,12 @@
         fi = Math.round(clamp(p, 0, 1) * (n - 1));
       } else fi = Math.min(n - 1, Math.floor(clamp(el / h.dur, 0, 1) * n));
       const dw = FRAME_W * S, dh = FRAME_H * S;
-      const x = h.x - dw / 2, y = GY - h.y - FEET_Y * S;
+      const x = h.dir < 0 ? -dw / 2 : h.x - dw / 2, y = GY - h.y - FEET_Y * S;
       // Schatten
       ctx.fillStyle = 'rgba(0,0,0,' + (0.35 - Math.min(0.25, h.y / FH * 0.3)) + ')';
       ctx.beginPath(); ctx.ellipse(h.x, GY + 2, FH * 0.24, FH * 0.05, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.drawImage(img, fi * FRAME_W, 0, FRAME_W, FRAME_H, x, y, dw, dh);
+      if (h.dir < 0) { ctx.save(); ctx.translate(h.x, 0); ctx.scale(-1, 1); ctx.drawImage(img, fi * FRAME_W, 0, FRAME_W, FRAME_H, x, y, dw, dh); ctx.restore(); }
+      else ctx.drawImage(img, fi * FRAME_W, 0, FRAME_W, FRAME_H, x, y, dw, dh);
     }
     const pixCanvas = document.createElement('canvas'); pixCanvas.width = 6; pixCanvas.height = 8;
     // Sprite-Zombie zeichnen (gibt false zurück, wenn die Sprites noch fehlen)
@@ -973,8 +980,8 @@
       const nOf = (a) => Math.max(1, Math.floor(zimgs[ch + ':' + a].naturalWidth / ZF));
       if (z.state === 'walk') {
         anim = pick((z.hold && now < z.hold) || (frozen && !z.cheat) ? 'talk' : (theme.zWalk || 'walk'));
-        fi = anim === 'talk' ? Math.floor(now / 110) : Math.floor(z.ph * 1.6);
-      } else if (z.state === 'grab') { anim = pick('grab'); fi = Math.floor(now / 90); }
+        fi = anim === 'talk' ? Math.floor(now / 170) : Math.floor(z.ph * 1.0);
+      } else if (z.state === 'grab') { anim = pick('grab'); fi = Math.floor(now / 140); }
       else if (z.state === 'fly' || z.state === 'portal') { anim = pick('fly'); fi = Math.floor((now - (z.killAt || 0)) / 70); rot = z.rot * 0.35; }
       else if (z.state === 'fall') { anim = pick('ko'); fi = Math.floor(Math.min(1, z.rot / (Math.PI / 2)) * (nOf(anim) - 1)); }
       else if (z.state === 'dead') { anim = pick('ko'); const n = nOf(anim); fi = Math.min(n - 1, Math.floor(n / 2) + Math.floor((now - (z.deadAt || 0)) / 50)); lying = true; }
@@ -1009,7 +1016,7 @@
       else ctx.drawImage(src, sx, 0, ZF, ZF, -Z_CX * s, -Z_FOOT * s, ZF * s, ZF * s);
       // Zubehör des Spiel-Themas: das 22 x 32 Raster der Pixel-Zombies wird in drei Bereichen
       // auf Kopf, Körper und Hand des Sprites gelegt (pro Frame ermittelt)
-      if (theme.acc && !(z.pixel && alive) && !lying && z.state !== 'squash' && z.state !== 'getup' && box.head) {
+      if (theme.acc && z.bomber && !(z.pixel && alive) && !lying && z.state !== 'squash' && z.state !== 'getup' && box.head) {   // nur der PC über dem Kopf
         const hd = box.head, hs = (hd.x1 - hd.x0) / 9;           // Pixel pro Rasterfeld am Kopf
         const regions = [
           { clip: [[-60, -60], [60, -60], [60, 9.5], [6, 9.5], [6, 2], [-60, 2]], tx: hd.x0 - 7 * hs, ty: hd.y0 + (hd.y1 - hd.y0) * 0.55, sx: hs, sy: (hd.y1 - hd.y0) / 9 },   // etwas tiefer: die Haare stehen hoch
