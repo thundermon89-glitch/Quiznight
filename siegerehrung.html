@@ -380,7 +380,7 @@
     const ROCKET_IMG = 'props/rocket.png';
     const ROCKET_WINDOW = { left: 32, top: 34.6, w: 34.4 };   // vermessen an props/rocket.png (360x560)
     const ROCKET_IMG_W = 150, ROCKET_IMG_H = 233;              // Seitenverhältnis wie das Bild
-    const FX = { flame: 'props/fx_flame.gif', impact: 'props/fx_impact.gif', firework: 'props/fx_firework.gif', twinkle: 'props/fx_twinkle.gif', smoke: 'props/fx_smoke.gif' };
+    const FX = { flame: 'props/fx_flame.gif', impact: 'props/fx_impact.gif', firework: 'props/fx_firework.gif', smoke: 'props/fx_smoke.gif' };
     Object.values(FX).forEach(u => { const i = new Image(); i.src = u; });   // vorladen
     // GIF-Effekt einmal an einer Bildschirmstelle abspielen (Query-Zusatz startet das GIF von vorn)
     function playFx(url, cx, cy, w, h, ms, opts = {}) {
@@ -593,7 +593,7 @@
         if (photoEl) {
           photoEl.classList.remove("empty");
           photoEl.classList.add("settled");
-          photoEl.innerHTML = '<div class="relative inline-block">' + (rank === 1 ? `<img src="${FX.twinkle}" style="position:absolute; left:50%; top:45%; width:270px; height:205px; transform:translate(-50%,-50%); pointer-events:none; image-rendering:pixelated; z-index:6; max-width:none; max-height:none;">` : '') + photoHtml(img, p) + (rank === 1 ? '<div class="podium-crown">👑</div>' : '') + '</div>';
+          photoEl.innerHTML = '<div class="relative inline-block">' + photoHtml(img, p) + (rank === 1 ? '<div class="podium-crown">👑</div>' : '') + '</div>';
           if (withShow) photoEl.classList.add("photo-settle");
         }
         nameEl.innerText = p.name;
