@@ -319,7 +319,7 @@
     // (eigene / vorgefertigte / feste Vorlage / Mix aus allem). Erst danach den Spielzustand
     // beobachten, damit nie mit dem falschen Katalog gestartet wird.
     get(ref(db, 'content/spiel7/activeSource')).then((sourceSnap) => {
-      const source = sourceSnap.val() || 'custom';
+      const source = 'default'; // keine Vorlagen mehr: immer die im Editor gepflegte Liste
       const defaultQuestions = questions; // die eingebauten Standard-Fragen als Basis für "mix"
 
       // Wandelt GitHub-"blob"-Ansichtslinks automatisch in echte Rohbild-Links um - sonst

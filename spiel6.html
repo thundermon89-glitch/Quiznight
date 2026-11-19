@@ -604,7 +604,7 @@
     // Filmrunden aus dem Editor laden, falls dort welche gepflegt wurden - sonst bleiben die
     // eingebauten Standard-Runden (movieRounds-Array oben) als Rückfallebene aktiv.
     get(ref(db, 'content/spiel6/activeSource')).then((sourceSnap) => {
-      const source = sourceSnap.val() || 'default';
+      const source = 'default'; // keine Vorlagen mehr: immer die im Editor gepflegte Liste
       function loadWithSource() {
         if (source.indexOf('template:') === 0) {
           const templateName = source.slice('template:'.length);

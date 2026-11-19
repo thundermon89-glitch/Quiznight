@@ -783,6 +783,7 @@
     }
 
     function loadTemplateList() {
+      return; // Vorlagen gibt es nicht mehr - jedes Spiel hat nur noch seine eine Liste
       const game = GAMES[currentGameKey];
       const select = document.getElementById("template-select");
       get(ref(db, game.templatesPath)).then((snap) => {
@@ -1783,21 +1784,6 @@
       </div>
     </div>
 
-    <!-- VORLAGEN-LEISTE -->
-    <div class="jax-card-dark p-4 flex flex-wrap items-center gap-3">
-      <span class="text-xs font-jax font-bold text-[#ffd23f] flex items-center gap-1">
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
-        Vorlagen
-      </span>
-      <select id="template-select" onchange="loadTemplate()" class="jax-input text-sm py-2"></select>
-      <button onclick="deleteSelectedTemplate()" class="jax-btn bg-[#ff2e93] text-white px-3 py-2 text-xs font-jax font-bold" title="Ausgewählte Vorlage löschen">
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/></svg>
-      </button>
-      <button onclick="saveAsTemplate()" class="jax-btn bg-[#ffd23f] text-[#1a1a2e] px-3 py-2 text-xs font-jax font-bold">
-        Aktuelle Liste als Vorlage speichern
-      </button>
-    </div>
-
     <!-- FRAGEN-LISTE -->
     <div id="question-list" class="space-y-4"></div>
 
@@ -1809,32 +1795,11 @@
       </button>
       <button onclick="saveActive()" class="jax-btn bg-[#7ed957] text-[#1a1a2e] px-5 py-3 text-sm font-jax font-bold flex items-center gap-1.5 ml-auto">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h8V4"/><path d="M8 14h8v6H8z"/></svg>
-        Speichern & im Spiel aktivieren
+        Speichern
       </button>
     </div>
 
   </div>
-
-  <!-- SPEICHERN UNTER -->
-  <div id="saveas-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="jax-card jax-pop p-6 w-full max-w-sm text-[#1a1a2e] space-y-4">
-      <div class="font-jax text-lg font-extrabold flex items-center gap-2">
-        <svg class="w-6 h-6 text-[#7017c9]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
-        Speichern unter...
-      </div>
-      <div>
-        <label class="text-[11px] font-jax font-bold text-[#1a1a2e]/60 uppercase">Name der Vorlage</label>
-        <input id="saveas-input" type="text" placeholder="z.B. 'Filmquiz', 'Runde 2'"
-          onkeydown="if(event.key==='Enter'){confirmSaveAsTemplate();}"
-          class="jax-input w-full mt-1 text-base" />
-      </div>
-      <div class="flex gap-2">
-        <button onclick="closeSaveAsModal()" class="flex-1 jax-btn bg-white text-[#1a1a2e] py-2.5 text-sm font-jax font-bold">Abbrechen</button>
-        <button onclick="confirmSaveAsTemplate()" class="flex-1 jax-btn bg-[#7ed957] text-[#1a1a2e] py-2.5 text-sm font-jax font-bold">Speichern</button>
-      </div>
-    </div>
-  </div>
-
 
   <img src="https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9455-removebg-preview.png" class="fixed bottom-2 left-2 h-16 md:h-20 w-auto z-30 pointer-events-none opacity-90" onerror="this.style.display='none'" alt="">
 </body>
