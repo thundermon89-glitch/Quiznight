@@ -43,20 +43,40 @@
       transition: opacity 0.7s cubic-bezier(.34,1.56,.64,1), transform 0.7s cubic-bezier(.34,1.56,.64,1);
     }
     .podium-step.revealed { opacity: 1; transform: translateY(0) scale(1); }
-    .podium-rank1 { border-color: #ffd23f; box-shadow: 0 0 40px rgba(255,210,63,0.5); }
-    .podium-rank2 { border-color: #cbd5e1; }
-    .podium-rank3 { border-color: #d97742; }
+    .podium-rank1 { border-color: #ffd23f; background: linear-gradient(180deg, #ffe680 0%, #f2b705 55%, #a86f00 100%); box-shadow: 0 0 50px rgba(255,210,63,0.55); }
+    .podium-rank2 { border-color: #eef2f7; background: linear-gradient(180deg, #f4f6fa 0%, #b8c2d1 55%, #6d7889 100%); }
+    .podium-rank3 { border-color: #f0a46e; background: linear-gradient(180deg, #f6b98a 0%, #c9733b 55%, #7c3f17 100%); }
+    .podium-rank1 .rank-num, .podium-rank2 .rank-num, .podium-rank3 .rank-num { color: #1a1006; text-shadow: 0 2px 0 rgba(255,255,255,.5); }
+    .rank-num { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 2.6rem; line-height: 1; color: #fff; }
+    .podium-medal { font-size: 2.2rem; line-height: 1; margin-top: 6px; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
+    .podium-name { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 1.05rem; color: #fff; line-height: 1.1; opacity: 0; }
+    .podium-score { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 1.25rem; color: #ffd23f; opacity: 0; }
+    .podium-crown { position: absolute; top: -40px; left: 50%; transform: translateX(-50%) rotate(-8deg); font-size: 3rem; animation: crownDrop .7s cubic-bezier(.34,1.56,.64,1) both; filter: drop-shadow(0 4px 0 rgba(0,0,0,.4)); }
+    @keyframes crownDrop { 0% { transform: translate(-50%, -140px) rotate(-40deg); opacity: 0; } 100% { transform: translateX(-50%) rotate(-8deg); opacity: 1; } }
+    .podium-initial { width: 96px; height: 96px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 2.6rem; color: #1a1a2e; background: #ffd23f; border: 4px solid #1a1a2e; }
+    /* Großer Einblender vor jeder Enthüllung (Trommelwirbel-Moment) */
+    #reveal-announce { pointer-events: none; }
+    #reveal-announce .ann { animation: annIn 0.5s cubic-bezier(.34,1.56,.64,1) both; }
+    @keyframes annIn { 0% { transform: scale(.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    #reveal-announce .ann-dots span { display: inline-block; animation: annDot 0.9s ease-in-out infinite; }
+    #reveal-announce .ann-dots span:nth-child(2) { animation-delay: .15s; } #reveal-announce .ann-dots span:nth-child(3) { animation-delay: .3s; }
+    @keyframes annDot { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+    /* Scheinwerfer auf den Sieger */
+    #winner-spotlight { background: conic-gradient(from 180deg at 50% -10%, transparent 0deg 160deg, rgba(255,230,140,.20) 172deg 188deg, transparent 200deg 360deg); opacity: 0; transition: opacity 1.2s ease; }
+    #winner-spotlight.on { opacity: 1; animation: spotSwing 5s ease-in-out infinite; }
+    @keyframes spotSwing { 0%,100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
 
     .podium-photo-frame {
-      width: 100px; height: 120px;
+      width: 130px; height: 150px;
       display: flex; align-items: flex-end; justify-content: center;
       overflow: visible;
-      margin: 0 auto -32px auto;
+      margin: 0 auto 4px auto;
       position: relative; z-index: 5;
     }
     .podium-photo-frame img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .podium-photo-frame.settled { height: auto; min-height: 96px; }
     .podium-photo-frame.empty {
-      width: 64px; height: 64px;
+      width: 84px; height: 84px;
       border-radius: 50%;
       border: 3px solid #4a3f6b;
       background: #0a0518;
@@ -69,14 +89,14 @@
     .rocket-wrap-abs {
       position: fixed;
       left: 0; top: 0;
-      width: 100px; height: 130px;
+      width: 130px; height: 170px;
       transform-origin: 50% 73%;
       pointer-events: none;
       z-index: 60;
       opacity: 0;
     }
     .rocket-photo-window {
-      position: absolute; left: 34px; top: 24px; width: 32px; height: 32px;
+      position: absolute; left: 32%; top: 18.5%; width: 36%; height: 27.7%;
       border-radius: 50%; overflow: hidden; background: #0a0518;
     }
     .rocket-photo-window img { width: 100%; height: 100%; object-fit: cover; }
@@ -351,6 +371,12 @@
     // Bewusst schief/krakelig gezeichnete "Kinderzeichnung"-Rakete, die das Spielerfoto im
     // Bullauge hereinträgt - inkl. Flossen, Flamme und Rauchwölkchen am Heck.
     const ROCKET_FLIGHT_MS = 4200; // deutlich länger als vorher
+    // Eigenes Raketenbild: einfach props/rocket.png ins Repo legen - fehlt es, kommt die SVG-Rakete.
+    // ROCKET_WINDOW = Lage des runden Bullauges im Bild (in Prozent der Bildbreite/-höhe).
+    const ROCKET_IMG = 'props/rocket.png';
+    const ROCKET_WINDOW = { left: 33, top: 26, w: 34 };
+    let rocketImgOk = false;
+    { const im = new Image(); im.onload = () => { rocketImgOk = true; }; im.src = ROCKET_IMG; }
 
     // Kurzer Motor-Aussetzer: Flamme flackert kurz weg, dabei spuckt der Motor ein paar
     // schwarze Rußwolken aus - wird per JS zu festen Zeitpunkten während des Flugs ausgelöst.
@@ -391,7 +417,7 @@
       const rect = targetEl.getBoundingClientRect();
       const targetX = rect.left + rect.width / 2;
       const targetY = rect.top + rect.height / 2;
-      const HALF_W = 50, HALF_H = 65;
+      const HALF_W = 65, HALF_H = 85;
 
       const corners = [
         { x: -90, y: vh + 90 },
@@ -409,7 +435,7 @@
         { x: vw * 0.62, y: vh * 0.28, rot: -300, scale: 1.0, dur: 550 },
         { x: vw * 0.46, y: vh * 0.46, rot: -420, scale: 1.05, dur: 500 },
         { x: vw * 0.56, y: vh * 0.36, rot: -540, scale: 1.0, dur: 450 },
-        { x: targetX, y: targetY, rot: -565, scale: 0.32, dur: 700 }
+        { x: targetX, y: targetY, rot: -565, scale: 0.45, dur: 700 }
       ];
 
       function place(i) {
@@ -436,6 +462,21 @@
     }
 
     function rocketMarkup(photoUrl) {
+      if (rocketImgOk) {
+        return `
+        <svg viewBox="0 0 100 130" style="position:absolute; inset:0; width:100%; height:100%; overflow:visible;">
+          <g transform="translate(0,14)">
+            <circle class="smoke-puff" style="--sx:-7px;" cx="40" cy="118" r="7" fill="#999" opacity="0.5"/>
+            <circle class="smoke-puff" style="--sx:8px; animation-delay:0.15s;" cx="58" cy="122" r="5.5" fill="#bbb" opacity="0.4"/>
+            <g class="rocket-flame">
+              <path d="M38,98 Q29,113 42,119 Q46,108 50,119 Q63,114 56,98 Q50,105 46,98 Q44,105 38,98 Z" fill="#ff8a3d" stroke="#1a1006" stroke-width="1.8" stroke-linejoin="round"/>
+              <path d="M42,101 Q39,109 45,112 Q47,105 49,112 Q54,110 51,101 Z" fill="#ffd23f"/>
+            </g>
+          </g>
+        </svg>
+        <img src="${ROCKET_IMG}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:contain;">
+        <div class="rocket-photo-window" style="left:${ROCKET_WINDOW.left}%; top:${ROCKET_WINDOW.top}%; width:${ROCKET_WINDOW.w}%; height:auto; aspect-ratio:1;">${photoUrl ? `<img src="${photoUrl}">` : ''}</div>`;
+      }
       return `
         <svg viewBox="0 0 100 130" style="width:100%; height:100%; overflow:visible;">
           <g>
@@ -466,84 +507,106 @@
       layoutOrder.forEach((rank) => {
         const p = rankedPlayers[rank - 1];
         if (!p) return;
-        const heightPx = n > 1 ? Math.round(70 + ((n - rank) / (n - 1)) * 170) : 180;
+        const heightPx = n > 1 ? Math.round(80 + ((n - rank) / (n - 1)) * 170) : 220;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
         const rankClass = rank === 1 ? 'podium-rank1' : rank === 2 ? 'podium-rank2' : rank === 3 ? 'podium-rank3' : '';
 
         const col = document.createElement("div");
         col.className = "flex flex-col items-center justify-end flex-shrink-0";
-        col.style.width = (n <= 6 ? 118 : 92) + "px";
+        col.style.width = (n <= 5 ? 165 : n <= 7 ? 140 : 112) + "px";
         col.innerHTML = `
           <div id="podium-photo-${rank}" class="podium-photo-frame empty">
             ${MYSTERY_SVG}
           </div>
-          <div id="podium-label-${rank}" class="podium-label w-full flex flex-col items-center justify-end text-center px-1 pb-2" style="min-height: 78px;">
-            <div id="podium-name-${rank}" class="text-white/90 text-[11px] font-bold w-full leading-tight break-words"></div>
-            <div id="podium-score-${rank}" class="text-[#ffd23f] font-jax font-extrabold text-sm mt-0.5"></div>
+          <div id="podium-label-${rank}" class="podium-label w-full flex flex-col items-center justify-end text-center px-1 pb-2" style="min-height: 56px;">
+            <div id="podium-name-${rank}" class="podium-name w-full break-words"></div>
+            <div id="podium-score-${rank}" class="podium-score mt-0.5"></div>
           </div>
-          <div id="podium-step-${rank}" class="podium-step ${rankClass} w-full flex items-start justify-center pt-3" style="height:${heightPx}px;">
-            <div class="font-jax text-white font-extrabold text-2xl">${rank}.</div>
+          <div id="podium-step-${rank}" class="podium-step ${rankClass} w-full flex flex-col items-center justify-start pt-3" style="height:${heightPx}px;">
+            <div class="rank-num">${rank}.</div>
+            ${medal ? `<div class="podium-medal">${medal}</div>` : ''}
           </div>
         `;
         wrap.appendChild(col);
       });
     }
 
+    function photoHtml(img, p) {
+      return img ? `<img src="${img}" class="object-contain" onerror="this.outerHTML='<div class=&quot;podium-initial&quot;>${(p.name || '?').charAt(0).toUpperCase()}</div>'">`
+                 : `<div class="podium-initial">${(p.name || '?').charAt(0).toUpperCase()}</div>`;
+    }
+
+    function countUp(el, to, ms) {
+      const t0 = performance.now();
+      (function f(t) { const k = Math.min(1, (t - t0) / ms); el.innerText = Math.round(to * (1 - Math.pow(1 - k, 3))) + " Pkt."; if (k < 1) requestAnimationFrame(f); })(t0);
+    }
+
+    // Großer Einblender vor jedem Platz: "Platz 3 ..." bzw. Trommelwirbel für den Sieger
+    function showRevealAnnounce(rank, n, ms) {
+      const el = document.getElementById("reveal-announce");
+      const medal = rank === 1 ? '🥁' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '🚀';
+      const title = rank === 1 ? 'Und der Sieger ist' : rank === n && n > 1 ? 'Den letzten Platz belegt' : 'Platz ' + rank + ' geht an';
+      el.innerHTML = `<div class="ann text-center">
+          <div class="text-7xl mb-3">${medal}</div>
+          <div class="font-jax font-extrabold ${rank === 1 ? 'text-6xl text-[#ffd23f]' : 'text-5xl text-white'}" style="text-shadow:4px 4px 0 #1a1006">${title}</div>
+          <div class="ann-dots font-jax font-extrabold text-6xl text-[#ffd23f]"><span>.</span><span>.</span><span>.</span></div>
+        </div>`;
+      el.classList.remove("hidden");
+      setTimeout(() => el.classList.add("hidden"), ms);
+    }
+
     function revealRank(rank, animate) {
       const p = rankedPlayers[rank - 1];
       if (!p) return;
+      const n = rankedPlayers.length;
       const step = document.getElementById("podium-step-" + rank);
       const nameEl = document.getElementById("podium-name-" + rank);
       const scoreEl = document.getElementById("podium-score-" + rank);
       const photoEl = document.getElementById("podium-photo-" + rank);
       if (!step) return;
-      if (animate && window.HSAudio) {
+      const img = PODIUM_IMAGES[rank] || p.head || p.clanTag || p.avatar;
+
+      // Alles, was erst NACH der Landung der Rakete zu sehen sein soll (sonst wäre der Name verraten)
+      const finish = (withShow) => {
+        if (photoEl) {
+          photoEl.classList.remove("empty");
+          photoEl.classList.add("settled");
+          photoEl.innerHTML = '<div class="relative inline-block">' + photoHtml(img, p) + (rank === 1 ? '<div class="podium-crown">👑</div>' : '') + '</div>';
+          if (withShow) photoEl.classList.add("photo-settle");
+        }
+        nameEl.innerText = p.name;
+        nameEl.classList.add("name-reveal");
+        scoreEl.classList.add("name-reveal");
+        if (withShow) countUp(scoreEl, p.score, rank === 1 ? 1800 : 1100); else scoreEl.innerText = p.score + " Pkt.";
+
+        const sentences = achievementSentencesFor(p.id, rank, achievements, n, p.score);
+        document.getElementById("achievement-banner").innerHTML = `
+          <div class="jax-card px-7 py-5 text-center title-pop max-w-xl ${rank === 1 ? 'border-[#ffd23f]' : ''}">
+            <div class="font-jax text-2xl font-extrabold text-[#1a1a2e] mb-2">${rank === 1 ? '👑 ' : ''}${p.name}</div>
+            ${sentences.map(s => `<div class="text-[#7017c9] font-semibold text-base leading-snug">${s}</div>`).join('')}
+          </div>`;
+        if (rank === 1) document.getElementById("winner-spotlight")?.classList.add("on");
+        if (!withShow) return;
+        const rect = step.getBoundingClientRect();
+        burstConfetti(rank === 1 ? 140 : 45);
+        if (rank === 1) fireworksShow(12); else burstFirework(rect.left + rect.width / 2, rect.top);
+      };
+
+      if (!animate) { step.classList.add("revealed"); finish(false); return; }
+
+      if (window.HSAudio) {
         // Trommelwirbel, dann die Fanfare je nach Platz
         try { HSAudio.play('aufloesung'); setTimeout(() => HSAudio.play(rank === 1 ? 'platz1' : rank === 2 ? 'platz2' : rank === 3 ? 'platz3' : 'platz_rest'), 1600); } catch (e) {}
       }
-
-      step.classList.add("revealed");
-      nameEl.innerText = p.name;
-      nameEl.classList.add("name-reveal");
-      scoreEl.innerText = p.score + " Pkt.";
-      scoreEl.classList.add("name-reveal");
-
-      // Bild fliegt JETZT erst mit der Rakete rein - vorher war nur ein Fragezeichen zu sehen,
-      // damit niemand die Platzierung an den Bildern vorab erraten konnte. Kommt jemand erst
-      // mitten in der Zeremonie dazu, werden bereits enthüllte Plätze ohne Raketen-Show
-      // sofort korrekt angezeigt (kein Nachfeuerwerk-Spam beim Aufholen).
-      if (photoEl) {
-        const img = PODIUM_IMAGES[rank] || p.head || p.clanTag || p.avatar;
-
-        if (!animate) {
-          photoEl.classList.remove("empty");
-          photoEl.classList.add("settled");
-          photoEl.innerHTML = img ? `<img src="${img}" class="object-contain" onerror="this.style.display='none'">` : TROPHY_SVG;
-        } else {
-          flyRocketAcrossScreen(img, photoEl, () => {
-            photoEl.classList.remove("empty");
-            photoEl.classList.add("settled");
-            photoEl.innerHTML = img ? `<img src="${img}" class="object-contain" onerror="this.style.display='none'">` : TROPHY_SVG;
-            photoEl.classList.add("photo-settle");
-          });
-        }
-      }
-
-      const captionWrap = document.getElementById("achievement-banner");
-      const sentences = achievementSentencesFor(p.id, rank, achievements, rankedPlayers.length, p.score);
-      captionWrap.innerHTML = `
-        <div class="jax-card px-6 py-5 text-center title-pop max-w-md">
-          <div class="font-jax text-xl font-extrabold text-[#1a1a2e] mb-2">${p.name}</div>
-          ${sentences.map(s => `<div class="text-[#7017c9] font-semibold text-sm leading-snug">${s}</div>`).join('')}
-        </div>
-      `;
-
-      const rect = step.getBoundingClientRect();
-      burstConfetti(rank === 1 ? 90 : 40);
-      if (rank === 1) {
-        fireworksShow(9);
-      } else {
-        burstFirework(rect.left + rect.width / 2, rect.top);
-      }
+      const annMs = rank === 1 ? 2800 : 1700;
+      const btn = document.getElementById("host-next-btn");
+      if (btn && isHost) { btn.disabled = true; btn.style.opacity = '.4'; setTimeout(() => { btn.disabled = false; btn.style.opacity = ''; }, annMs + ROCKET_FLIGHT_MS + 800); }
+      document.getElementById("achievement-banner").innerHTML = '';
+      showRevealAnnounce(rank, n, annMs);
+      setTimeout(() => {
+        step.classList.add("revealed");
+        if (photoEl) flyRocketAcrossScreen(img, photoEl, () => finish(true)); else finish(true);
+      }, annMs);
     }
 
     // ================= GEMEINSAMER ZUSTAND: der Host bestimmt das Tempo, alle sehen dasselbe =================
@@ -701,6 +764,8 @@
   <div id="confetti-layer" class="fixed inset-0 pointer-events-none z-40 overflow-hidden"></div>
   <div id="firework-layer" class="fixed inset-0 pointer-events-none z-40 overflow-hidden"></div>
   <div id="rocket-fly-layer" class="fixed inset-0 pointer-events-none z-[60] overflow-visible"></div>
+  <div id="winner-spotlight" class="fixed inset-0 pointer-events-none z-[1]"></div>
+  <div id="reveal-announce" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-black/60"></div>
 
   <header class="relative z-10 text-center pt-4">    <h1 class="font-jax text-3xl md:text-5xl font-extrabold text-[#ffd23f] title-pop" style="text-shadow: 3px 3px 0 #1a1006, -3px -3px 0 #1a1006, 3px -3px 0 #1a1006, -3px 3px 0 #1a1006;">
       🏆 SIEGEREHRUNG 🏆
@@ -708,7 +773,7 @@
     <div id="ceremony-status" class="text-white/60 text-sm mt-2">Der Moderator enthüllt gleich die Platzierungen...</div>
   </header>
 
-  <div id="achievement-banner" class="relative z-10 my-4 min-h-[100px] flex items-center justify-center w-full max-w-md"></div>
+  <div id="achievement-banner" class="relative z-10 my-4 min-h-[110px] flex items-center justify-center w-full max-w-xl"></div>
 
   <div id="podium-wrap" class="relative z-10 flex items-end justify-center gap-2 md:gap-3 flex-1 pb-4 flex-wrap max-w-6xl"></div>
 
