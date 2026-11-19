@@ -107,7 +107,6 @@
     musik_spiel8:   { group: 'Musik je Spiel', label: 'Spiel 8 Schriftzug-Salat',     file: 'musik-quiz-loop',          vol: 0.45, music: true },
     musik_spiel9:   { group: 'Musik je Spiel', label: 'Spiel 9 Zeitreise',            file: 'musik-news-countdown',     vol: 0.45, music: true },
     musik_spiel10:  { group: 'Musik je Spiel', label: 'Spiel 10',                     file: 'musik-news-countdown',     vol: 0.45, music: true },
-    musik_sekwars:  { group: 'Musik je Spiel', label: 'Sekwars',                      file: 'musik-bereit',             vol: 0.45, music: true },
     // Nebenspiele
     musik_snake:    { group: 'Nebenspiele', label: 'Snake - Musik',                   file: 'musik-beat-112',           vol: 0.45, music: true },
     musik_goldregen:{ group: 'Nebenspiele', label: 'Goldregen - Musik',               file: 'musik-beat-112',           vol: 0.45, music: true },
@@ -167,7 +166,6 @@
     spiel8:  { music: 'musik_spiel8', active: ['guessing'], on: { guessing: 'neue_frage', evaluation: 'aufloesung', result: 'aufloesung' }, start: true },
     spiel9:  { music: 'musik_spiel9', active: ['input'], on: { input: 'neue_frage', result: 'aufloesung', finished: 'spiel_ende' }, start: true },
     spiel10: { music: 'musik_spiel10', active: ['input'], on: { input: 'neue_frage', result: 'aufloesung', finished: 'spiel_ende' }, start: true },
-    sekwars: { music: 'musik_sekwars', active: ['input'], on: { input: 'neue_frage', result: 'aufloesung', finished: 'spiel_ende' }, start: true },
     snake:          { music: 'musik_snake' },
     goldregen:      { music: 'musik_goldregen' },
     'vier-gewinnt': { music: 'musik_vier' },
