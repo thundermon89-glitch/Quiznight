@@ -253,6 +253,11 @@
       #hsintro .hsi-skip { position: absolute; top: 12px; right: 12px; background: rgba(26,26,46,.75); color: #fff; border: 2px solid rgba(255,255,255,.6);
         border-radius: 999px; padding: 6px 14px; font: 700 13px 'Baloo 2', system-ui, sans-serif; cursor: pointer; z-index: 2; }
       #hsintro .hsi-skip:hover { background: #ff2e93; }
+      #hsintro .hsi-sound { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 2; background: #ffd23f; color: #1a1a2e;
+        border: 3px solid #1a1a2e; border-radius: 999px; padding: 6px 16px; font: 800 15px 'Baloo 2', system-ui, sans-serif; cursor: pointer;
+        box-shadow: 3px 3px 0 rgba(0,0,0,.8); animation: hsiPulse 1.1s ease-in-out infinite; transition: opacity .4s; }
+      #hsintro .hsi-sound.hsi-gone { opacity: 0; pointer-events: none; }
+      @keyframes hsiPulse { 0%,100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.08); } }
       @keyframes hsiZoom { from { transform: scale(1); } to { transform: scale(1.08); } }
       @keyframes hsiGrad { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
       @keyframes hsiPop { from { transform: scale(.4) rotate(-4deg); opacity: 0; } to { transform: scale(1) rotate(0); opacity: 1; } }
@@ -303,7 +308,8 @@
       <div class="hsi-shade"></div>
       <canvas></canvas>
       <div class="hsi-head"><div class="hsi-title">${esc(title)}</div>${cfg.subtitle ? `<div class="hsi-sub">${esc(cfg.subtitle)}</div>` : ''}</div>
-      <button type="button" class="hsi-skip">Überspringen ▸</button>`;
+      <button type="button" class="hsi-skip">Überspringen ▸</button>
+      <button type="button" class="hsi-sound hsi-gone">🔊 Einmal klicken für Ton</button>`;
     if (!root.parentNode) document.body.appendChild(root);
 
     const canvas = root.querySelector('canvas');
@@ -327,6 +333,16 @@
     const order = FIGHTERS.slice().sort(() => Math.random() - 0.5);
     // Ablauf: normal (Jungs hauen Zombies um) / Zombies gewinnen / Jungs fallen von oben ins Bild
     const SCN = cfg.scenario || (() => { const r = Math.random(); return r < 0.5 ? 'normal' : r < 0.75 ? 'zwin' : 'drop'; })();
+    // Musik zum Intro (je Ablauf ein eigener Jingle, im Editor unter "Intro / Ladebildschirm" änderbar)
+    let jingle = null;
+    try { if (window.HSAudio && HSAudio.introJingle) jingle = HSAudio.introJingle('intro_' + SCN, DURATION); } catch (e) {}
+    const soundHint = root.querySelector('.hsi-sound');
+    const soundLocked = () => { try { return window.HSAudio && HSAudio.sfxOn() && !HSAudio.isUnlocked(); } catch (e) { return false; } };
+    if (soundHint) {
+      if (soundLocked()) soundHint.classList.remove('hsi-gone');
+      soundHint.addEventListener('click', (e) => { e.stopPropagation(); soundHint.classList.add('hsi-gone'); });
+      const hintTimer = setInterval(() => { if (!soundLocked() || !root.isConnected) { soundHint.classList.add('hsi-gone'); clearInterval(hintTimer); } }, 300);
+    }
     // Rollen: vorne 3 Kämpfer, dahinter Mitläufer - einer davon dreht manchmal ab der Hälfte um
     const roles = ['fighter', 'fighter', 'fighter', 'tail', 'tail', Math.random() < 0.6 ? 'turn' : 'tail'];
     const heroes = order.map((f, i) => ({
@@ -1333,6 +1349,7 @@
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', layout);
       if (!instant) sfx('coin', 0.8);
+      try { if (jingle) jingle.stop(); } catch (e) {}
       root.style.filter = '';
       root.classList.add('hsi-out');
       setTimeout(() => { root.remove(); }, instant ? 0 : 600);

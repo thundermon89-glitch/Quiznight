@@ -121,6 +121,9 @@
     sieg_klein:     { group: 'Nebenspiele', label: 'Gewonnen (Nebenspiel)',           file: range('sieg-gitarre-', 3),  vol: 0.8, duck: true },
     verloren:       { group: 'Nebenspiele', label: 'Verloren / ausgeschieden',        file: ['falsch-posaune', 'falsch-affe'], vol: 0.8 },
     // Siegerehrung
+    intro_normal:   { group: 'Intro / Ladebildschirm', label: 'Intro: Jungs hauen Zombies um', file: 'musik-kampf-start',   vol: 0.6 },
+    intro_zwin:     { group: 'Intro / Ladebildschirm', label: 'Intro: Zombies gewinnen',        file: 'musik-unheimlich-loop', vol: 0.65 },
+    intro_drop:     { group: 'Intro / Ladebildschirm', label: 'Intro: Jungs fallen vom Himmel', file: 'fanfare-lustig',      vol: 0.7 },
     musik_siegerehrung: { group: 'Siegerehrung', label: 'Hintergrundmusik',           file: 'musik-orchester-hoffnung', vol: 0.45, music: true },
     platz1:         { group: 'Siegerehrung', label: 'Platz 1 wird enthüllt',          file: 'fanfare-sieg-gross',       vol: 0.9, duck: true },
     platz2:         { group: 'Siegerehrung', label: 'Platz 2 wird enthüllt',          file: 'fanfare-sieg',             vol: 0.85, duck: true },
@@ -266,6 +269,7 @@
   function play(slot, opt) {
     opt = opt || {};
     if (muted || sfxVol <= 0) return;
+    if (slot === 'spiel_start' && introActive) return;   // das Intro hat seinen eigenen Jingle
     if (slot === 'aufloesung') revealAt = Date.now();
     const wait = AFTER_REVEAL.includes(slot) ? revealAt + 1700 - Date.now() : 0;
     if (wait > 0 && !opt._waited) { setTimeout(() => play(slot, Object.assign({}, opt, { _waited: true })), wait); return; }
@@ -282,6 +286,43 @@
       if (opt.duck !== false && (opt.duck || (SLOTS[slot] && SLOTS[slot].duck))) duck(Math.min(buf.duration, 12));
     }).catch(() => {});
   }
+  // Intro-Jingle für den Ladebildschirm (game-intro.js): läuft so lange wie das Intro, die
+  // Spielmusik wird solange leiser gedreht. Ist der Ton noch gesperrt (Browser erlaubt Ton erst
+  // nach dem ersten Klick auf der Seite), startet der Jingle beim ersten Klick nachträglich.
+  let introActive = false;
+  function introJingle(slot, ms) {
+    const file = pick(slot);
+    const st = { src: null, g: null, stopped: false, until: Date.now() + (ms || 9000) };
+    if (!file || !AC) return { stop() {} };
+    introActive = true;
+    const start = () => {
+      if (st.stopped || st.src || muted || sfxVol <= 0 || AC.state !== 'running') return;
+      const left = st.until - Date.now();
+      if (left < 800) return;
+      loadBuf(file).then(buf => {
+        if (st.stopped || st.src || AC.state !== 'running') return;
+        const src = AC.createBufferSource(); src.buffer = buf;
+        const g = AC.createGain(); const t = AC.currentTime, vol = slotVol(slot);
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.15);
+        const end = Math.min(buf.duration, (st.until - Date.now()) / 1000);
+        g.gain.setValueAtTime(vol, t + Math.max(0.2, end - 0.7)); g.gain.linearRampToValueAtTime(0.0001, t + end);
+        src.connect(g); g.connect(sfxBus); src.start(t); src.stop(t + end + 0.05);
+        st.src = src; st.g = g;
+        duck(end);
+      }).catch(() => {});
+    };
+    loadBuf(file).then(start).catch(() => {});
+    const onUnlock = () => setTimeout(start, 60);
+    ['pointerdown', 'keydown', 'touchend'].forEach(ev => window.addEventListener(ev, onUnlock, { capture: true }));
+    st.stop = () => {
+      if (st.stopped) return; st.stopped = true; introActive = false;
+      ['pointerdown', 'keydown', 'touchend'].forEach(ev => window.removeEventListener(ev, onUnlock, { capture: true }));
+      if (st.src) { try { const t = AC.currentTime; st.g.gain.cancelScheduledValues(t); st.g.gain.setValueAtTime(st.g.gain.value, t); st.g.gain.linearRampToValueAtTime(0.0001, t + 0.5); st.src.stop(t + 0.55); } catch (e) {} }
+      duckUntil = 0; refreshTracks(1.2);
+    };
+    return st;
+  }
+
   // Kleine, live erzeugte Töne (für Dinge, die sehr oft passieren: Münze, Futter, Stein)
   function synth(kind, vol) {
     if (!AC || muted || sfxVol <= 0 || AC.state !== 'running') return;
@@ -473,7 +514,7 @@
 
   window.HSAudio = {
     FILES, SLOTS, PAGES, page, url,
-    play, preload, result, stage, duck, once, synth,
+    play, preload, result, stage, duck, once, synth, introJingle,
     music: (slot, opt) => setTrack(0, slot, opt),
     atmo: (slot, opt) => setTrack(1, slot, opt),
     level: setLevel,
