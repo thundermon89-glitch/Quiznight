@@ -490,6 +490,31 @@
       }).join('');
     }
 
+    // Video sanft an die gemeinsame Uhr anpassen: kleine Abweichungen über die Abspielgeschwindigkeit
+    // ausgleichen, nur bei großen Abweichungen (> 1 s) springen - und dann höchstens alle 2 s.
+    // Vorher wurde bei jeder kleinen Abweichung gesprungen, das Springen selbst kostete Zeit -> Dauerruckeln.
+    function syncVideo(vid, should) {
+      if (vid.readyState < 2) return;                 // noch kein Bild dekodierbar
+      const diff = vid.currentTime - should;           // > 0: Video ist voraus
+      const now = performance.now();
+      if (Math.abs(diff) > 1 && (vid._lastSeek === undefined || now - vid._lastSeek > 2000)) {
+        vid._lastSeek = now;
+        vid.playbackRate = 1;
+        try { vid.currentTime = should; } catch (err) {}
+      } else if (Math.abs(diff) > 0.08) {
+        vid.playbackRate = diff > 0 ? 0.9 : 1.1;
+      } else {
+        vid.playbackRate = 1;
+      }
+      if (vid.paused && !vid._playPending) {
+        vid._playPending = true;
+        vid.play().then(() => { vid._playPending = false; }).catch(() => {
+          vid.muted = true;   // Browser blockt Ton ohne Klick -> stumm weiter
+          vid.play().catch(() => {}).finally(() => { vid._playPending = false; });
+        });
+      }
+    }
+
     function updateFuse(startedAt) {
       const pts = currentMoviePoints(startedAt);
       const elapsed = startedAt ? Math.max(0, serverNow() - startedAt) : 0;   // gemeinsame Serveruhr, wie die Punkte
@@ -594,7 +619,7 @@
           renderLeaderboard(state, "movie-leaderboard-live");
           clearInterval(movieTickInterval);
         } else {
-          guessWrap?.classList.remove("hidden");
+          guessWrap?.classList.toggle("hidden", isHost);   // Admin rät nicht mit
           fuseWrap?.classList.remove("hidden");
           solvedWrap?.classList.add("hidden");
           // Am movieStartedAt-Zeitstempel erkennen, nicht nur an der Runden-ID - sonst würde
@@ -657,13 +682,13 @@
             if (left > 0) {
               // Countdown 3-2-1, alle starten gleichzeitig
               if (cd) { cd.classList.remove("hidden"); cd.innerText = Math.ceil(left / 1000); }
-              if (vid && vid.readyState >= 1 && vid.currentTime !== 0) { try { vid.currentTime = 0; } catch (err) {} }
+              if (vid && vid.readyState >= 1 && !vid._atZero) { vid._atZero = true; try { vid.currentTime = 0; } catch (err) {} }
               updateFuse(startAt);
               return;
             }
             if (cd) cd.classList.add("hidden");
             if (vid) {
-              // Häppchen: 3 s zeigen, 3 s Pause (schwarz), dann die nächsten 3 s - bei allen gleichzeitig
+              // Häppchen: 5 s zeigen, 5 s Pause (schwarz), dann die nächsten 5 s - bei allen gleichzeitig
               const e = (serverNow() - startAt) / 1000;
               const cyc = Math.floor(e / (CLIP_SHOW + CLIP_PAUSE)), inCyc = e - cyc * (CLIP_SHOW + CLIP_PAUSE);
               const showing = inCyc < CLIP_SHOW;
@@ -672,10 +697,14 @@
               const atEnd = vid.duration && should >= vid.duration - 0.05;
               if (showing && !atEnd) {
                 if (pauseEl) pauseEl.classList.add("hidden");
-                if (vid.readyState >= 1 && Math.abs(vid.currentTime - should) > 0.6) { try { vid.currentTime = should; } catch (err) {} }
-                if (vid.paused) vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); });
+                syncVideo(vid, should);
               } else {
                 if (!vid.paused) vid.pause();
+                vid.playbackRate = 1;
+                // In der Pause schon genau ans Ende des Häppchens stellen - dann geht das nächste
+                // Häppchen ohne Springen/Nachladen exakt pünktlich weiter.
+                const chunkEnd = Math.min((cyc + 1) * CLIP_SHOW, vid.duration || Infinity);
+                if (!atEnd && vid._pausedCyc !== cyc && vid.readyState >= 1) { vid._pausedCyc = cyc; try { vid.currentTime = chunkEnd; } catch (err) {} }
                 if (pauseEl) {
                   pauseEl.classList.remove("hidden");
                   pauseEl.querySelector('span').innerText = atEnd ? 'Mehr gibt es nicht!' : 'weiter in ' + Math.ceil(CLIP_SHOW + CLIP_PAUSE - inCyc) + ' …';
@@ -692,7 +721,7 @@
             }
           };
           tick();
-          movieTickInterval = setInterval(tick, 150);
+          movieTickInterval = setInterval(tick, 50);   // feiner Takt für pünktliche Häppchen
         }
         return;
       }
@@ -767,7 +796,7 @@
           isHost = true;
           document.getElementById("host-end-game-btn")?.classList.remove("hidden");
           document.getElementById("host-panel")?.classList.remove("hidden");
-          document.getElementById("player-panel")?.classList.add("hidden");
+          // Admin sieht den Trailer mit (ohne Rate-Feld) - das Spieler-Panel bleibt sichtbar
           // WICHTIG: die Host-Erkennung läuft asynchron und kommt oft NACH dem ersten
           // Rendern des Spielzustands (das dann noch fälschlich isHost=false annahm).
           // Deshalb hier einmal neu zeichnen, sobald wirklich feststeht, dass es der Host ist -
