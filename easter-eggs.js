@@ -10,6 +10,9 @@
      und hüpft nach jedem Klick weiter. 3 Treffer = +50 Punkte.
    - Jedes Ei gibt es pro Spieler einmal pro Tag. Wird es verpasst, kommt es später wieder.
    - Admin/Host sieht keine Eier. Auf Lobby, Editor und Admin-Seiten erscheinen sie nicht.
+   - DER ADMIN: Wird es am Rechner eines Spielers ruhig (eine Weile keine Maus/Tastatur),
+     schlurft der Admin vorbei und macht irgendeinen Quatsch (Bier, Rülpser, Tanz, am PC
+     hocken ...). Wer ihn wegklickt, kassiert eine Uppercut und -25 Punkte.
    ===================================================================================== */
 (function () {
   if (window.HSEggs) return;
@@ -199,6 +202,101 @@
   }
 
   // =====================================================================================
+  // DER ADMIN: kommt, wenn Ruhe ist. Wegklicken wird bestraft.
+  // =====================================================================================
+  const ADMIN_PENALTY = 25;
+  const QUIET_MS = 45000;                 // so lange keine Eingabe = "Ruhe"
+  const ADMIN_COOLDOWN = [4, 9];          // Minuten bis zum nächsten möglichen Besuch
+  const ADM = { walk: 17, drink: 6, burp: 11, cheers: 11, dance: 9, facepalm: 13, button: 13, scratch: 13, type: 15, rage: 13, sleep: 15, uppercut: 7, flip: 6 };
+  const ADM_ACTS = [
+    ['drink', 'Ruhe hier? Dann trink ich halt eins.'], ['burp', 'Tschuldigung.'], ['cheers', 'Prost, ihr Schnarchnasen!'],
+    ['dance', 'Keiner guckt? Perfekt.'], ['facepalm', 'Was ist DAS denn für eine Antwort?!'], ['button', 'Nächstes Spiel! … ach nee, noch nicht.'],
+    ['scratch', 'Hm. Was wollte ich hier?'], ['type', 'Kurz mit Claude was basteln …'], ['rage', 'WARUM GEHT DAS NICHT?!'], ['sleep', 'Nur kurz die Augen zu …']
+  ];
+  let lastInput = Date.now();
+  ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'].forEach(ev => window.addEventListener(ev, () => { lastInput = Date.now(); }, { passive: true, capture: true }));
+
+  async function penalize() {
+    const me = await api('players/' + pid);
+    if (!me || !me.name) return;
+    await api('players/' + pid + '/score', { method: 'PUT', body: JSON.stringify((me.score || 0) - ADMIN_PENALTY) });
+    await api('gameLog', { method: 'POST', body: JSON.stringify({ text: '👊 ' + me.name + ' wollte den Admin wegklicken: -' + ADMIN_PENALTY + ' Punkte', at: Date.now() }) });
+  }
+
+  function runAdmin(done) {
+    const T = Math.round(Math.max(260, Math.min(420, window.innerHeight * 0.46)));   // Kachel (Figur ~40 % davon)
+    const el = document.createElement('div'); el.className = 'hsegg';
+    el.style.width = T + 'px'; el.style.height = T + 'px'; el.style.bottom = (-T * 0.07) + 'px';
+    document.body.appendChild(el);
+    const W = () => window.innerWidth;
+    let anim = null, frame0 = 0, fps = 9, x = -T * 0.7, last = performance.now(), ended = false, hit = false;
+    let phase = 'in', acts = [], actEnd = 0, flipX = false;
+    const stopAt = W() * rnd(0.25, 0.55) - T / 2;
+    const pool = ADM_ACTS.slice().sort(() => Math.random() - 0.5); acts = pool.slice(0, 2 + Math.floor(Math.random() * 2));
+    function play(name, f, now) {
+      anim = name; fps = f; frame0 = now;
+      el.style.backgroundImage = `url('${BASE}eggs/admin_${name}.png')`; el.style.backgroundSize = `${ADM[name] * T}px ${T}px`;
+    }
+    function nextAct(now) {
+      const a = acts.shift();
+      if (!a) { phase = 'out'; play('walk', 11, now); return; }
+      play(a[0], a[0] === 'sleep' || a[0] === 'type' ? 7 : 9, now);
+      // jede Aktion läuft einmal durch (Schlafen/Tippen zweimal) plus kurze Pause
+      const loops = (a[0] === 'sleep' || a[0] === 'type') ? 2 : 1;
+      actEnd = now + (ADM[a[0]] / fps) * 1000 * loops + 500;
+      bubble(el, a[1], 2600);
+    }
+    play('walk', 11, last);
+    function tickF(now) {
+      if (ended) return;
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      let f = Math.floor((now - frame0) / 1000 * fps);
+      const n = ADM[anim];
+      if (phase === 'in') { x += 95 * dt; if (x >= stopAt) { phase = 'acts'; nextAct(now); } }
+      else if (phase === 'acts') { if (now > actEnd) nextAct(now); }
+      else if (phase === 'out') { x += 80 * dt; if (x > W() + 20) return finish(); }
+      else if (phase === 'punch') { f = Math.min(f, n - 1); if (now > actEnd) { phase = 'flee'; play('flip', 10, now); actEnd = now + 600; } }
+      else if (phase === 'flee') { x += 520 * dt; if (now > actEnd) play('walk', 22, now), actEnd = Infinity; if (x > W() + 20) return finish(); }
+      el.style.backgroundPosition = `-${(f % n) * T}px 0`;
+      el.style.transform = flipX ? 'scaleX(-1)' : '';
+      el.style.left = x + 'px';
+      placeBubble(el, x + T / 2, window.innerHeight - T * 0.62);
+      requestAnimationFrame(tickF);
+    }
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (ended || hit) return;
+      hit = true;
+      const now = performance.now();
+      phase = 'punch'; play('uppercut', 11, now); actEnd = now + (ADM.uppercut / 11) * 1000 + 250;
+      bubble(el, ['WEGKLICKEN?! Na warte!', 'Mich klickt man nicht weg!', 'Das gibt Abzug, Freundchen!'][Math.floor(Math.random() * 3)], 2400);
+      sfx('drop', 1);
+      setTimeout(() => {
+        sfx('boom', 0.8);
+        document.body.style.animation = 'hseggShake .35s';
+        setTimeout(() => (document.body.style.animation = ''), 380);
+        pop(e.clientX, e.clientY, '-' + ADMIN_PENALTY, '#ff2e93');
+        toast('👊 Den Admin wegklicken? Kostet ' + ADMIN_PENALTY + ' Punkte!');
+        penalize();
+      }, 350);
+    });
+    function finish() {
+      if (ended) return; ended = true;
+      el.remove(); if (el._bubble) el._bubble.remove();
+      done();
+    }
+    requestAnimationFrame(tickF);
+  }
+
+  let adminNextOk = Date.now() + 60000;     // frühestens 1 Minute nach dem Laden
+  function adminTick() {
+    if (busy || document.hidden) return;
+    if (Date.now() < adminNextOk || Date.now() - lastInput < QUIET_MS) return;
+    busy = true; style();
+    runAdmin(() => { busy = false; adminNextOk = Date.now() + rnd(ADMIN_COOLDOWN[0], ADMIN_COOLDOWN[1]) * 60000; });
+  }
+
+  // =====================================================================================
   // ZEITPLAN: je Ei ein zufälliger Zeitpunkt pro Tag, gespeichert im Browser
   // =====================================================================================
   const RUN = { stefan: runStefan, duck: runDuck };
@@ -228,8 +326,9 @@
     Object.keys(RUN).forEach(plan);
     setInterval(tick, 5000);
     setTimeout(tick, 1500);
+    setInterval(adminTick, 3000);
   }
   // Zum Testen: HSEggs.show('stefan') / HSEggs.show('duck')
-  window.HSEggs = { show: (egg) => { style(); RUN[egg](() => {}); } };
+  window.HSEggs = { show: (egg) => { style(); (egg === 'admin' ? runAdmin : RUN[egg])(() => {}); } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true }); else start();
 })();
