@@ -122,7 +122,6 @@
     const CLIP_SHOW = 5, CLIP_PAUSE = 5;   // Sekunden: Ausschnitt zeigen / schwarze Pause
     const MOVIE_DURATION_MS = 60000; // 1 Minute - die Zündschnur brennt in dieser Zeit ab
     const MOVIE_LEAD_MS = 3000;      // Countdown 3-2-1, sobald alle den Trailer komplett geladen haben
-    const MOVIE_LOAD_TIMEOUT_MS = 20000; // wer nach 20 s immer noch lädt, wird nicht mehr abgewartet
 
     // Gemeinsame Uhr für alle Geräte (Firebase-Serverzeit), damit alle zeitgleich starten
     let serverOffset = 0;
@@ -285,6 +284,14 @@
           movieGuesses: null,
           roundsCompleted: state.roundsCompleted || 0
         });
+      });
+    };
+
+    window.hostForceStart = () => {
+      get(ref(db, 'game6State')).then((snap) => {
+        const st = snap.val() || {};
+        if (st.stage !== 'movie_playing' || st.movieStartedAt) return;
+        update(ref(db, 'game6State'), { movieStartedAt: serverNow() + MOVIE_LEAD_MS });
       });
     };
 
@@ -636,15 +643,16 @@
               const readyCount = ids.filter(id => ready[id]).length;
               if (cd) { cd.classList.remove("hidden"); cd.innerHTML = '<span class="text-2xl" style="-webkit-text-stroke:0">⏳ Trailer lädt … ' + readyCount + '/' + ids.length + ' bereit</span>'; }
               updateFuse(null);
-              if (isHost && !startSentFor[loadKey]) {
-                const waited = serverNow() - (state.movieLoadingSince || 0);
-                if (readyCount >= ids.length || waited > MOVIE_LOAD_TIMEOUT_MS) {
-                  startSentFor[loadKey] = true;
-                  update(ref(db, 'game6State'), { movieStartedAt: serverNow() + MOVIE_LEAD_MS });
-                }
+              // Kein automatischer Zeitablauf: es geht erst los, wenn ALLE den Trailer geladen haben.
+              // Hängt jemand fest, kann der Host per Knopf ohne Nachzügler starten.
+              document.getElementById("hc-force-start")?.classList.toggle("hidden", !isHost);
+              if (isHost && !startSentFor[loadKey] && readyCount >= ids.length) {
+                startSentFor[loadKey] = true;
+                update(ref(db, 'game6State'), { movieStartedAt: serverNow() + MOVIE_LEAD_MS });
               }
               return;
             }
+            document.getElementById("hc-force-start")?.classList.add("hidden");
             const left = startAt - serverNow();
             if (left > 0) {
               // Countdown 3-2-1, alle starten gleichzeitig
@@ -799,6 +807,9 @@
 
     <div id="hc-playing" class="hidden space-y-3">
       <div id="hc-solved-count" class="text-center text-sm font-bold">0 von 0 haben gelöst</div>
+      <button id="hc-force-start" onclick="hostForceStart()" class="hidden w-full py-3 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold text-sm">
+        ▶️ Ohne Nachzügler starten
+      </button>
       <button onclick="hostEndMovieRound()" class="w-full py-4 jax-btn bg-white text-[#1a1a2e] font-jax font-bold text-base">
         🏁 Runde jetzt beenden & auflösen
       </button>
