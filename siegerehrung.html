@@ -9,7 +9,7 @@
   <title>Hirnschmalz-Arena - Siegerehrung</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=UnifrakturMaguntia&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Inter', sans-serif; }
     .font-jax { font-family: 'Baloo 2', sans-serif; }
@@ -150,6 +150,16 @@
       100% { opacity: 1; transform: translateY(0); }
     }
     .name-reveal { animation: nameReveal 0.5s ease-out forwards; }
+    /* Siegerurkunde */
+    #cert-modal canvas { max-width: 100%; max-height: 72vh; width: auto; height: auto; border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+    #cert-print { display: none; }
+    @media print {
+      @page { size: A4 landscape; margin: 0; }
+      body > *:not(#cert-print) { display: none !important; }
+      body { background: #fff !important; padding: 0 !important; overflow: visible !important; }
+      #cert-print { display: block !important; }
+      #cert-print img { width: 100vw; height: auto; display: block; }
+    }
   </style>
 
   <script type="module">
@@ -853,6 +863,176 @@
       if (isHost && (lastRenderedRevealIndex < rankedPlayers.length)) document.getElementById('host-next-btn')?.classList.remove('hidden');
     }
 
+    // ================= SIEGERURKUNDE (Geschenk zum Abschluss) =================
+    // Nach der Siegerehrung kann sich jeder seine Urkunde als PNG holen oder als PDF drucken.
+    // Der Admin kann sich jede Urkunde ansehen (Auswahl oben im Fenster).
+    let certAwards = [];
+    const CERT_TITLES = {
+      1: 'Großmeister des Hirnschmalzes',
+      2: 'Vize-Hirni mit Silberrand',
+      3: 'Bronzene Denkmurmel'
+    };
+    function certTitle(rank, n) {
+      if (CERT_TITLES[rank]) return CERT_TITLES[rank];
+      if (rank === n && n > 1) return 'Hüter der Roten Laterne';
+      return 'Tapferer Rätselkämpfer';
+    }
+    function certLines(p, rank, n) {
+      const lines = [];
+      for (const g in (achievements && achievements.topPerGame) || {}) {
+        if (achievements.topPerGame[g].id === p.id) { lines.push('🔥 Punktbester in Spiel ' + g); break; }
+      }
+      certAwards.filter(a => (a.ids || []).includes(p.id)).forEach(a => lines.push(a.icon + ' Sonderpreis „' + a.title + '“ (+' + a.points + ')'));
+      if (!lines.length) lines.push(rank === n ? '🏮 Hat bis zum bitteren Ende durchgehalten' : '🧠 War die ganze Nacht mit vollem Hirnschmalz dabei');
+      return lines.slice(0, 4);
+    }
+    function loadImg(src) {
+      return new Promise((res) => {
+        if (!src) return res(null);
+        const im = new Image();
+        if (!src.startsWith('data:')) im.crossOrigin = 'anonymous';
+        im.onload = () => res(im); im.onerror = () => res(null);
+        im.src = src;
+      });
+    }
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    }
+    function fitText(ctx, text, maxW, font, startPx) {
+      let px = startPx;
+      do { ctx.font = font.replace('{px}', px); px -= 2; } while (ctx.measureText(text).width > maxW && px > 14);
+    }
+    async function drawCertificate(canvas, p) {
+      const rank = rankedPlayers.findIndex(x => x.id === p.id) + 1;
+      const n = rankedPlayers.length;
+      const W = 2000, H = 1414; canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      try { await Promise.all([document.fonts.load('800 80px "Baloo 2"'), document.fonts.load('80px "UnifrakturMaguntia"'), document.fonts.load('600 30px "Inter"')]); } catch (e) {}
+      const metal = rank === 1 ? ['#fff2a8', '#f2b705', '#a86f00'] : rank === 2 ? ['#ffffff', '#b8c2d1', '#6d7889'] : rank === 3 ? ['#f9cfa8', '#c9733b', '#7c3f17'] : ['#e9d8ff', '#9b6bff', '#4b2a9c'];
+
+      // Papier
+      const paper = ctx.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, 1300);
+      paper.addColorStop(0, '#fffaf0'); paper.addColorStop(1, '#f1e2c0');
+      ctx.fillStyle = paper; ctx.fillRect(0, 0, W, H);
+      // Rahmen
+      const fr = ctx.createLinearGradient(0, 0, W, H);
+      fr.addColorStop(0, metal[0]); fr.addColorStop(0.5, metal[1]); fr.addColorStop(1, metal[2]);
+      ctx.lineWidth = 34; ctx.strokeStyle = fr; ctx.strokeRect(40, 40, W - 80, H - 80);
+      ctx.lineWidth = 5; ctx.strokeStyle = '#1a1a2e'; ctx.strokeRect(22, 22, W - 44, H - 44); ctx.strokeRect(74, 74, W - 148, H - 148);
+      ctx.lineWidth = 2; ctx.setLineDash([14, 10]); ctx.strokeRect(96, 96, W - 192, H - 192); ctx.setLineDash([]);
+      // Ecken-Gehirne
+      ctx.font = '70px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      [[150, 150], [W - 150, 150], [150, H - 150], [W - 150, H - 150]].forEach(([x, y]) => ctx.fillText('🧠', x, y));
+
+      // Kopf
+      ctx.fillStyle = '#7017c9'; ctx.font = '800 40px "Baloo 2"';
+      ctx.fillText('HIRNSCHMALZ-ARENA · QUIZNACHT', W / 2, 175);
+      ctx.fillStyle = '#1a1a2e'; ctx.font = '170px "UnifrakturMaguntia"';
+      ctx.fillText(rank === n && n > 1 ? 'Ehrenurkunde' : 'Urkunde', W / 2, 320);
+
+      // Porträt
+      const px = 330, py = 720, pr = 175;
+      ctx.save(); ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fillStyle = '#1a0d3d'; ctx.fill(); ctx.clip();
+      const img = await loadImg(p.head || p.clanTag || p.avatar);
+      if (img) {
+        const sc = Math.min((pr * 1.8) / img.width, (pr * 1.8) / img.height);
+        const iw = img.width * sc, ih = img.height * sc;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, px - iw / 2, py - ih / 2 + 10, iw, ih);
+      } else {
+        ctx.fillStyle = '#ffd23f'; ctx.font = '800 170px "Baloo 2"'; ctx.fillText((p.name || '?').charAt(0).toUpperCase(), px, py + 10);
+      }
+      ctx.restore();
+      ctx.lineWidth = 14; ctx.strokeStyle = fr; ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 5; ctx.strokeStyle = '#1a1a2e'; ctx.beginPath(); ctx.arc(px, py, pr + 9, 0, Math.PI * 2); ctx.stroke();
+
+      // Text rechts vom Porträt
+      const cx = 1150, maxW = 1250;
+      ctx.fillStyle = '#1a1a2e'; ctx.font = '600 40px "Inter"';
+      ctx.fillText('Hiermit wird feierlich bescheinigt, dass', cx, 450);
+      fitText(ctx, p.name || '?', maxW, '800 {px}px "Baloo 2"', 150);
+      ctx.fillStyle = '#7017c9'; ctx.fillText(p.name || '?', cx, 575);
+      ctx.fillStyle = '#1a1a2e'; ctx.font = '600 40px "Inter"';
+      const dateStr = new Date().toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' });
+      ctx.fillText(`am ${dateStr} den ${rank}. Platz von ${n} belegt hat`, cx, 680);
+      ctx.fillText(`und dabei ${p.score} Punkte erspielte.`, cx, 735);
+      // Titel-Band
+      const title = certTitle(rank, n);
+      ctx.font = '800 52px "Baloo 2"';
+      const tw = Math.min(maxW, ctx.measureText(title).width + 110);
+      roundRect(ctx, cx - tw / 2, 790, tw, 92, 46); ctx.fillStyle = fr; ctx.fill();
+      ctx.lineWidth = 5; ctx.strokeStyle = '#1a1a2e'; ctx.stroke();
+      ctx.fillStyle = '#1a1006'; fitText(ctx, title, tw - 60, '800 {px}px "Baloo 2"', 52); ctx.fillText(title, cx, 838);
+      // Errungenschaften
+      ctx.font = '600 34px "Inter"'; ctx.fillStyle = '#3a2e55';
+      certLines(p, rank, n).forEach((l, i) => ctx.fillText(l, cx, 935 + i * 50));
+
+      // Siegel unten links
+      const sx = 330, sy = 1130;
+      ctx.save(); ctx.translate(sx, sy); ctx.rotate(-0.12);
+      ctx.beginPath();
+      for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2, r = i % 2 ? 118 : 132; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+      ctx.closePath(); ctx.fillStyle = fr; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#1a1a2e'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, 92, 0, Math.PI * 2); ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = '#1a1006'; ctx.font = '800 92px "Baloo 2"'; ctx.fillText(rank + '.', 0, -8);
+      ctx.font = '800 26px "Baloo 2"'; ctx.fillText('PLATZ', 0, 52);
+      ctx.restore();
+
+      // Unterschriften
+      const sig = (x, name, role) => {
+        ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x - 230, 1185); ctx.lineTo(x + 230, 1185); ctx.stroke();
+        ctx.fillStyle = '#2a1f6b'; ctx.font = '64px "UnifrakturMaguntia"'; ctx.fillText(name, x, 1140);
+        ctx.fillStyle = '#1a1a2e'; ctx.font = '600 28px "Inter"'; ctx.fillText(role, x, 1225);
+      };
+      sig(920, 'Der Spielleiter', 'Admin der Hirnschmalz-Arena');
+      sig(1560, 'Clippy', 'Oberster Schiedsrichter');
+      ctx.font = '600 22px "Inter"'; ctx.fillStyle = '#1a1a2e88';
+      ctx.fillText('Diese Urkunde ist rechtlich völlig wertlos, moralisch aber unbezahlbar.', W / 2, H - 125);
+      return rank;
+    }
+
+    let certCurrent = null;
+    async function showCertFor(id) {
+      const p = rankedPlayers.find(x => x.id === id) || rankedPlayers[0];
+      if (!p) return;
+      certCurrent = p;
+      const cv = document.getElementById('cert-canvas');
+      const rank = await drawCertificate(cv, p);
+      if (rank === 1) { burstConfetti(60); }
+    }
+    window.openCertificate = function() {
+      const modal = document.getElementById('cert-modal');
+      const sel = document.getElementById('cert-select');
+      const own = rankedPlayers.find(x => x.id === playerId);
+      sel.innerHTML = rankedPlayers.map((p, i) => `<option value="${p.id}">${i + 1}. ${p.name}</option>`).join('');
+      sel.classList.toggle('hidden', !isHost && !!own);
+      const startId = own ? own.id : rankedPlayers[0].id;
+      sel.value = startId;
+      modal.classList.remove('hidden');
+      showCertFor(startId);
+    };
+    window.certSelectChanged = function(v) { showCertFor(v); };
+    window.closeCertificate = function() { document.getElementById('cert-modal').classList.add('hidden'); };
+    function certFileName() { return 'Urkunde_Hirnschmalz-Arena_' + (certCurrent ? certCurrent.name : 'Spieler').replace(/[^\wäöüÄÖÜß-]+/g, '_') + '.png'; }
+    window.downloadCertificate = function() {
+      const cv = document.getElementById('cert-canvas');
+      try {
+        cv.toBlob((b) => {
+          if (!b) { alert('Die Urkunde konnte nicht gespeichert werden.'); return; }
+          const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = certFileName();
+          document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        }, 'image/png');
+      } catch (e) { alert('Die Urkunde konnte nicht gespeichert werden (Bild blockiert).'); }
+    };
+    window.printCertificate = function() {
+      const cv = document.getElementById('cert-canvas');
+      let url; try { url = cv.toDataURL('image/png'); } catch (e) { alert('Drucken nicht möglich (Bild blockiert).'); return; }
+      const box = document.getElementById('cert-print');
+      box.innerHTML = `<img src="${url}">`;
+      box.querySelector('img').onload = () => window.print();
+    };
+
     function watchCeremonyState() {
       onValue(ref(db, 'ceremonyState'), (snapshot) => {
         const cs = snapshot.val();
@@ -868,6 +1048,7 @@
           document.getElementById("host-next-btn")?.classList.toggle("hidden", !isHost);
         }
 
+        certAwards = cs.awards || [];
         if ((cs.phase || 'podium') === 'awards') { renderAwards(cs); return; }
         leaveAwards();
 
@@ -883,6 +1064,8 @@
           document.getElementById("ceremony-status").innerHTML = "🎉 Das war die <img src=\"https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/9486-removebg-preview.png\" class=\"inline-block h-5 w-5 align-middle -mt-1\" onerror=\"this.style.display='none'\"> Hirnschmalz-Arena! 🎉";
           document.getElementById("host-next-btn")?.classList.add("hidden");
           if (isHost) document.getElementById("host-end-btn").classList.remove("hidden");
+          const cb = document.getElementById("cert-btn");
+          if (cb && cb.classList.contains("hidden")) { cb.innerText = isHost ? "📜 Urkunden ansehen" : "📜 Meine Urkunde abholen"; setTimeout(() => cb.classList.remove("hidden"), 2500); }
         }
       });
     }
@@ -946,6 +1129,22 @@
   <button id="host-next-btn" onclick="hostRevealNext()" class="hidden relative z-10 jax-btn bg-[#ffd23f] text-[#1a1a2e] font-jax font-bold px-6 py-3 mb-4">
     Nächsten Platz enthüllen ➡️
   </button>
+
+  <button id="cert-btn" onclick="openCertificate()" class="hidden relative z-30 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold px-6 py-3 mb-3">📜 Meine Urkunde abholen</button>
+
+  <div id="cert-modal" class="hidden fixed inset-0 z-[90] bg-black/80 flex flex-col items-center justify-center gap-4 p-6">
+    <div class="flex items-center gap-3">
+      <div class="font-jax text-3xl font-extrabold text-[#ffd23f]">📜 Deine Urkunde</div>
+      <select id="cert-select" onchange="certSelectChanged(this.value)" class="hidden text-[#1a1a2e] font-semibold rounded-xl px-3 py-2 border-[3px] border-[#1a1a2e]"></select>
+    </div>
+    <canvas id="cert-canvas" width="2000" height="1414"></canvas>
+    <div class="flex gap-3">
+      <button onclick="downloadCertificate()" class="jax-btn bg-[#ffd23f] text-[#1a1a2e] font-bold px-6 py-3">💾 Als Bild speichern</button>
+      <button onclick="printCertificate()" class="jax-btn bg-white text-[#1a1a2e] font-bold px-6 py-3">🖨️ Drucken / als PDF</button>
+      <button onclick="closeCertificate()" class="jax-btn bg-[#ff2e93] text-white font-bold px-6 py-3">✖ Schließen</button>
+    </div>
+  </div>
+  <div id="cert-print"></div>
 
   <button id="host-end-btn" onclick="hostEndCeremony()" class="hidden relative z-10 jax-btn bg-[#ff2e93] text-white font-jax font-bold px-6 py-3 mb-4">
     Zurück zur Lobby
