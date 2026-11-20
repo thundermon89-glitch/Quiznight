@@ -128,8 +128,19 @@
     const serverNow = () => Date.now() + serverOffset;
     // Videos aus dem Repo direkt von der eigenen Seite (GitHub Pages) laden - viel schneller als raw.githubusercontent.com
     function videoSrc(url) {
-      const RAW = 'https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/';
-      return url && url.indexOf(RAW) === 0 ? url.slice(RAW.length) : url;
+      if (!url) return url;
+      // Alle Links auf Dateien dieses Repos (egal ob /main/ oder alter Commit-Stand) auf die eigene
+      // Seite umbiegen. Die alten .mp4.webm/.mp4.mkv-Fassungen (AV1/720p, auf main längst gelöscht,
+      // stehen aber noch in der gespeicherten Editor-Liste) durch die aktuellen .mp4-Trailer ersetzen:
+      // die laden schneller und sind für den Rechner viel leichter abzuspielen.
+      const m = url.match(/^https:\/\/raw\.githubusercontent\.com\/thundermon89-glitch\/Quiznight\/[^/]+\/(.+)$/i);
+      if (!m) return url;
+      let file = decodeURIComponent(m[1]);
+      file = file.replace(/\.mp4\.(webm|mkv)$/i, '.mp4');
+      return encodeURI(file);
+    }
+    function videoType(round) {
+      return /\.mp4$/i.test(videoSrc(round.videoUrl) || '') ? 'video/mp4' : (round.videoType || 'video/mp4');
     }
     // Trailer KOMPLETT herunterladen (als Blob im Speicher), bevor er gestartet wird - so gibt es
     // beim Abspielen und beim Springen zwischen den Häppchen kein Nachladen/Ruckeln mehr.
@@ -497,7 +508,7 @@
       if (vid.readyState < 2) return;                 // noch kein Bild dekodierbar
       const diff = vid.currentTime - should;           // > 0: Video ist voraus
       const now = performance.now();
-      if (Math.abs(diff) > 1 && (vid._lastSeek === undefined || now - vid._lastSeek > 2000)) {
+      if (Math.abs(diff) > 1 && (vid._lastSeek === undefined || now - vid._lastSeek > 3000)) {
         vid._lastSeek = now;
         vid.playbackRate = 1;
         try { vid.currentTime = should; } catch (err) {}
