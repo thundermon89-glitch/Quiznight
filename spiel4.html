@@ -156,12 +156,17 @@
     // kg: 2 Nachkommastellen, Komma als Dezimaltrennzeichen (deutsche Schreibweise).
     // formatUnitValueHtml liefert die Nachkommastellen zusätzlich kleiner geschrieben.
     const UNIT_DECIMALS = { m: 0, kg: 2, cm: 0, '€': 2, h: 0, Blöcke: 0, 'Mio.': 0 };
+    // Ganze Einheiten zeigen eine Nachkommastelle nur, wenn wirklich eine da ist (z. B. 93,5 m)
+    function decimalsFor(value, unit) {
+      const d = UNIT_DECIMALS[unit] ?? 0;
+      return (d === 0 && Math.round(Number(value) * 10) % 10 !== 0) ? 1 : d;
+    }
     function formatUnitValue(value, unit) {
-      const decimals = UNIT_DECIMALS[unit] ?? 0;
+      const decimals = decimalsFor(value, unit);
       return Number(value).toFixed(decimals).replace('.', ',');
     }
     function formatUnitValueHtml(value, unit) {
-      const decimals = UNIT_DECIMALS[unit] ?? 0;
+      const decimals = decimalsFor(value, unit);
       const fixed = Number(value).toFixed(decimals);
       if (decimals === 0) return fixed;
       const [whole, frac] = fixed.split('.');
@@ -169,7 +174,7 @@
     }
 
     function getActivePlayerIds() {
-      return Object.keys(allPlayers).filter(id => allPlayers[id] && allPlayers[id].name && !allPlayers[id].name.includes("Host"));
+      return Object.keys(allPlayers).filter(id => allPlayers[id] && allPlayers[id].name && !allPlayers[id].name.includes("Host") && !allPlayers[id].name.includes("Admin"));
     }
 
     onValue(ref(db, 'players/'), (snapshot) => {
@@ -419,16 +424,46 @@
 
     // ================= SPIELER AKTIONEN =================
 
-    window.onSliderInput = function(val) {
-      const idx = (latestState && latestState.roundIdx) || 0;
-      const round = rounds[idx];
-      currentSliderValue = (round.unit === 'kg' || round.unit === '€') ? parseFloat(val) : parseInt(val, 10);
+    // Schritt: kg/€ auf 0,01 genau, alles andere auf 0,1 (eine Nachkommastelle)
+    function stepFor(round) { return (UNIT_DECIMALS[round.unit] ?? 0) >= 2 ? 0.01 : 0.1; }
+    function roundToStep(v, round) { const st = stepFor(round); return Math.round(v / st) * st; }
+    function inputText(v, round) {
+      const d = (UNIT_DECIMALS[round.unit] ?? 0) >= 2 ? 2 : 1;
+      return String(Number(v.toFixed(d))).replace('.', ',');
+    }
+    function updateEstimateDisplay(round) {
       const disp = document.getElementById("slider-value-display");
       if (disp) disp.innerHTML = formatUnitValueHtml(currentSliderValue, round.unit) + " " + round.unit;
+    }
+
+    // Regler bewegt -> Zahl ins Eingabefeld übernehmen
+    window.onSliderInput = function(val) {
+      const round = rounds[(latestState && latestState.roundIdx) || 0];
+      currentSliderValue = roundToStep(parseFloat(val), round);
+      const inp = document.getElementById("estimate-input");
+      if (inp) { inp.value = inputText(currentSliderValue, round); inp.classList.remove('border-[#ff2e93]'); }
+      updateEstimateDisplay(round);
+    };
+
+    // Zahl eingetippt (Komma oder Punkt) -> Regler mitziehen. Werte außerhalb des Reglers sind erlaubt.
+    window.onEstimateTyped = function(txt) {
+      const round = rounds[(latestState && latestState.roundIdx) || 0];
+      const inp = document.getElementById("estimate-input");
+      const clean = String(txt).trim().replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+      const v = parseFloat(clean);
+      if (clean === '' || isNaN(v) || v < 0) { if (inp) inp.classList.add('border-[#ff2e93]'); return; }
+      if (inp) inp.classList.remove('border-[#ff2e93]');
+      currentSliderValue = roundToStep(v, round);
+      const sl = document.getElementById("estimate-slider");
+      if (sl) sl.value = Math.min(round.max, Math.max(round.min, currentSliderValue));
+      updateEstimateDisplay(round);
     };
 
     window.submitEstimate = function() {
-      update(ref(db, 'game4State/submissions'), { [playerId]: currentSliderValue });
+      const round = rounds[(latestState && latestState.roundIdx) || 0];
+      const inp = document.getElementById("estimate-input");
+      if (inp && inp.classList.contains('border-[#ff2e93]')) { inp.focus(); return; }   // ungültige Eingabe
+      update(ref(db, 'game4State/submissions'), { [playerId]: Number(roundToStep(currentSliderValue, round).toFixed(2)) });
     };
 
     // ================= RENDERING =================
@@ -535,7 +570,7 @@
         currentSliderValue = Math.round((round.min + round.max) / 2);
       }
 
-      const sliderStep = round.unit === 'kg' ? 0.01 : 1;
+      const sliderStep = stepFor(round);
 
       let widgetHtml = '';
       if (mySubmission !== undefined) {
@@ -544,11 +579,18 @@
         widgetHtml = `
           <div class="space-y-5">
             <div id="slider-value-display" class="text-5xl font-jax font-extrabold text-[#7017c9] tabular-nums">${formatUnitValueHtml(currentSliderValue, round.unit)} ${round.unit}</div>
-            <input type="range" class="bp-slider w-full" min="${round.min}" max="${round.max}" step="${sliderStep}" value="${currentSliderValue}" oninput="onSliderInput(this.value)">
+            <input id="estimate-slider" type="range" class="bp-slider w-full" min="${round.min}" max="${round.max}" step="${sliderStep}" value="${currentSliderValue}" oninput="onSliderInput(this.value)">
             <div class="flex justify-between text-xs text-[#1a1a2e]/50 font-bold">
               <span>${round.min} ${round.unit}</span><span>${round.max} ${round.unit}</span>
             </div>
-            ${round.unit === 'kg' ? '<div class="text-[10px] text-[#1a1a2e]/40">Tipp: Nach dem Klick auf den Regler kannst du mit den Pfeiltasten in 10-Gramm-Schritten nachjustieren.</div>' : ''}
+            <div class="flex items-center justify-center gap-3">
+              <span class="text-sm font-bold text-[#1a1a2e]/60">oder eintippen:</span>
+              <input id="estimate-input" type="text" inputmode="decimal" autocomplete="off" value="${inputText(currentSliderValue, round)}"
+                class="w-44 text-center text-2xl font-jax font-extrabold text-[#1a1a2e] bg-white border-[3px] border-[#1a1a2e] rounded-xl px-3 py-2 outline-none focus:border-[#7017c9]"
+                oninput="onEstimateTyped(this.value)" onkeydown="if(event.key==='Enter'){onEstimateTyped(this.value);submitEstimate();}" onfocus="this.select()">
+              <span class="text-xl font-jax font-extrabold text-[#1a1a2e]">${round.unit}</span>
+            </div>
+            <div class="text-[11px] text-[#1a1a2e]/45">Nachkommastellen mit Komma, z. B. ${inputText(stepFor(round) === 0.01 ? 12.34 : 93.5, round)} · Tipp: Regler anklicken und mit den Pfeiltasten fein nachjustieren.</div>
             <button onclick="submitEstimate()" class="px-8 py-4 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold text-lg">
               ${icon('check','w-5 h-5 inline -mt-1')} Schätzung abgeben
             </button>
