@@ -340,6 +340,29 @@
       }
     });
 
+    // Panzer-Kollision untereinander: lebende fremde Panzer sind feste Hindernisse.
+    // Jeder Client blockiert nur seinen EIGENEN Panzer (Positionen der anderen kommen aus
+    // Firebase). Stecken zwei Panzer schon ineinander (z.B. durch Netz-Verzögerung), ist
+    // jede Bewegung erlaubt, die den Abstand vergrößert - so verkeilt sich niemand.
+    function tankBlocked(x, y) {
+      for (const tid in allTanks) {
+        if (tid === playerId) continue;
+        const t = allTanks[tid];
+        if (!t || t.alive === false || typeof t.x !== 'number' || typeof t.y !== 'number') continue;
+        if (!rectsOverlap(x, y, TANK_SIZE, TANK_SIZE, t.x, t.y, TANK_SIZE, TANK_SIZE)) continue;
+        if (rectsOverlap(my.x, my.y, TANK_SIZE, TANK_SIZE, t.x, t.y, TANK_SIZE, TANK_SIZE)) {
+          const before = Math.hypot(my.x - t.x, my.y - t.y);
+          const after = Math.hypot(x - t.x, y - t.y);
+          if (after > before) continue; // wegfahren aus der Überlappung ist erlaubt
+        }
+        return true;
+      }
+      return false;
+    }
+    function canMoveTo(x, y) {
+      return !overlapsWall(x, y, TANK_SIZE) && !tankBlocked(x, y);
+    }
+
     function tickMyMovement() {
       if (!gameRunning || iAmDead || !my) return;
       let dx = 0, dy = 0;
@@ -356,10 +379,15 @@
       dy = (dy / len) * MOVE_SPEED;
       const newAngle = Math.atan2(dx, -dy) * 180 / Math.PI; // 0° = oben, im Uhrzeigersinn
 
-      let nx = Math.max(0, Math.min(ARENA_W - TANK_SIZE, my.x + dx));
-      let ny = Math.max(0, Math.min(ARENA_H - TANK_SIZE, my.y + dy));
-      // Wand blockiert Bewegung wie eine feste Mauer - kein Durchfahren möglich
-      if (overlapsWall(nx, ny, TANK_SIZE)) { nx = my.x; ny = my.y; }
+      // Erst die volle Bewegung probieren, sonst einzeln je Achse - so rutscht man an einem
+      // Hindernis (Wand oder anderer Panzer) entlang, statt komplett hängen zu bleiben.
+      const cx = (v) => Math.max(0, Math.min(ARENA_W - TANK_SIZE, v));
+      const cy = (v) => Math.max(0, Math.min(ARENA_H - TANK_SIZE, v));
+      let nx = my.x, ny = my.y;
+      const fx = cx(my.x + dx), fy = cy(my.y + dy);
+      if (canMoveTo(fx, fy)) { nx = fx; ny = fy; }
+      else if (dx !== 0 && canMoveTo(fx, my.y)) { nx = fx; }
+      else if (dy !== 0 && canMoveTo(my.x, fy)) { ny = fy; }
 
       my.x = nx; my.y = ny; my.angle = newAngle;
       writeMyTank();
