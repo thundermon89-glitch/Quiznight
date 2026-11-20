@@ -11,7 +11,7 @@
    - Jedes Ei gibt es pro Spieler einmal pro Tag. Wird es verpasst, kommt es später wieder.
    - Admin/Host sieht keine Eier. Auf Lobby, Editor und Admin-Seiten erscheinen sie nicht.
    - DER ADMIN: Wird es am Rechner eines Spielers ruhig (eine Weile keine Maus/Tastatur),
-     schlurft der Admin vorbei und macht irgendeinen Quatsch (Bier, Rülpser, Tanz, am PC
+     schlurft der Admin vorbei (höchstens 2-3x pro Abend) und macht irgendeinen Quatsch (Bier, Rülpser, Tanz, am PC
      hocken ...). Wer ihn wegklickt, kassiert eine Uppercut und -25 Punkte.
    ===================================================================================== */
 (function () {
@@ -206,7 +206,8 @@
   // =====================================================================================
   const ADMIN_PENALTY = 25;
   const QUIET_MS = 45000;                 // so lange keine Eingabe = "Ruhe"
-  const ADMIN_COOLDOWN = [4, 9];          // Minuten bis zum nächsten möglichen Besuch
+  const ADMIN_COOLDOWN = [15, 30];        // Minuten bis zum nächsten möglichen Besuch
+  const ADMIN_MAX_VISITS = [2, 3];        // pro Spieler und Abend höchstens 2-3 Besuche, damit er nicht nervt
   const ADM = { walk: 17, drink: 6, burp: 11, cheers: 11, dance: 9, facepalm: 13, button: 13, scratch: 13, type: 15, rage: 13, sleep: 15, uppercut: 7, flip: 6 };
   const ADM_ACTS = [
     ['drink', 'Ruhe hier? Dann trink ich halt eins.'], ['burp', 'Tschuldigung.'], ['cheers', 'Prost, ihr Schnarchnasen!'],
@@ -292,6 +293,10 @@
   function adminTick() {
     if (busy || document.hidden) return;
     if (Date.now() < adminNextOk || Date.now() - lastInput < QUIET_MS) return;
+    let quota = ls.get('admin');
+    if (!quota) { quota = { max: ADMIN_MAX_VISITS[0] + Math.floor(Math.random() * (ADMIN_MAX_VISITS[1] - ADMIN_MAX_VISITS[0] + 1)), seen: 0 }; ls.set('admin', quota); }
+    if (quota.seen >= quota.max) return;
+    quota.seen++; ls.set('admin', quota);
     busy = true; style();
     runAdmin(() => { busy = false; adminNextOk = Date.now() + rnd(ADMIN_COOLDOWN[0], ADMIN_COOLDOWN[1]) * 60000; });
   }
