@@ -9,7 +9,7 @@
   <title>Hirnschmalz-Arena - Siegerehrung</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=UnifrakturMaguntia&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=UnifrakturMaguntia&family=Playfair+Display:ital,wght@0,900;1,700&family=Caveat:wght@500&family=Great+Vibes&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Inter', sans-serif; }
     .font-jax { font-family: 'Baloo 2', sans-serif; }
@@ -151,14 +151,14 @@
     }
     .name-reveal { animation: nameReveal 0.5s ease-out forwards; }
     /* Siegerurkunde */
-    #cert-modal canvas { max-width: 100%; max-height: 72vh; width: auto; height: auto; border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+    #cert-modal canvas { max-width: 100%; max-height: 78vh; width: auto; height: auto; border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
     #cert-print { display: none; }
     @media print {
-      @page { size: A4 landscape; margin: 0; }
+      @page { size: A4 portrait; margin: 0; }
       body > *:not(#cert-print) { display: none !important; }
       body { background: #fff !important; padding: 0 !important; overflow: visible !important; }
       #cert-print { display: block !important; }
-      #cert-print img { width: 100vw; height: auto; display: block; }
+      #cert-print img { height: 100vh; width: auto; display: block; margin: 0 auto; }
     }
   </style>
 
@@ -903,92 +903,138 @@
       let px = startPx;
       do { ctx.font = font.replace('{px}', px); px -= 2; } while (ctx.measureText(text).width > maxW && px > 14);
     }
-    async function drawCertificate(canvas, p) {
+    // Im Stil der alten Bundesjugendspiele-Urkunden: Platz 1 = Ehrenurkunde, Mitte = Siegerurkunde,
+    // letzter Platz = Teilnahmeurkunde. Felder wie mit blauem Kuli vom Sportlehrer ausgefüllt.
+    function certKind(rank, n) {
+      if (rank === 1) return 'Ehrenurkunde';
+      if (rank === n && n > 2) return 'Teilnahmeurkunde';
+      return 'Siegerurkunde';
+    }
+    let certDrawToken = 0;
+    async function drawCertificate(target, p) {
+      const token = ++certDrawToken;
+      const canvas = document.createElement('canvas');
       const rank = rankedPlayers.findIndex(x => x.id === p.id) + 1;
       const n = rankedPlayers.length;
-      const W = 2000, H = 1414; canvas.width = W; canvas.height = H;
+      const kind = certKind(rank, n);
+      const W = 1414, H = 2000; canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext('2d');
-      try { await Promise.all([document.fonts.load('800 80px "Baloo 2"'), document.fonts.load('80px "UnifrakturMaguntia"'), document.fonts.load('600 30px "Inter"')]); } catch (e) {}
-      const metal = rank === 1 ? ['#fff2a8', '#f2b705', '#a86f00'] : rank === 2 ? ['#ffffff', '#b8c2d1', '#6d7889'] : rank === 3 ? ['#f9cfa8', '#c9733b', '#7c3f17'] : ['#e9d8ff', '#9b6bff', '#4b2a9c'];
+      try { await Promise.all([document.fonts.load('900 80px "Playfair Display"'), document.fonts.load('italic 700 40px "Playfair Display"'), document.fonts.load('60px "Caveat"'), document.fonts.load('60px "Great Vibes"'), document.fonts.load('600 30px "Inter"')]); } catch (e) {}
+      ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      const INK = '#1f3a93';   // Kuli-Blau
+      const BLACK = '#1b1b1b';
 
-      // Papier
-      const paper = ctx.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, 1300);
-      paper.addColorStop(0, '#fffaf0'); paper.addColorStop(1, '#f1e2c0');
-      ctx.fillStyle = paper; ctx.fillRect(0, 0, W, H);
-      // Rahmen
-      const fr = ctx.createLinearGradient(0, 0, W, H);
-      fr.addColorStop(0, metal[0]); fr.addColorStop(0.5, metal[1]); fr.addColorStop(1, metal[2]);
-      ctx.lineWidth = 34; ctx.strokeStyle = fr; ctx.strokeRect(40, 40, W - 80, H - 80);
-      ctx.lineWidth = 5; ctx.strokeStyle = '#1a1a2e'; ctx.strokeRect(22, 22, W - 44, H - 44); ctx.strokeRect(74, 74, W - 148, H - 148);
-      ctx.lineWidth = 2; ctx.setLineDash([14, 10]); ctx.strokeRect(96, 96, W - 192, H - 192); ctx.setLineDash([]);
-      // Ecken-Gehirne
-      ctx.font = '70px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      [[150, 150], [W - 150, 150], [150, H - 150], [W - 150, H - 150]].forEach(([x, y]) => ctx.fillText('🧠', x, y));
+      // Papier (leicht vergilbt, wie aus dem Schuhkarton)
+      ctx.fillStyle = '#fdfbf4'; ctx.fillRect(0, 0, W, H);
+      const age = ctx.createRadialGradient(W / 2, H / 2, 500, W / 2, H / 2, 1250);
+      age.addColorStop(0, 'rgba(0,0,0,0)'); age.addColorStop(1, 'rgba(170,140,70,0.16)');
+      ctx.fillStyle = age; ctx.fillRect(0, 0, W, H);
+      // Knick in der Mitte (war mal gefaltet im Ranzen)
+      const fold = ctx.createLinearGradient(0, H / 2 - 18, 0, H / 2 + 18);
+      fold.addColorStop(0, 'rgba(0,0,0,0)'); fold.addColorStop(0.5, 'rgba(120,100,60,0.10)'); fold.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = fold; ctx.fillRect(0, H / 2 - 18, W, 36);
 
-      // Kopf
-      ctx.fillStyle = '#7017c9'; ctx.font = '800 40px "Baloo 2"';
-      ctx.fillText('HIRNSCHMALZ-ARENA · QUIZNACHT', W / 2, 175);
-      ctx.fillStyle = '#1a1a2e'; ctx.font = '170px "UnifrakturMaguntia"';
-      ctx.fillText(rank === n && n > 1 ? 'Ehrenurkunde' : 'Urkunde', W / 2, 320);
+      // Rahmen: feine Doppellinie
+      ctx.strokeStyle = BLACK; ctx.lineWidth = 4; ctx.strokeRect(60, 60, W - 120, H - 120);
+      ctx.lineWidth = 1.5; ctx.strokeRect(76, 76, W - 152, H - 152);
 
-      // Porträt
-      const px = 330, py = 720, pr = 175;
-      ctx.save(); ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fillStyle = '#1a0d3d'; ctx.fill(); ctx.clip();
-      const img = await loadImg(p.head || p.clanTag || p.avatar);
-      if (img) {
-        const sc = Math.min((pr * 1.8) / img.width, (pr * 1.8) / img.height);
-        const iw = img.width * sc, ih = img.height * sc;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, px - iw / 2, py - ih / 2 + 10, iw, ih);
-      } else {
-        ctx.fillStyle = '#ffd23f'; ctx.font = '800 170px "Baloo 2"'; ctx.fillText((p.name || '?').charAt(0).toUpperCase(), px, py + 10);
+      // Schwarz-Rot-Gold-Band oben
+      [['#000000', 0], ['#dd0000', 1], ['#ffce00', 2]].forEach(([c, i]) => { ctx.fillStyle = c; ctx.fillRect(76, 76 + i * 22, W - 152, 22); });
+
+      // Wappen: Hirn mit Flügeln
+      const ex = W / 2, ey = 300;
+      ctx.fillStyle = BLACK;
+      for (const s of [-1, 1]) {
+        for (let i = 0; i < 6; i++) {
+          ctx.save(); ctx.translate(ex + s * 60, ey - 10); ctx.rotate(s * (-0.9 + i * 0.32));
+          ctx.beginPath(); ctx.ellipse(s * 70, 0, 75 - i * 6, 13, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        }
       }
-      ctx.restore();
-      ctx.lineWidth = 14; ctx.strokeStyle = fr; ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.stroke();
-      ctx.lineWidth = 5; ctx.strokeStyle = '#1a1a2e'; ctx.beginPath(); ctx.arc(px, py, pr + 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(ex, ey, 72, 0, Math.PI * 2); ctx.fillStyle = '#ffce00'; ctx.fill();
+      ctx.lineWidth = 6; ctx.strokeStyle = BLACK; ctx.stroke();
+      ctx.font = '86px serif'; ctx.textBaseline = 'middle'; ctx.fillText('🧠', ex, ey + 4); ctx.textBaseline = 'alphabetic';
 
-      // Text rechts vom Porträt
-      const cx = 1150, maxW = 1250;
-      ctx.fillStyle = '#1a1a2e'; ctx.font = '600 40px "Inter"';
-      ctx.fillText('Hiermit wird feierlich bescheinigt, dass', cx, 450);
-      fitText(ctx, p.name || '?', maxW, '800 {px}px "Baloo 2"', 150);
-      ctx.fillStyle = '#7017c9'; ctx.fillText(p.name || '?', cx, 575);
-      ctx.fillStyle = '#1a1a2e'; ctx.font = '600 40px "Inter"';
-      const dateStr = new Date().toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' });
-      ctx.fillText(`am ${dateStr} den ${rank}. Platz von ${n} belegt hat`, cx, 680);
-      ctx.fillText(`und dabei ${p.score} Punkte erspielte.`, cx, 735);
-      // Titel-Band
-      const title = certTitle(rank, n);
-      ctx.font = '800 52px "Baloo 2"';
-      const tw = Math.min(maxW, ctx.measureText(title).width + 110);
-      roundRect(ctx, cx - tw / 2, 790, tw, 92, 46); ctx.fillStyle = fr; ctx.fill();
-      ctx.lineWidth = 5; ctx.strokeStyle = '#1a1a2e'; ctx.stroke();
-      ctx.fillStyle = '#1a1006'; fitText(ctx, title, tw - 60, '800 {px}px "Baloo 2"', 52); ctx.fillText(title, cx, 838);
-      // Errungenschaften
-      ctx.font = '600 34px "Inter"'; ctx.fillStyle = '#3a2e55';
-      certLines(p, rank, n).forEach((l, i) => ctx.fillText(l, cx, 935 + i * 50));
+      // Kopfzeile
+      ctx.fillStyle = BLACK; ctx.font = '600 34px "Inter"';
+      ctx.fillText('B U N D E S Q U I Z S P I E L E', W / 2, 440);
+      ctx.font = 'italic 700 30px "Playfair Display"'; ctx.fillStyle = '#555';
+      ctx.fillText('Hirnschmalz-Arena · Quiznacht ' + new Date().getFullYear(), W / 2, 486);
 
-      // Siegel unten links
-      const sx = 330, sy = 1130;
-      ctx.save(); ctx.translate(sx, sy); ctx.rotate(-0.12);
-      ctx.beginPath();
-      for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2, r = i % 2 ? 118 : 132; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
-      ctx.closePath(); ctx.fillStyle = fr; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#1a1a2e'; ctx.stroke();
-      ctx.beginPath(); ctx.arc(0, 0, 92, 0, Math.PI * 2); ctx.lineWidth = 3; ctx.stroke();
-      ctx.fillStyle = '#1a1006'; ctx.font = '800 92px "Baloo 2"'; ctx.fillText(rank + '.', 0, -8);
-      ctx.font = '800 26px "Baloo 2"'; ctx.fillText('PLATZ', 0, 52);
+      // Titel
+      ctx.fillStyle = kind === 'Ehrenurkunde' ? '#b8860b' : kind === 'Siegerurkunde' ? '#b30000' : BLACK;
+      let tpx = 150; do { ctx.font = `900 ${tpx}px "Playfair Display"`; tpx -= 4; } while (ctx.measureText(kind).width > W - 260);
+      ctx.fillText(kind, W / 2, 660);
+      ctx.fillStyle = BLACK; ctx.fillRect(W / 2 - 260, 700, 520, 4);
+
+      // Ausfüllfelder
+      ctx.font = '600 32px "Inter"'; ctx.fillStyle = '#333';
+      ctx.fillText(kind === 'Teilnahmeurkunde' ? 'für die Teilnahme an den Bundesquizspielen' : 'für erfolgreiche Teilnahme an den Bundesquizspielen', W / 2, 790);
+      const field = (y, label, value, xL = 200, xR = W - 200, size = 78) => {
+        ctx.textAlign = 'left'; ctx.fillStyle = '#444'; ctx.font = '600 26px "Inter"'; ctx.fillText(label, xL, y + 46);
+        ctx.setLineDash([3, 7]); ctx.strokeStyle = '#555'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(xL, y); ctx.lineTo(xR, y); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = INK; ctx.textAlign = 'center';
+        let s = size; do { ctx.font = `${s}px "Caveat"`; s -= 3; } while (ctx.measureText(value).width > (xR - xL - 20));
+        ctx.save(); ctx.translate((xL + xR) / 2, y - 12); ctx.rotate(-0.012); ctx.fillText(value, 0, 0); ctx.restore();
+      };
+      field(960, 'Name', p.name || '?', 200, W - 200, 110);
+      field(1110, 'Punktzahl', p.score + ' Punkte', 200, W / 2 - 30);
+      field(1110, 'Platzierung', rank + '. von ' + n, W / 2 + 30, W - 200);
+      field(1260, 'Schule / Verein', 'Hirnschmalz-Arena');
+
+      // Disziplinen (Sonderpreise & Bestleistungen)
+      ctx.textAlign = 'left'; ctx.fillStyle = '#444'; ctx.font = '600 26px "Inter"';
+      ctx.fillText('Besondere Leistungen', 200, 1375);
+      ctx.fillStyle = INK;
+      certLines(p, rank, n).slice(0, 3).forEach((l, i) => {
+        const t = '– ' + l.replace(/^\S+\s/, '');
+        let fs = 52; do { ctx.font = `${fs}px "Caveat"`; fs -= 2; } while (ctx.measureText(t).width > 740 && fs > 26);
+        ctx.save(); ctx.translate(230, 1440 + i * 60); ctx.rotate(-0.01); ctx.fillText(t, 0, 0); ctx.restore();
+      });
+      ctx.textAlign = 'center';
+
+      // Porträt als eingeklebtes Passfoto mit Tesafilm
+      const img = await loadImg(p.head || p.clanTag || p.avatar);
+      ctx.save(); ctx.translate(W - 290, 1470); ctx.rotate(0.06);
+      ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4;
+      ctx.fillRect(-110, -135, 220, 270); ctx.shadowColor = 'transparent';
+      ctx.fillStyle = '#cfd8e3'; ctx.fillRect(-96, -121, 192, 242);
+      if (img) { const sc = Math.min(180 / img.width, 230 / img.height); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, -img.width * sc / 2, -img.height * sc / 2, img.width * sc, img.height * sc); }
+      else { ctx.fillStyle = INK; ctx.font = '140px "Caveat"'; ctx.fillText((p.name || '?').charAt(0).toUpperCase(), 0, 45); }
+      ctx.fillStyle = 'rgba(255,255,230,.55)'; ctx.rotate(-0.25); ctx.fillRect(-60, -160, 120, 42);
       ctx.restore();
 
       // Unterschriften
-      const sig = (x, name, role) => {
-        ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x - 230, 1185); ctx.lineTo(x + 230, 1185); ctx.stroke();
-        ctx.fillStyle = '#2a1f6b'; ctx.font = '64px "UnifrakturMaguntia"'; ctx.fillText(name, x, 1140);
-        ctx.fillStyle = '#1a1a2e'; ctx.font = '600 28px "Inter"'; ctx.fillText(role, x, 1225);
+      const sig = (x, y, name, role, font) => {
+        ctx.strokeStyle = BLACK; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 220, y); ctx.lineTo(x + 220, y); ctx.stroke();
+        ctx.fillStyle = font.includes('Caveat') ? INK : BLACK; ctx.font = font;
+        ctx.save(); ctx.translate(x, y - 14); ctx.rotate(-0.04); ctx.fillText(name, 0, 0); ctx.restore();
+        ctx.fillStyle = '#444'; ctx.font = '600 24px "Inter"'; ctx.fillText(role, x, y + 36);
       };
-      sig(920, 'Der Spielleiter', 'Admin der Hirnschmalz-Arena');
-      sig(1560, 'Clippy', 'Oberster Schiedsrichter');
-      ctx.font = '600 22px "Inter"'; ctx.fillStyle = '#1a1a2e88';
-      ctx.fillText('Diese Urkunde ist rechtlich völlig wertlos, moralisch aber unbezahlbar.', W / 2, H - 125);
+      const dateStr = new Date().toLocaleDateString('de-DE');
+      if (kind === 'Ehrenurkunde') {
+        ctx.fillStyle = '#333'; ctx.font = 'italic 700 30px "Playfair Display"';
+        ctx.fillText('Für hervorragende Leistungen', W / 2, 1640);
+        sig(W / 2, 1735, 'Clippy', 'Der Bundesquizpräsident', '72px "Great Vibes"');
+      }
+      sig(380, 1860, 'Kiel, ' + dateStr, 'Ort, Datum', '50px "Caveat"');
+      sig(W - 380, 1860, 'Der Spielleiter', 'Schulleiter / Sportlehrer', '58px "Caveat"');
+
+      // Schulstempel (blau, schief, nicht ganz durchgedrückt)
+      ctx.save(); ctx.translate(1010, 1725); ctx.rotate(-0.22); ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = '#2a4fbf'; ctx.fillStyle = '#2a4fbf';
+      ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, 0, 92, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 70, 0, Math.PI * 2); ctx.stroke();
+      ctx.font = '800 17px "Inter"';
+      const txt = '★ HIRNSCHMALZ-ARENA ★ QUIZNACHT ';
+      [...txt].forEach((ch, i) => { ctx.save(); ctx.rotate((i / txt.length) * Math.PI * 2); ctx.fillText(ch, 0, -76); ctx.restore(); });
+      ctx.font = '50px serif'; ctx.textBaseline = 'middle'; ctx.fillText('🧠', 0, 2); ctx.textBaseline = 'alphabetic';
+      ctx.restore(); ctx.globalAlpha = 1;
+      // Nur zeichnen, wenn inzwischen keine andere Urkunde angefordert wurde
+      if (token === certDrawToken) {
+        target.width = W; target.height = H;
+        target.getContext('2d').drawImage(canvas, 0, 0);
+      }
       return rank;
     }
 
@@ -1137,7 +1183,7 @@
       <div class="font-jax text-3xl font-extrabold text-[#ffd23f]">📜 Deine Urkunde</div>
       <select id="cert-select" onchange="certSelectChanged(this.value)" class="hidden text-[#1a1a2e] font-semibold rounded-xl px-3 py-2 border-[3px] border-[#1a1a2e]"></select>
     </div>
-    <canvas id="cert-canvas" width="2000" height="1414"></canvas>
+    <canvas id="cert-canvas" width="1414" height="2000"></canvas>
     <div class="flex gap-3">
       <button onclick="downloadCertificate()" class="jax-btn bg-[#ffd23f] text-[#1a1a2e] font-bold px-6 py-3">💾 Als Bild speichern</button>
       <button onclick="printCertificate()" class="jax-btn bg-white text-[#1a1a2e] font-bold px-6 py-3">🖨️ Drucken / als PDF</button>
