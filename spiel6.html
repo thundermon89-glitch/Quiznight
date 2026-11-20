@@ -501,27 +501,28 @@
       }).join('');
     }
 
-    // Video sanft an die gemeinsame Uhr anpassen: kleine Abweichungen über die Abspielgeschwindigkeit
-    // ausgleichen, nur bei großen Abweichungen (> 1 s) springen - und dann höchstens alle 2 s.
-    // Vorher wurde bei jeder kleinen Abweichung gesprungen, das Springen selbst kostete Zeit -> Dauerruckeln.
+    // Video an die gemeinsame Uhr halten - aber ohne Dauer-Nachregeln: Jedes Häppchen startet exakt
+    // an der richtigen Stelle (in der Pause vorbereitet) und läuft dann einfach normal durch.
+    // Nur wenn es wirklich weit daneben liegt (> 1 s, z.B. Nachzügler), wird EINMAL gesprungen.
+    // Vorher wurde ständig die Geschwindigkeit nachgeregelt - mit Ton (beim Admin) wackelte das Bild hin und her.
     function syncVideo(vid, should) {
       if (vid.readyState < 2) return;                 // noch kein Bild dekodierbar
+      if (vid.playbackRate !== 1) vid.playbackRate = 1;
       const diff = vid.currentTime - should;           // > 0: Video ist voraus
       const now = performance.now();
       if (Math.abs(diff) > 1 && (vid._lastSeek === undefined || now - vid._lastSeek > 3000)) {
         vid._lastSeek = now;
-        vid.playbackRate = 1;
         try { vid.currentTime = should; } catch (err) {}
-      } else if (Math.abs(diff) > 0.08) {
-        vid.playbackRate = diff > 0 ? 0.9 : 1.1;
-      } else {
-        vid.playbackRate = 1;
       }
       if (vid.paused && !vid._playPending) {
         vid._playPending = true;
-        vid.play().then(() => { vid._playPending = false; }).catch(() => {
-          vid.muted = true;   // Browser blockt Ton ohne Klick -> stumm weiter
-          vid.play().catch(() => {}).finally(() => { vid._playPending = false; });
+        vid.play().then(() => { vid._playPending = false; }).catch((err) => {
+          // Nur wenn der Browser den Ton blockt, stumm nochmal versuchen - NICHT wenn wir selbst
+          // pausiert haben (sonst liefe das Video in der schwarzen Pause heimlich weiter).
+          if (err && err.name === 'NotAllowedError') {
+            vid.muted = true;
+            vid.play().catch(() => {}).finally(() => { vid._playPending = false; });
+          } else vid._playPending = false;
         });
       }
     }
@@ -681,14 +682,14 @@
               updateFuse(null);
               // Kein automatischer Zeitablauf: es geht erst los, wenn ALLE den Trailer geladen haben.
               // Hängt jemand fest, kann der Host per Knopf ohne Nachzügler starten.
-              document.getElementById("hc-force-start")?.classList.toggle("hidden", !isHost);
+              document.getElementById("hc-force-start")?.classList.toggle("invisible", !isHost);
               if (isHost && !startSentFor[loadKey] && readyCount >= ids.length) {
                 startSentFor[loadKey] = true;
                 update(ref(db, 'game6State'), { movieStartedAt: serverNow() + MOVIE_LEAD_MS });
               }
               return;
             }
-            document.getElementById("hc-force-start")?.classList.add("hidden");
+            document.getElementById("hc-force-start")?.classList.add("invisible");   // Platz bleibt, damit nichts springt
             const left = startAt - serverNow();
             if (left > 0) {
               // Countdown 3-2-1, alle starten gleichzeitig
@@ -847,7 +848,7 @@
 
     <div id="hc-playing" class="hidden space-y-3">
       <div id="hc-solved-count" class="text-center text-sm font-bold">0 von 0 haben gelöst</div>
-      <button id="hc-force-start" onclick="hostForceStart()" class="hidden w-full py-3 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold text-sm">
+      <button id="hc-force-start" onclick="hostForceStart()" class="invisible w-full py-3 jax-btn bg-[#7ed957] text-[#1a1a2e] font-jax font-bold text-sm">
         ▶️ Ohne Nachzügler starten
       </button>
       <button onclick="hostEndMovieRound()" class="w-full py-4 jax-btn bg-white text-[#1a1a2e] font-jax font-bold text-base">
