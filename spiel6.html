@@ -119,9 +119,10 @@
     // ==== FILMRUNDEN-DATEN ====
     // Jetzt YouTube statt Rumble - deutlich zuverlässiger einzubetten.
     let MOVIE_START_POINTS = 50;   // wird nach dem Laden auf 600 / Anzahl Filme gesetzt (Punkte-Balance)
-    const CLIP_SHOW = 3, CLIP_PAUSE = 3;   // Sekunden: Ausschnitt zeigen / schwarze Pause
+    const CLIP_SHOW = 5, CLIP_PAUSE = 5;   // Sekunden: Ausschnitt zeigen / schwarze Pause
     const MOVIE_DURATION_MS = 60000; // 1 Minute - die Zündschnur brennt in dieser Zeit ab
-    const MOVIE_LEAD_MS = 4000;      // so lange vor dem gemeinsamen Start wird das Video schon geladen (3-2-1)
+    const MOVIE_LEAD_MS = 3000;      // Countdown 3-2-1, sobald alle den Trailer komplett geladen haben
+    const MOVIE_LOAD_TIMEOUT_MS = 20000; // wer nach 20 s immer noch lädt, wird nicht mehr abgewartet
 
     // Gemeinsame Uhr für alle Geräte (Firebase-Serverzeit), damit alle zeitgleich starten
     let serverOffset = 0;
@@ -131,18 +132,21 @@
       const RAW = 'https://raw.githubusercontent.com/thundermon89-glitch/Quiznight/main/';
       return url && url.indexOf(RAW) === 0 ? url.slice(RAW.length) : url;
     }
-    // Nächsten Trailer schon im Hintergrund vorladen, während alle warten
-    let preloadEl = null;
-    function preloadVideo(url) {
+    // Trailer KOMPLETT herunterladen (als Blob im Speicher), bevor er gestartet wird - so gibt es
+    // beim Abspielen und beim Springen zwischen den Häppchen kein Nachladen/Ruckeln mehr.
+    const videoBlobs = {};
+    function loadVideoBlob(url) {
       const src = videoSrc(url);
-      if (!src || (preloadEl && preloadEl.dataset.src === src)) return;
-      if (preloadEl) preloadEl.remove();
-      preloadEl = document.createElement('video');
-      preloadEl.preload = 'auto'; preloadEl.muted = true; preloadEl.dataset.src = src; preloadEl.src = src;
-      preloadEl.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-10px;top:-10px';
-      document.body.appendChild(preloadEl);
-      try { preloadEl.load(); } catch (e) {}
+      if (!src) return Promise.resolve(null);
+      if (!videoBlobs[src]) {
+        videoBlobs[src] = fetch(src)
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+          .then(b => URL.createObjectURL(b))
+          .catch(() => { delete videoBlobs[src]; return src; }); // Notfall: normal streamen
+      }
+      return videoBlobs[src];
     }
+    function preloadVideo(url) { loadVideoBlob(url); }
 
     // Filmtitel vom Nutzer bestätigt, englische Originaltitel als Hauptantwort (IMDb/TMDb-
     // Schreibweise), deutsche/gängige Varianten als Alternativen für robustere Erkennung.
@@ -165,6 +169,7 @@
 
     // Punkte: 150 direkt beim Start, dann gleichmäßig weniger - wenn die Zündschnur abgebrannt ist, gibt es nichts mehr
     function currentMoviePoints(startedAt) {
+      if (!startedAt) return MOVIE_START_POINTS;   // Trailer lädt noch - Zündschnur noch nicht angezündet
       const elapsed = Math.max(0, serverNow() - startedAt);
       const remaining = Math.max(0, MOVIE_DURATION_MS - elapsed);
       return Math.round(MOVIE_START_POINTS * (remaining / MOVIE_DURATION_MS));
@@ -251,7 +256,9 @@
         set(ref(db, 'game6State'), {
           stage: 'movie_playing',
           movieRoundId: round.id,
-          movieStartedAt: serverNow() + MOVIE_LEAD_MS,   // alle laden vor und starten gleichzeitig
+          movieLoadingSince: serverNow(),   // erst laden alle komplett, dann setzt der Host den gemeinsamen Start
+          movieStartedAt: null,
+          movieReady: null,
           movieGuesses: null,
           roundsCompleted: completed // wird erst beim Beenden dieser Runde hochgezählt
         });
@@ -272,7 +279,9 @@
         set(ref(db, 'game6State'), {
           stage: 'movie_playing',
           movieRoundId: roundId,
-          movieStartedAt: serverNow() + MOVIE_LEAD_MS,
+          movieLoadingSince: serverNow(),
+          movieStartedAt: null,
+          movieReady: null,
           movieGuesses: null,
           roundsCompleted: state.roundsCompleted || 0
         });
@@ -295,6 +304,7 @@
     let mySolved = false;
     let myVideoPlaybackStartedAt = null; // wann das Video bei DIESER Person tatsächlich losläuft
     let movieTickInterval = null;
+    const startSentFor = {};   // Host: Start pro Ladevorgang nur einmal setzen
     let movieSuggestDebounce = null;
 
     let movieSuggestionIndex = -1; // aktuell per Pfeiltasten markierter Vorschlag
@@ -409,7 +419,7 @@
         // Punkte werden anhand des tatsächlichen Video-Startzeitpunkts bei DIESER Person
         // berechnet (konsistent mit der angezeigten Zündschnur), nicht der Firebase-Zeit.
         const referenceStart = state.movieStartedAt;
-        if (serverNow() < referenceStart) return;                                   // läuft noch gar nicht
+        if (!referenceStart || serverNow() < referenceStart) return;                                   // läuft noch gar nicht
         if (currentMoviePoints(referenceStart) <= 0) { showWrongGuessFeedback(); return; }   // Zündschnur abgebrannt
         runTransaction(ref(db, 'game6State/movieGuesses/' + playerId), (current) => {
           if (current) return current; // schon gelöst, nicht doppelt schreiben
@@ -475,7 +485,7 @@
 
     function updateFuse(startedAt) {
       const pts = currentMoviePoints(startedAt);
-      const elapsed = Date.now() - startedAt;
+      const elapsed = startedAt ? Math.max(0, serverNow() - startedAt) : 0;   // gemeinsame Serveruhr, wie die Punkte
       const progressPct = Math.min(100, (elapsed / MOVIE_DURATION_MS) * 100);
       const burnt = document.getElementById("fuse-burnt");
       const spark = document.getElementById("fuse-spark");
@@ -582,7 +592,8 @@
           solvedWrap?.classList.add("hidden");
           // Am movieStartedAt-Zeitstempel erkennen, nicht nur an der Runden-ID - sonst würde
           // ein Neustart DERSELBEN Runde das Video nicht neu laden, weil die ID gleich bleibt.
-          if (iframeWrap && iframeWrap.dataset.loadedFor !== String(state.movieStartedAt)) {
+          const loadKey = state.movieRoundId + '|' + (state.movieLoadingSince || state.movieStartedAt);
+          if (iframeWrap && iframeWrap.dataset.loadedFor !== loadKey) {
             iframeWrap.innerHTML = "";
             myVideoPlaybackStartedAt = null; // noch nicht wirklich losgelaufen
             // Lokale Video-Datei statt YouTube-Einbettung - keine Werbung mehr möglich, da
@@ -598,28 +609,47 @@
             freshVideo.controls = false;
             freshVideo.disablePictureInPicture = true;
             freshVideo.setAttribute("controlsList", "nodownload noplaybackrate nofullscreen");
-            const source = document.createElement("source");
-            source.src = videoSrc(round.videoUrl);
-            source.type = round.videoType || "video/mp4";
-            freshVideo.appendChild(source);
-            // WICHTIG: der Punkte-Countdown startet erst, wenn das Video bei DIESER Person
-            // tatsächlich zu spielen beginnt - nicht schon beim synchronen Firebase-Zeitstempel.
-            // Sonst verliert, wer langsamer lädt (z.B. schlechtere Verbindung), unfair schon
-            // Punkte, bevor bei ihm überhaupt etwas zu sehen ist.
             iframeWrap.appendChild(freshVideo);
-            iframeWrap.dataset.loadedFor = String(state.movieStartedAt);
-            if (preloadEl) { preloadEl.remove(); preloadEl = null; }
+            iframeWrap.dataset.loadedFor = loadKey;
+            // Erst komplett laden, dann "bereit" melden - der Host startet, wenn alle bereit sind
+            loadVideoBlob(round.videoUrl).then((blobUrl) => {
+              if (!blobUrl || iframeWrap.dataset.loadedFor !== loadKey || !freshVideo.isConnected) return;
+              const markReady = () => {
+                if (iframeWrap.dataset.loadedFor !== loadKey || isHost) return;
+                set(ref(db, 'game6State/movieReady/' + playerId), true);
+              };
+              freshVideo.addEventListener('canplaythrough', markReady, { once: true });
+              freshVideo.src = blobUrl;
+              try { freshVideo.load(); } catch (e) {}
+            });
           }
           clearInterval(movieTickInterval);
           const startAt = state.movieStartedAt;
           let endSent = false;
           const tick = () => {
             const vid = iframeWrap && iframeWrap.querySelector('video');
-            const left = startAt - serverNow();
             const cd = document.getElementById("movie-countdown");
+            if (!startAt) {
+              // Trailer lädt noch: Zündschnur bleibt voll, nichts läuft
+              const ids = getActivePlayerIds();
+              const ready = state.movieReady || {};
+              const readyCount = ids.filter(id => ready[id]).length;
+              if (cd) { cd.classList.remove("hidden"); cd.innerHTML = '<span class="text-2xl" style="-webkit-text-stroke:0">⏳ Trailer lädt … ' + readyCount + '/' + ids.length + ' bereit</span>'; }
+              updateFuse(null);
+              if (isHost && !startSentFor[loadKey]) {
+                const waited = serverNow() - (state.movieLoadingSince || 0);
+                if (readyCount >= ids.length || waited > MOVIE_LOAD_TIMEOUT_MS) {
+                  startSentFor[loadKey] = true;
+                  update(ref(db, 'game6State'), { movieStartedAt: serverNow() + MOVIE_LEAD_MS });
+                }
+              }
+              return;
+            }
+            const left = startAt - serverNow();
             if (left > 0) {
               // Countdown 3-2-1, alle starten gleichzeitig
               if (cd) { cd.classList.remove("hidden"); cd.innerText = Math.ceil(left / 1000); }
+              if (vid && vid.readyState >= 1 && vid.currentTime !== 0) { try { vid.currentTime = 0; } catch (err) {} }
               updateFuse(startAt);
               return;
             }
@@ -661,6 +691,7 @@
 
       if (stage === 'movie_result') {
         clearInterval(movieTickInterval);
+        { const nr = movieRounds[state.roundsCompleted || 0]; if (nr) preloadVideo(nr.videoUrl); }
         // Auch hier: iframe komplett entfernen, nicht nur den Bereich optisch verstecken -
         // sonst läuft das Video bei allen, die noch nicht gelöst hatten, im Hintergrund weiter.
         document.getElementById("movie-iframe-wrap")?.replaceChildren();
@@ -706,6 +737,7 @@
         movieRounds.length = 0;
         movieRounds.push(...custom);
       }
+      if (movieRounds[0]) preloadVideo(movieRounds[0].videoUrl);
       MOVIE_START_POINTS = Math.max(30, Math.min(150, Math.round(600 / Math.max(1, movieRounds.length) / 5) * 5));
       { const el = document.getElementById('my-solved-points'); if (el) el.innerText = '+' + MOVIE_START_POINTS + ' Punkte'; }
 
@@ -815,7 +847,7 @@
 
       <div class="relative w-full max-w-md mx-auto" style="aspect-ratio: 16/9;">
         <div id="movie-iframe-wrap" class="absolute inset-0 w-full h-full rounded-2xl overflow-hidden border-4 border-[#1a1a2e]"></div>
-        <div id="movie-pause" class="hidden absolute inset-0 flex items-center justify-center bg-black rounded-2xl pointer-events-none"><span class="font-jax font-extrabold text-2xl text-white/70">weiter in 3 …</span></div>
+        <div id="movie-pause" class="hidden absolute inset-0 flex items-center justify-center bg-black rounded-2xl pointer-events-none"><span class="font-jax font-extrabold text-2xl text-white/70">weiter in 5 …</span></div>
         <div id="movie-countdown" class="hidden absolute inset-0 flex items-center justify-center font-jax font-extrabold text-8xl text-[#ffd23f] bg-black/60 rounded-2xl pointer-events-none" style="-webkit-text-stroke:3px #1a1a2e">3</div>
         <!-- Unsichtbare Klick-Sperre über dem Video: verhindert Pausieren, Rechtsklick-Infos,
              Doppelklick-Vollbild - Spieler haben keinerlei Kontrolle über den Player. -->
